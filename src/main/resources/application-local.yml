@@ -2,7 +2,7 @@ xbGroupId: 690933736
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
 xxGroupId: 690933736
 captcha:
-   shitu-api-url: http://113.44.42.139:8000/
+   shitu-api-url: http://81.71.4.234:8000/
 #   shitu-api-url: http://116.205.232.32:8848/
 
 bot:
@@ -66,9 +66,9 @@ bot:
 #    enableAlchemy: true
 #
   - type: ws
-    url: ws://42.194.185.3:8086
+    url: ws://42.194.185.3:8083
     #修炼+任务群
-    groupId: 1051327161
+    groupId: 516625967
     accessToken: 1024*1024*1024
     #    大号qq
     controlQQ: 819463350&1018454301

@@ -72,6 +72,31 @@ public class FamilyTask {
         this.saveTasksToFile();
     }
 
+    /**
+     * 记录宗门任务状态机的关键状态变更，便于排查“设置已启用但没有继续执行”的问题。
+     */
+    private void setFamilyTaskStatus(Bot bot, BotConfig botConfig, int status, String reason) {
+        int previousStatus = botConfig.getFamilyTaskStatus();
+        botConfig.setFamilyTaskStatus(status);
+        if (previousStatus != status) {
+            logger.info("[宗门任务] 状态变更 botId={}, groupId={}, {} -> {}, reason={}, enableSectMission={}, sectMode={}, cultivationMode={}, stop={}, lastRefreshTime={}",
+                    bot.getBotId(), botConfig.getGroupId(), previousStatus, status, reason,
+                    botConfig.isEnableSectMission(), botConfig.getSectMode(), botConfig.getCultivationMode(),
+                    botConfig.isStop(), botConfig.getLastRefreshTime());
+        }
+    }
+
+    /**
+     * 记录发给小小的宗门任务指令。返回值表示消息是否已交给发送流程，不代表小小已经回复。
+     */
+    private boolean sendFamilyTaskCommand(Bot bot, long groupId, String command, int status) {
+        boolean accepted = Utils.sendGroupMessage(bot, groupId,
+                (new MessageChain()).at("3889001741").text(command));
+        logger.info("[宗门任务] 定时器发送命令 botId={}, groupId={}, status={}, command={}, accepted={}",
+                bot.getBotId(), groupId, status, command, accepted);
+        return accepted;
+    }
+
     public synchronized void saveTasksToFile() {
         try {
             ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(FILE_PATH)));
@@ -144,11 +169,13 @@ public class FamilyTask {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             if (!botConfig.isEnableSectMission()) {
-                botConfig.setFamilyTaskStatus(0);
+                setFamilyTaskStatus(bot, botConfig, 0, "宗门任务开关关闭");
             } else {
                 if (botConfig.isStop() && botConfig.getFamilyTaskStatus() != 0) {
+                    logger.warn("[宗门任务] 检测到 stop=true，重置任务状态 botId={}, groupId={}, oldStatus={}",
+                            bot.getBotId(), botConfig.getGroupId(), botConfig.getFamilyTaskStatus());
                     botConfig.setStop(false);
-                    botConfig.setFamilyTaskStatus(0);
+                    setFamilyTaskStatus(bot, botConfig, 0, "stop=true");
                 }
 
                 long groupId = botConfig.getGroupId();
@@ -158,17 +185,21 @@ public class FamilyTask {
 
                 Group group = bot.getGroup(groupId);
                 if (group == null) {
+                    if (botConfig.getFamilyTaskStatus() != 0) {
+                        logger.warn("[宗门任务] 找不到任务群，跳过本次处理 botId={}, groupId={}, status={}",
+                                bot.getBotId(), groupId, botConfig.getFamilyTaskStatus());
+                    }
                     return;
                 }
                 switch (botConfig.getFamilyTaskStatus()) {
                     case 0:
                         return;
                     case 1:
-                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门任务接取"));
+                        sendFamilyTaskCommand(bot, group.getGroupId(), "宗门任务接取", 1);
                         return;
                     case 2:
                         if (botConfig.getLastRefreshTime() + 65000L < System.currentTimeMillis()) {
-                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门任务刷新"));
+                            sendFamilyTaskCommand(bot, group.getGroupId(), "宗门任务刷新", 2);
                         }
 
                         return;
@@ -178,9 +209,9 @@ public class FamilyTask {
                         }
 
                         if (botConfig.getCultivationMode() == 2) {
-                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("出关"));
+                            sendFamilyTaskCommand(bot, group.getGroupId(), "出关", 3);
                         } else if (botConfig.getCultivationMode() == 3) {
-                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门出关"));
+                            sendFamilyTaskCommand(bot, group.getGroupId(), "宗门出关", 3);
                         }
 
                         try {
@@ -188,8 +219,8 @@ public class FamilyTask {
                         } catch (InterruptedException var7) {
                         }
 
-                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门任务完成"));
-                        botConfig.setFamilyTaskStatus(1);
+                        sendFamilyTaskCommand(bot, group.getGroupId(), "宗门任务完成", 3);
+                        setFamilyTaskStatus(bot, botConfig, 1, "状态3已发送任务完成");
 
                         try {
                             Thread.sleep(2000L);
@@ -197,24 +228,24 @@ public class FamilyTask {
                         }
 
                         if (botConfig.getCultivationMode() == 2) {
-                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("闭关"));
+                            sendFamilyTaskCommand(bot, group.getGroupId(), "闭关", 3);
                         } else if (botConfig.getCultivationMode() == 3) {
-                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门闭关"));
+                            sendFamilyTaskCommand(bot, group.getGroupId(), "宗门闭关", 3);
                         }
 
                         return;
                     case 4:
                         botConfig.setLastRefreshTime(System.currentTimeMillis() + 360000L);
                         if (botConfig.getCultivationMode() == 0) {
-                            botConfig.setFamilyTaskStatus(0);
+                            setFamilyTaskStatus(bot, botConfig, 0, "状态4且当前无修炼模式");
                         }
 
                         botConfig.setStartScheduled(true);
-                        botConfig.setFamilyTaskStatus(3);
+                        setFamilyTaskStatus(bot, botConfig, 3, "状态4进入出关完成流程");
                         return;
                     case 5:
-                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门任务完成"));
-                        botConfig.setFamilyTaskStatus(1);
+                        sendFamilyTaskCommand(bot, group.getGroupId(), "宗门任务完成", 5);
+                        setFamilyTaskStatus(bot, botConfig, 1, "状态5已发送任务完成");
                         return;
                 }
             }
@@ -239,29 +270,29 @@ public class FamilyTask {
         boolean isAtSelf = isAtSelf(bot,group, taskMessage,xxGroupId);
         if (isAtSelf) {
             if (taskMessage.contains("道友目前还没有宗门任务")) {
-                botConfig.setFamilyTaskStatus(1);
+                setFamilyTaskStatus(bot, botConfig, 1, "小小回复：当前没有宗门任务");
             }
 
             if (taskMessage.contains("今日无法再获取宗门任务")) {
-                botConfig.setFamilyTaskStatus(0);
+                setFamilyTaskStatus(bot, botConfig, 0, "小小回复：今日无法再获取宗门任务");
                 TestService.proccessCultivation(group);
                 groupManager.setZonMenTaskFinished(bot);
 //                bot.getGroup(xxGroupId).sendMessage(new MessageChain().text("今日宗门任务"))
             }
 
             if (taskMessage.contains("道友大战一番") && taskMessage.contains("获得修为") && taskMessage.contains("宗门建设度增加")) {
-                botConfig.setFamilyTaskStatus(1);
+                setFamilyTaskStatus(bot, botConfig, 1, "小小回复：宗门任务战斗完成");
             }
             if (taskMessage.contains("恭喜道友完成宗门任务")) {
-                botConfig.setFamilyTaskStatus(1);
+                setFamilyTaskStatus(bot, botConfig, 1, "小小回复：宗门任务完成");
             }
 
             if (taskMessage.contains("出门做任务") && taskMessage.contains("不扣你任务次数")) {
                 if (botConfig.getCultivationMode() == 0) {
-                    botConfig.setFamilyTaskStatus(0);
+                    setFamilyTaskStatus(bot, botConfig, 0, "小小回复：任务无需出门且当前无修炼模式");
                 }else{
                     botConfig.setLastRefreshTime(System.currentTimeMillis() + 360000L);
-                    botConfig.setFamilyTaskStatus(3);
+                    setFamilyTaskStatus(bot, botConfig, 3, "小小回复：任务需要出门执行");
                 }
 
             }
@@ -275,15 +306,17 @@ public class FamilyTask {
                 if (taskMessage.contains("邪修抢夺灵石") || taskMessage.contains("私自架设小型窝点") || taskMessage.contains("宗门密令") ||
                         taskMessage.contains("除魔令")) {
                     botConfig.setLastRefreshTime(System.currentTimeMillis());
-                    botConfig.setFamilyTaskStatus(3);
+                    setFamilyTaskStatus(bot, botConfig, 3, "邪修查抄模式：任务可执行");
                 }
 
                 if (taskMessage.contains("被追打催债") ||
                         taskMessage.contains("坊市通告") ||
                         taskMessage.contains("九转仙丹") ||
+                         taskMessage.contains("红尘寻宝") ||
                         taskMessage.contains("仗义疏财")
                         || taskMessage.contains("为宗门购买一些") || taskMessage.contains("请道友下山购买")) {
-                    botConfig.setFamilyTaskStatus(2);
+                    logger.info("[宗门任务] 识别为需要刷新任务 botId={}, taskMessage={}", bot.getBotId(), taskMessage);
+                    setFamilyTaskStatus(bot, botConfig, 2, "邪修查抄模式：跳过当前任务");
                     botConfig.setLastRefreshTime(System.currentTimeMillis());
                 }
             }
@@ -294,11 +327,13 @@ public class FamilyTask {
                     taskMessage.contains("为宗门购买一些") ||
                     taskMessage.contains("宗门密令") ||
                     taskMessage.contains("除魔令") ||
+                    taskMessage.contains("红尘寻宝") ||
                     taskMessage.contains("坊市通告") ||
                     taskMessage.contains("九转仙丹") ||
                     taskMessage.contains("仗义疏财"))) {
+                logger.info("[宗门任务] 识别为可执行任务 botId={}, taskMessage={}", bot.getBotId(), taskMessage);
                 botConfig.setLastRefreshTime(System.currentTimeMillis());
-                botConfig.setFamilyTaskStatus(5);
+                setFamilyTaskStatus(bot, botConfig, 5, "所有任务模式：当前任务自动完成");
             }
         }
 
@@ -730,6 +765,7 @@ public class FamilyTask {
             Bot bot = (Bot) var1.next();
             if (bot.getBotConfig().isEnableAutoTask()) {
                 try {
+                    bot.getBotConfig().setStop(false);
                     Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain().at("3889001741")).text("宗门任务接取"));
                 } catch (Exception e) {
                     logger.error("开始宗门任务失败", e);

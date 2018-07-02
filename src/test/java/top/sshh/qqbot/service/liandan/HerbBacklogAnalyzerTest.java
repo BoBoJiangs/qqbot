@@ -44,10 +44,12 @@ public class HerbBacklogAnalyzerTest {
         String output = new HerbBacklogAnalyzer(tempDir).analyze(BOT_ID, config(), herbPack, Collections.emptyMap(), marketPrices::get);
 
         assertTrue(output.contains("天问花 10/3"));
-        assertTrue(output.contains("搭配药价格过低导致累积"));
-        assertTrue(output.contains("搭配草当前采购价50万，最新坊市价80万"));
+        assertTrue(output.contains("搭配药库存不足导致积压"));
+        assertTrue(output.contains("要降至限制数量需炼7炉"));
+        assertTrue(output.contains("【搭配草】现有0/目标7，缺7；采购价50万，坊市价80万"));
+        assertTrue(output.contains("【辅草】现有1/目标7，缺6"));
         assertTrue(output.contains("采购药材天问花 90"));
-        assertTrue(output.contains("采购药材搭配草 80"));
+        assertTrue(output.contains("采购药材搭配草 110"));
     }
 
     @Test
@@ -66,7 +68,7 @@ public class HerbBacklogAnalyzerTest {
 
         String output = new HerbBacklogAnalyzer(tempDir).analyze(BOT_ID, config(), herbPack, Collections.emptyMap(), marketPrices::get);
 
-        assertTrue(output.contains("本身采购价偏高导致累积"));
+        assertTrue(output.contains("无可用消耗配方"));
         assertTrue(output.contains("当前炼丹配方中没有消耗【无用草】的组合"));
         assertTrue(output.contains("采购药材无用草 120"));
     }
@@ -83,20 +85,21 @@ public class HerbBacklogAnalyzerTest {
 
         Map<String, ProductPrice> herbPack = new LinkedHashMap<>();
         herbPack.put("天问花", product("天问花", 10));
-        herbPack.put("搭配草", product("搭配草", 1));
-        herbPack.put("辅草", product("辅草", 1));
+        herbPack.put("搭配草", product("搭配草", 7));
+        herbPack.put("辅草", product("辅草", 7));
 
         Map<String, Integer> marketPrices = new HashMap<>();
         marketPrices.put("天问花", 90);
 
         String output = new HerbBacklogAnalyzer(tempDir).analyze(BOT_ID, config(), herbPack, Collections.emptyMap(), marketPrices::get);
 
-        assertTrue(output.contains("可炼但未消耗"));
+        assertTrue(output.contains("库存可消化但未执行"));
+        assertTrue(output.contains("要降至限制数量需炼7炉，当前库存可炼7炉"));
         assertTrue(output.contains("采购药材天问花 90"));
     }
 
     @Test
-    void analyze_ignoresBacklogHerbWhenSelfPriceBelowAdjustThreshold() throws Exception {
+    void analyze_reportsBacklogHerbWithoutCommandWhenSelfPriceBelowAdjustThreshold() throws Exception {
         writeBotFiles(
                 "炼金丹配方",
                 "主药天问花-1&100 药引搭配草-1&50 辅药辅草-1&50 花费200 炼金收益60 6丹 测试丹",
@@ -113,8 +116,37 @@ public class HerbBacklogAnalyzerTest {
 
         String output = new HerbBacklogAnalyzer(tempDir).analyze(BOT_ID, config(), herbPack, Collections.emptyMap(), marketPrices::get);
 
-        assertTrue(output.contains("当前采购价未达到调价阈值"));
+        assertTrue(output.contains("天问花 10/3"));
+        assertTrue(output.contains("未达到调价门槛80万，暂不建议降价"));
         assertFalse(output.contains("采购药材天问花"));
+    }
+
+    @Test
+    void analyze_reportsEveryOverLimitHerbInSummary() throws Exception {
+        writeBotFiles(
+                "炼金丹配方",
+                "主药天问花-1&100 药引搭配草-1&50 辅药辅草-1&50 花费200 炼金收益60 6丹 测试丹",
+                "70 天问花",
+                "100 无用草",
+                "50 搭配草",
+                "50 辅草"
+        );
+
+        Map<String, ProductPrice> herbPack = new LinkedHashMap<>();
+        herbPack.put("天问花", product("天问花", 10));
+        herbPack.put("无用草", product("无用草", 8));
+
+        Map<String, Integer> marketPrices = new HashMap<>();
+        marketPrices.put("天问花", 100);
+        marketPrices.put("无用草", 90);
+
+        String output = new HerbBacklogAnalyzer(tempDir).analyze(
+                BOT_ID, config(), herbPack, Collections.emptyMap(), marketPrices::get);
+
+        assertTrue(output.contains("已解析药材：2种"));
+        assertTrue(output.contains("检测到超限药材：2种"));
+        assertTrue(output.contains("天问花 10/3"));
+        assertTrue(output.contains("无用草 8/3"));
     }
 
     private void writeBotFiles(String recipeHeader, String recipeLine, String... priceLines) throws Exception {

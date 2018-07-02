@@ -9,8 +9,6 @@ import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -23,12 +21,12 @@ import top.sshh.qqbot.service.utils.Utils;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Component
 public class AutoSellGoods {
-    private static final Logger logger = LoggerFactory.getLogger(AutoSellGoods.class);
     private Map<Long, List<ProductPrice>> herbPackMap = new ConcurrentHashMap();
     private Map<Long, List<ProductPrice>> equipPackMap = new ConcurrentHashMap();
     private Map<Long, List<ProductPrice>> pillPackMap = new ConcurrentHashMap();
@@ -83,19 +81,26 @@ public class AutoSellGoods {
     public void 成功上架药材(Bot bot, Group group, Member member, MessageChain messageChain, String message,
             Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        if (Utils.isAtSelf(bot, group, message, xxGroupId)
-                && (message.contains("上架价格过高") || message.contains("物品成功上架坊市") || message.contains("道友的上一条指令还没执行完")
-                        || message.contains("操作失败") || message.contains("物品数量不足"))
-                && "批量上架药材".equals(botConfig.getCommand())) {
+        boolean isAtSelf = Utils.isAtSelf(bot, group, message, xxGroupId);
+        boolean isSellResult = message.contains("上架价格过高") || message.contains("上架价格过低")
+                || message.contains("物品成功上架坊市")
+                || message.contains("道友的上一条指令还没执行完") || message.contains("操作失败")
+                || message.contains("物品数量不足");
+        boolean isBatchSell = "批量上架药材".equals(botConfig.getCommand());
+        if (isAtSelf && isSellResult && isBatchSell) {
             List<ProductPrice> autoBuyList = herbPackMap.get(bot.getBotId());
             if (autoBuyList != null && !autoBuyList.isEmpty()) {
+                ProductPrice current = autoBuyList.get(0);
+                if (message.contains("上架价格过高") || message.contains("上架价格过低")) {
+                    String priceMessage = message.contains("上架价格过高") ? "上架价格过高" : "上架价格过低";
+                    group.sendMessage(new MessageChain().text("药材：" + current.getName() + priceMessage + "，已跳过"));
+                }
                 autoBuyList.remove(0);
             }
-            if (autoBuyList != null && autoBuyList.isEmpty()) {
-                Utils.getRemindGroup(bot, xxGroupId).sendMessage(new MessageChain().text("药材上架完成"));
-                botConfig.setCommand("");
-            } else {
+            if (autoBuyList != null && !autoBuyList.isEmpty()) {
                 this.buyHerbs(autoBuyList, group, bot.getBotConfig());
+            } else {
+                finishHerbSelling(group, botConfig);
             }
 
         }
@@ -152,10 +157,15 @@ public class AutoSellGoods {
     public void 药材背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId)
             throws Exception {
         BotConfig botConfig = bot.getBotConfig();
-        if (Utils.isAtSelf(bot, group, message, xxGroupId)
-                && (message.contains("上一页") || message.contains("下一页") || message.contains("药材背包"))
-                && "批量上架药材".equals(botConfig.getCommand())) {
-            List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
+        boolean isAtSelf = Utils.isAtSelf(bot, group, message, xxGroupId);
+        boolean isBackpackMessage = message.contains("上一页") || message.contains("下一页")
+                || message.contains("药材背包");
+        boolean isBatchSell = "批量上架药材".equals(botConfig.getCommand());
+        List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
+        if (isAtSelf && isBackpackMessage && isBatchSell) {
+            if (textMessages == null || textMessages.isEmpty()) {
+                return;
+            }
             boolean hasNextPage = false;
             TextMessage textMessage = null;
             if (textMessages.size() > 1) {
@@ -165,8 +175,10 @@ public class AutoSellGoods {
             }
 
             if (textMessage != null) {
-                String msg = textMessage.getText();
-                if (message.contains("炼金") && message.contains("坊市数据")) {
+                String msg = StringUtils.defaultString(textMessage.getText());
+                // 新版消息正文可能只在 TextMessage 中，不能只检查注入的 message 参数。
+                boolean isHerbContent = msg.contains("炼金") && msg.contains("坊市数据");
+                if (isHerbContent) {
                     String[] lines = msg.split("\n");
                     this.parseHerbList(Arrays.asList(lines), bot);
                     if (msg.contains("下一页")) {
@@ -178,7 +190,6 @@ public class AutoSellGoods {
                     botConfig.setPage(botConfig.getPage() + 1);
                     Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包" + botConfig.getPage()));
                 } else {
-
                     buyHerbs(this.herbPackMap.get(bot.getBotId()), group, botConfig);
 
                 }
@@ -419,41 +430,52 @@ public class AutoSellGoods {
     }
 
     private void buyHerbs(List<ProductPrice> autoBuyList, Group group, BotConfig botConfig) {
-        Iterator var3 = autoBuyList.iterator();
+        if (autoBuyList == null || autoBuyList.isEmpty()) {
+            finishHerbSelling(group, botConfig);
+            return;
+        }
 
-        while (var3.hasNext()) {
-            ProductPrice productPrice = (ProductPrice) var3.next();
-
+        while (!autoBuyList.isEmpty()) {
+            ProductPrice productPrice = autoBuyList.get(0);
             try {
                 if (StringUtils.isEmpty(botConfig.getCommand())) {
-                    break;
+                    return;
                 }
                 ProductPrice first = this.productPriceResponse
                         .getFirstByNameOrderByTimeDesc(productPrice.getName().trim());
-                if (first != null) {
-                    if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(productPrice.getName())
-                            * 1.1) {
-                        Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741")
-                                .text("炼金 " + first.getName() + " " + productPrice.getHerbCount()));
-                        group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice()
-                                + "万，炼金：" + ProductLowPrice.getLowPrice(first.getName()) + "万，直接炼金处理。"));
-                        if (!autoBuyList.isEmpty()) {
-                            autoBuyList.remove(0);
-                        }
-                        this.buyHerbs(autoBuyList, group, botConfig);
-
-                    } else {
-                        Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741")
-                                .text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000 + " "
-                                        + productPrice.getHerbCount()));
-                    }
+                if (first == null) {
+                    group.sendMessage(new MessageChain().text("药材：" + productPrice.getName()
+                            + "未找到坊市价格，已跳过"));
+                    autoBuyList.remove(0);
+                    continue;
                 }
-                break;
+
+                if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(productPrice.getName())
+                        * 1.1) {
+                    Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741")
+                            .text("炼金 " + first.getName() + " " + productPrice.getHerbCount()));
+                    group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice()
+                            + "万，炼金：" + ProductLowPrice.getLowPrice(first.getName()) + "万，直接炼金处理。"));
+                    autoBuyList.remove(0);
+                    continue;
+                }
+
+                long delayMs = ThreadLocalRandom.current().nextLong(1000L, 2001L);
+                Thread.sleep(delayMs);
+                Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741")
+                        .text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000 + " "
+                                + productPrice.getHerbCount()));
+                return;
             } catch (Exception var6) {
-                Thread.currentThread().interrupt();
+                return;
             }
         }
+        finishHerbSelling(group, botConfig);
+    }
 
+    private void finishHerbSelling(Group group, BotConfig botConfig) {
+        Utils.getRemindGroup(group.getBot(), xxGroupId).sendMessage(new MessageChain().text("药材上架完成"));
+        botConfig.setCommand("");
     }
 
     private void alchemyEquip(List<ProductPrice> autoBuyList, Group group, BotConfig botConfig) {

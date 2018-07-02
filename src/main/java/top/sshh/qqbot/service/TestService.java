@@ -103,7 +103,7 @@ public class TestService {
     private static final List<String> KEYWORDS = Arrays.asList("机缘巧合", "古洞深处", "烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后",
             "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困",
             "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得",
-            "从腐朽道袍中滑落");
+            "从腐朽道袍中滑落","此行探毕");
     private static final List<String> commandWords = Arrays.asList("悬赏令", "秘境", "宗门任务", "宗门丹药", "灵田", "灵石");
     private static final List<String> forwardWords = Arrays.asList("稍等一会", "宗门系统繁忙", "宗门闭关室", "当前灵石", "探索需要花费时间",
             "探索耗时", "道友成功领取到丹药", "道友已经领取过了", "不需要验证", "验证码已过期", "道友今天已经很努力了", "主修功法");
@@ -232,7 +232,12 @@ public class TestService {
             }
 
             if ("开始自动宗门任务".equals(message)) {
-                Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("宗门任务接取"));
+                bot.getBotConfig().setStop(false);
+                boolean accepted = Utils.sendGroupMessage(bot, groupId,
+                        (new MessageChain()).at("3889001741").text("宗门任务接取"));
+                log.info("[宗门任务] 手动开始任务 botId={}, groupId={}, status={}, enableSectMission={}, sectMode={}, accepted={}",
+                        bot.getBotId(), groupId, botConfig.getFamilyTaskStatus(), botConfig.isEnableSectMission(),
+                        botConfig.getSectMode(), accepted);
             }
 
             if ("开始自动刷天赋".equals(message)) {
@@ -685,14 +690,23 @@ public class TestService {
                     saveBotConfig(bot);
                 }
             } else if ("停止自动宗门任务".equals(message)) {
+                log.info("[宗门任务] 收到停止命令 botId={}, oldStatus={}, enableSectMission={}",
+                        bot.getBotId(), botConfig.getFamilyTaskStatus(), botConfig.isEnableSectMission());
                 botConfig.setFamilyTaskStatus(0);
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止宗门任务成功"));
             } else if ("启用自动宗门任务".equals(message)) {
+                log.info("[宗门任务] 收到启用命令 botId={}, oldStatus={}, oldEnableSectMission={}, sectMode={}, cultivationMode={}",
+                        bot.getBotId(), botConfig.getFamilyTaskStatus(), botConfig.isEnableSectMission(),
+                        botConfig.getSectMode(), botConfig.getCultivationMode());
                 botConfig.setFamilyTaskStatus(0);
                 botConfig.setEnableSectMission(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("启用自动宗门任务成功"));
+                log.info("[宗门任务] 启用命令处理完成 botId={}, newStatus={}, newEnableSectMission={}",
+                        bot.getBotId(), botConfig.getFamilyTaskStatus(), botConfig.isEnableSectMission());
                 saveBotConfig(bot);
             } else if ("关闭自动宗门任务".equals(message)) {
+                log.info("[宗门任务] 收到关闭命令 botId={}, oldStatus={}, oldEnableSectMission={}",
+                        bot.getBotId(), botConfig.getFamilyTaskStatus(), botConfig.isEnableSectMission());
                 botConfig.setFamilyTaskStatus(0);
                 botConfig.setEnableSectMission(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("关闭自动宗门任务成功"));

@@ -12,11 +12,11 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,6 +26,7 @@ import java.util.stream.Collectors;
  * 结合当前炼丹配方与背包数量，判断药材积压更像是搭配药买不到，还是自身采购价偏高。
  */
 public class HerbBacklogAnalyzer {
+    private static final int PARTNER_MARKET_PRICE_PREMIUM = 30;
     private static final Pattern INGREDIENT_PATTERN = Pattern.compile("(主药|药引|辅药)([^\\s-]+)-(\\d+)&(-?\\d+)");
     private static final Pattern PROFIT_PATTERN = Pattern.compile("(炼金收益|坊市收益)(-?\\d+)");
     private static final Pattern DAN_LABEL_PATTERN = Pattern.compile("(\\d+丹\\s+\\S+)$");
@@ -74,11 +75,10 @@ public class HerbBacklogAnalyzer {
 
         List<HerbAnalysis> analyses = new ArrayList<>();
         Set<String> commands = new LinkedHashSet<>();
+        Map<String, Integer> marketPriceCache = new HashMap<>();
         for (BacklogHerb backlogHerb : backlogHerbs) {
-            HerbAnalysis analysis = analyzeOne(backlogHerb, limitHerbsCount, herbCounts, recipes, purchasePrices, marketPriceResolver, config.getAddPrice());
-            if (analysis == null) {
-                continue;
-            }
+            HerbAnalysis analysis = analyzeOne(backlogHerb, limitHerbsCount, herbCounts, recipes,
+                    purchasePrices, marketPriceResolver, marketPriceCache, config.getAddPrice());
             analyses.add(analysis);
             for (String command : analysis.commands) {
                 if (isNotBlank(command)) {
@@ -87,27 +87,24 @@ public class HerbBacklogAnalyzer {
             }
         }
 
-        if (analyses.isEmpty()) {
-            return "检测到背包药材数量超限，但这些药材当前采购价未达到调价阈值（采购价 < 当前坊市价 + 降低采购药材价格），暂不输出建议";
-        }
-
-        return buildMessage(limitHerbsCount, analyses, commands, recipes.isEmpty());
+        return buildMessage(herbCounts.size(), limitHerbsCount, analyses, commands, recipes.isEmpty());
     }
 
     private HerbAnalysis analyzeOne(BacklogHerb backlogHerb,
                                     int limitHerbsCount,
                                     Map<String, Integer> herbCounts,
-                                    List<Recipe> recipes,
-                                    Map<String, Integer> purchasePrices,
-                                    MarketPriceResolver marketPriceResolver,
-                                    int configuredPriceOffset) {
+                                     List<Recipe> recipes,
+                                     Map<String, Integer> purchasePrices,
+                                     MarketPriceResolver marketPriceResolver,
+                                     Map<String, Integer> marketPriceCache,
+                                     int configuredPriceOffset) {
         String herbName = backlogHerb.name;
         Integer selfBuyPrice = purchasePrices.get(herbName);
-        int selfMarketPrice = resolveMarketPrice(herbName, marketPriceResolver);
-        if (!shouldOutputSelfSuggestion(selfBuyPrice, selfMarketPrice, configuredPriceOffset)) {
-            return null;
-        }
-        String selfCommand = buildPurchaseCommand(herbName, selfMarketPrice);
+        int selfMarketPrice = resolveMarketPrice(herbName, marketPriceResolver, marketPriceCache);
+        boolean selfPriceActionable = shouldOutputSelfSuggestion(selfBuyPrice, selfMarketPrice, configuredPriceOffset);
+        boolean missingPriceData = selfBuyPrice == null || selfBuyPrice <= 0 || selfMarketPrice <= 0;
+        String selfCommand = selfPriceActionable ? buildPurchaseCommand(herbName, selfMarketPrice) : null;
+        String selfPriceStatus = buildSelfPriceStatus(selfBuyPrice, selfMarketPrice, configuredPriceOffset);
 
         List<Recipe> relatedRecipes = recipes.stream()
                 .filter(recipe -> recipe.containsHerb(herbName))
@@ -115,107 +112,187 @@ public class HerbBacklogAnalyzer {
                 .collect(Collectors.toList());
 
         if (relatedRecipes.isEmpty()) {
-            return buildSelfHighAnalysis(backlogHerb, limitHerbsCount, null, selfBuyPrice, selfMarketPrice, selfCommand,
-                    "当前炼丹配方中没有消耗【" + herbName + "】的组合，说明采购速度大于当前消耗需求。");
+            List<String> itemCommands = commandList(selfCommand);
+            String suggestion = selfPriceActionable
+                    ? "当前没有可用消耗配方，建议按当前坊市价降低本药材采购价。"
+                    : "当前没有可用消耗配方；暂不生成调价命令，请检查配方配置或停止采购该药材。";
+            return new HerbAnalysis(backlogHerb, limitHerbsCount, "无可用消耗配方", "未找到消耗该药材的配方",
+                    "当前炼丹配方中没有消耗【" + herbName + "】的组合。" + selfPriceStatus,
+                    suggestion, itemCommands, missingPriceData);
         }
 
-        Recipe readyRecipe = relatedRecipes.stream()
-                .filter(recipe -> recipe.canCraft(herbCounts))
+        RecipePlan bestPlan = relatedRecipes.stream()
+                .map(recipe -> buildRecipePlan(recipe, backlogHerb, limitHerbsCount, herbCounts))
+                .filter(plan -> plan != null)
+                .sorted(recipePlanComparator())
                 .findFirst()
                 .orElse(null);
-        if (readyRecipe != null) {
-            return new HerbAnalysis(backlogHerb, limitHerbsCount, "可炼但未消耗",
-                    formatRecipeBrief(readyRecipe),
-                    "主药、药引、辅药背包数量均满足至少1次炼丹，但药材仍在累积。",
-                    "检查自动炼丹状态；若暂不想继续囤该药材，可按当前坊市价降低本药材采购价。",
-                    Collections.singletonList(selfCommand));
+        if (bestPlan == null) {
+            List<String> itemCommands = commandList(selfCommand);
+            return new HerbAnalysis(backlogHerb, limitHerbsCount, "配方无法消化当前库存", formatRecipeBrief(relatedRecipes.get(0)),
+                    "关联配方存在，但单炉所需的本药材数量大于当前库存。" + selfPriceStatus,
+                    selfPriceActionable ? "建议先按坊市价降低采购价。" : "暂不生成调价命令，请继续观察库存。",
+                    itemCommands, missingPriceData);
         }
 
-        PartnerIssue partnerIssue = findPartnerIssue(herbName, relatedRecipes, herbCounts, purchasePrices, marketPriceResolver);
-        if (partnerIssue != null) {
-            String buyText = formatPrice(partnerIssue.buyPrice);
-            String marketText = formatMarketPrice(partnerIssue.marketPrice);
-            List<String> itemCommands = new ArrayList<>();
-            itemCommands.add(selfCommand);
-            String partnerCommand = buildPurchaseCommand(partnerIssue.ingredient.name, partnerIssue.suggestedPrice);
-            if (isNotBlank(partnerCommand)) {
-                itemCommands.add(partnerCommand);
-            }
-            return new HerbAnalysis(backlogHerb, limitHerbsCount, "搭配药价格过低导致累积",
-                    formatRecipeBrief(partnerIssue.recipe),
-                    herbName + "可参与该配方，但搭配药【" + partnerIssue.ingredient.name + "】背包不足（现有"
-                            + partnerIssue.currentCount + "/需要" + partnerIssue.ingredient.count + "）；"
-                            + partnerIssue.ingredient.name + "当前采购价" + buyText + "，最新坊市价" + marketText + "，较难买到。",
-                    "本药材采购价已达到调价阈值，建议按当前坊市价降低本药材采购价，同时提高搭配药采购价。",
-                    itemCommands);
+        List<String> itemCommands = commandList(selfCommand);
+        if (bestPlan.shortages.isEmpty()) {
+            String suggestion = selfPriceActionable
+                    ? "检查自动炼丹状态；若暂不想继续囤该药材，可按当前坊市价降低采购价。"
+                    : "材料足以消化超限库存，建议优先检查自动炼丹是否运行、任务是否被暂停。";
+            return new HerbAnalysis(backlogHerb, limitHerbsCount, "库存可消化但未执行",
+                    formatRecipeBrief(bestPlan.recipe),
+                    "要降至限制数量需炼" + bestPlan.targetBatches + "炉，当前库存可炼"
+                            + bestPlan.craftableBatches + "炉。" + selfPriceStatus,
+                    suggestion, itemCommands, missingPriceData);
         }
 
-        Recipe bestRecipe = relatedRecipes.get(0);
-        return buildSelfHighAnalysis(backlogHerb, limitHerbsCount, bestRecipe, selfBuyPrice, selfMarketPrice, selfCommand,
-                "关联配方存在，但没有发现搭配药采购价低于坊市价；更像是本药材买入过快。");
-    }
+        boolean partnerPriceNeedsAdjustment = false;
+        boolean partnerPriceMissing = false;
+        List<String> shortageTexts = new ArrayList<>();
+        for (RecipeShortage shortage : bestPlan.shortages) {
+            Integer buyPrice = purchasePrices.get(shortage.name);
+            int marketPrice = resolveMarketPrice(shortage.name, marketPriceResolver, marketPriceCache);
+            boolean notConfigured = buyPrice == null || buyPrice <= 0;
+            boolean priceMissing = marketPrice <= 0;
+            boolean belowMarket = marketPrice > 0 && (notConfigured || buyPrice < marketPrice);
+            partnerPriceNeedsAdjustment |= belowMarket;
+            partnerPriceMissing |= priceMissing || notConfigured;
 
-    private PartnerIssue findPartnerIssue(String herbName,
-                                          List<Recipe> relatedRecipes,
-                                          Map<String, Integer> herbCounts,
-                                          Map<String, Integer> purchasePrices,
-                                          MarketPriceResolver marketPriceResolver) {
-        PartnerIssue best = null;
-        for (Recipe recipe : relatedRecipes) {
-            List<Ingredient> shortages = recipe.findShortages(herbCounts);
-            for (Ingredient shortage : shortages) {
-                if (Objects.equals(shortage.name, herbName)) {
-                    continue;
-                }
+            shortageTexts.add("【" + shortage.name + "】现有" + shortage.currentCount + "/目标"
+                    + shortage.requiredCount + "，缺" + shortage.missingCount + "；采购价"
+                    + formatPrice(buyPrice) + "，坊市价" + formatMarketPrice(marketPrice));
 
-                Integer buyPrice = purchasePrices.get(shortage.name);
-                int marketPrice = resolveMarketPrice(shortage.name, marketPriceResolver);
-                boolean notConfigured = buyPrice == null || buyPrice <= 0;
-                boolean belowMarket = marketPrice > 0 && (notConfigured || buyPrice < marketPrice);
-                if (!notConfigured && !belowMarket) {
-                    continue;
-                }
-
-                int suggestedPrice = chooseSuggestedPartnerPrice(shortage, buyPrice, marketPrice);
-                int score = scorePartnerIssue(recipe, buyPrice, marketPrice);
-                PartnerIssue candidate = new PartnerIssue(recipe, shortage, herbCounts.getOrDefault(shortage.name, 0),
-                        buyPrice, marketPrice, suggestedPrice, score);
-                if (best == null || candidate.score > best.score) {
-                    best = candidate;
-                }
+            int suggestedPrice = chooseSuggestedPartnerPrice(shortage.unitPrice, buyPrice, marketPrice);
+            if (belowMarket && suggestedPrice > 0) {
+                addCommand(itemCommands, buildPurchaseCommand(shortage.name, suggestedPrice));
             }
         }
-        return best;
+
+        String suggestion;
+        if (partnerPriceNeedsAdjustment) {
+            suggestion = "优先补齐或提高短缺搭配药采购价";
+        } else if (partnerPriceMissing) {
+            suggestion = "短缺搭配药的采购价或坊市价不完整，建议先刷新价格数据再决定调价";
+        } else {
+            suggestion = "搭配药库存不足但采购价并不低，建议等待成交或检查坊市刷新状态";
+        }
+        if (selfPriceActionable) {
+            suggestion += "；同时可按当前坊市价降低本药材采购价。";
+        } else {
+            suggestion += "；本药材暂不生成降价命令。";
+        }
+
+        return new HerbAnalysis(backlogHerb, limitHerbsCount, "搭配药库存不足导致积压",
+                formatRecipeBrief(bestPlan.recipe),
+                "要降至限制数量需炼" + bestPlan.targetBatches + "炉，当前最多可炼"
+                        + bestPlan.craftableBatches + "炉。短缺：" + String.join("；", shortageTexts)
+                        + "。" + selfPriceStatus,
+                suggestion, itemCommands, missingPriceData || partnerPriceMissing);
     }
 
-    private int scorePartnerIssue(Recipe recipe, Integer buyPrice, int marketPrice) {
-        int currentBuy = buyPrice == null ? 0 : buyPrice;
-        int priceGap = marketPrice > 0 ? Math.max(0, marketPrice - currentBuy) : 0;
-        int missingBonus = currentBuy <= 0 ? 100000 : 0;
-        return missingBonus + priceGap + Math.max(recipe.profit, 0);
+    private RecipePlan buildRecipePlan(Recipe recipe,
+                                       BacklogHerb backlogHerb,
+                                       int limitHerbsCount,
+                                       Map<String, Integer> herbCounts) {
+        int selfNeedPerBatch = recipe.needByName.getOrDefault(backlogHerb.name, 0);
+        int surplus = backlogHerb.count - limitHerbsCount;
+        if (selfNeedPerBatch <= 0 || surplus <= 0) {
+            return null;
+        }
+
+        int targetBatches = ceilDiv(surplus, selfNeedPerBatch);
+        int selfRequired = targetBatches * selfNeedPerBatch;
+        if (backlogHerb.count < selfRequired) {
+            return null;
+        }
+
+        int craftableBatches = Integer.MAX_VALUE;
+        List<RecipeShortage> shortages = new ArrayList<>();
+        int totalMissing = 0;
+        for (Map.Entry<String, Integer> requirement : recipe.needByName.entrySet()) {
+            String name = requirement.getKey();
+            int needPerBatch = requirement.getValue();
+            if (needPerBatch <= 0) {
+                continue;
+            }
+            int currentCount = herbCounts.getOrDefault(name, 0);
+            craftableBatches = Math.min(craftableBatches, currentCount / needPerBatch);
+
+            int requiredCount = targetBatches * needPerBatch;
+            if (!name.equals(backlogHerb.name) && currentCount < requiredCount) {
+                int missingCount = requiredCount - currentCount;
+                Ingredient ingredient = recipe.firstIngredient(name);
+                shortages.add(new RecipeShortage(name, currentCount, requiredCount, missingCount,
+                        ingredient == null ? 0 : ingredient.unitPrice));
+                totalMissing += missingCount;
+            }
+        }
+
+        if (craftableBatches == Integer.MAX_VALUE) {
+            craftableBatches = 0;
+        }
+        shortages.sort(Comparator.comparingInt(RecipeShortage::getMissingCount).reversed()
+                .thenComparing(RecipeShortage::getName));
+        return new RecipePlan(recipe, targetBatches, craftableBatches, shortages, totalMissing);
     }
 
-    private HerbAnalysis buildSelfHighAnalysis(BacklogHerb backlogHerb,
-                                               int limitHerbsCount,
-                                               Recipe recipe,
-                                               Integer buyPrice,
-                                               int marketPrice,
-                                               String command,
-                                               String reasonPrefix) {
-        String recipeText = recipe == null ? "未找到足够高收益消耗配方" : formatRecipeBrief(recipe);
-        String reason = reasonPrefix + " 当前采购价" + formatPrice(buyPrice) + "，最新坊市价" + formatMarketPrice(marketPrice) + "。";
-        return new HerbAnalysis(backlogHerb, limitHerbsCount, "本身采购价偏高导致累积",
-                recipeText,
-                reason,
-                "按当前坊市价降低本药材采购价后观察背包变化。",
-                Collections.singletonList(command));
+    private Comparator<RecipePlan> recipePlanComparator() {
+        return (left, right) -> {
+            int result = Double.compare(right.getCompletionRatio(), left.getCompletionRatio());
+            if (result != 0) return result;
+            result = Integer.compare(left.shortages.size(), right.shortages.size());
+            if (result != 0) return result;
+            result = Integer.compare(left.totalMissing, right.totalMissing);
+            if (result != 0) return result;
+            return Integer.compare(right.recipe.profit, left.recipe.profit);
+        };
     }
 
-    private String buildMessage(int limitHerbsCount, List<HerbAnalysis> analyses, Set<String> commands, boolean recipeMissing) {
+    private int ceilDiv(int dividend, int divisor) {
+        return (dividend + divisor - 1) / divisor;
+    }
+
+    private String buildSelfPriceStatus(Integer buyPrice, int marketPrice, int configuredPriceOffset) {
+        if (buyPrice == null || buyPrice <= 0) {
+            return " 本药材尚未设置采购价。";
+        }
+        if (marketPrice <= 0) {
+            return " 本药材当前采购价" + formatPrice(buyPrice) + "，但未查询到坊市价。";
+        }
+        int threshold = marketPrice + configuredPriceOffset;
+        if (buyPrice >= threshold) {
+            return " 本药材当前采购价" + formatPrice(buyPrice) + "，坊市价" + formatMarketPrice(marketPrice)
+                    + "，已达到调价门槛" + threshold + "万。";
+        }
+        return " 本药材当前采购价" + formatPrice(buyPrice) + "，坊市价" + formatMarketPrice(marketPrice)
+                + "，未达到调价门槛" + threshold + "万，暂不建议降价。";
+    }
+
+    private List<String> commandList(String command) {
+        List<String> commands = new ArrayList<>();
+        addCommand(commands, command);
+        return commands;
+    }
+
+    private void addCommand(List<String> commands, String command) {
+        if (isNotBlank(command) && !commands.contains(command)) {
+            commands.add(command);
+        }
+    }
+
+    private String buildMessage(int parsedHerbCount, int limitHerbsCount, List<HerbAnalysis> analyses,
+                                Set<String> commands, boolean recipeMissing) {
+        long actionableCount = analyses.stream().filter(analysis -> !analysis.commands.isEmpty()).count();
+        long missingPriceCount = analyses.stream().filter(analysis -> analysis.missingPriceData).count();
         StringBuilder sb = new StringBuilder();
         sb.append("背包药材分析完成\n");
+        sb.append("已解析药材：").append(parsedHerbCount).append("种\n");
         sb.append("背包限制：").append(limitHerbsCount).append("\n");
-        sb.append("检测到超限药材：").append(analyses.size()).append("种");
+        sb.append("检测到超限药材：").append(analyses.size()).append("种\n");
+        sb.append("生成调价建议：").append(actionableCount).append("种\n");
+        sb.append("暂不调价/继续观察：").append(analyses.size() - actionableCount).append("种\n");
+        sb.append("价格数据不完整：").append(missingPriceCount).append("种");
         if (recipeMissing) {
             sb.append("\n提示：未找到当前bot的炼丹配方.txt，本次只能按采购价给出保守建议。");
         }
@@ -365,14 +442,14 @@ public class HerbBacklogAnalyzer {
         return selfBuyPrice >= selfMarketPrice + configuredPriceOffset;
     }
 
-    private int chooseSuggestedPartnerPrice(Ingredient ingredient, Integer buyPrice, int marketPrice) {
+    private int chooseSuggestedPartnerPrice(int recipeUnitPrice, Integer buyPrice, int marketPrice) {
         if (marketPrice > 0) {
-            return marketPrice;
+            return (int) Math.min(Integer.MAX_VALUE, (long) marketPrice + PARTNER_MARKET_PRICE_PREMIUM);
         }
         if (buyPrice != null && buyPrice > 0) {
             return buyPrice;
         }
-        return Math.max(ingredient.unitPrice, 0);
+        return Math.max(recipeUnitPrice, 0);
     }
 
     private String buildPurchaseCommand(String herbName, int suggestedPrice) {
@@ -382,12 +459,25 @@ public class HerbBacklogAnalyzer {
         return "采购药材" + herbName + " " + suggestedPrice;
     }
 
-    private int resolveMarketPrice(String herbName, MarketPriceResolver resolver) {
+    private int resolveMarketPrice(String herbName, MarketPriceResolver resolver, Map<String, Integer> cache) {
         if (resolver == null || !isNotBlank(herbName)) {
             return 0;
         }
-        Integer price = resolver.resolve(herbName.trim());
-        return price == null ? 0 : Math.max(price, 0);
+        String normalizedName = herbName.trim();
+        if (cache != null && cache.containsKey(normalizedName)) {
+            return cache.get(normalizedName);
+        }
+        int resolvedPrice;
+        try {
+            Integer price = resolver.resolve(normalizedName);
+            resolvedPrice = price == null ? 0 : Math.max(price, 0);
+        } catch (RuntimeException e) {
+            resolvedPrice = 0;
+        }
+        if (cache != null) {
+            cache.put(normalizedName, resolvedPrice);
+        }
+        return resolvedPrice;
     }
 
     private String formatPrice(Integer price) {
@@ -441,6 +531,7 @@ public class HerbBacklogAnalyzer {
         private final String reason;
         private final String suggestion;
         private final List<String> commands;
+        private final boolean missingPriceData;
 
         private HerbAnalysis(BacklogHerb herb,
                              int limitHerbsCount,
@@ -448,7 +539,8 @@ public class HerbBacklogAnalyzer {
                              String recipeText,
                              String reason,
                              String suggestion,
-                             List<String> commands) {
+                             List<String> commands,
+                             boolean missingPriceData) {
             this.herb = herb;
             this.limitHerbsCount = limitHerbsCount;
             this.cause = cause;
@@ -456,32 +548,62 @@ public class HerbBacklogAnalyzer {
             this.reason = reason;
             this.suggestion = suggestion;
             this.commands = commands == null ? Collections.emptyList() : commands;
+            this.missingPriceData = missingPriceData;
         }
     }
 
-    private static final class PartnerIssue {
+    private static final class RecipePlan {
         private final Recipe recipe;
-        private final Ingredient ingredient;
-        private final int currentCount;
-        private final Integer buyPrice;
-        private final int marketPrice;
-        private final int suggestedPrice;
-        private final int score;
+        private final int targetBatches;
+        private final int craftableBatches;
+        private final List<RecipeShortage> shortages;
+        private final int totalMissing;
 
-        private PartnerIssue(Recipe recipe,
-                             Ingredient ingredient,
-                             int currentCount,
-                             Integer buyPrice,
-                             int marketPrice,
-                             int suggestedPrice,
-                             int score) {
+        private RecipePlan(Recipe recipe,
+                           int targetBatches,
+                           int craftableBatches,
+                           List<RecipeShortage> shortages,
+                           int totalMissing) {
             this.recipe = recipe;
-            this.ingredient = ingredient;
+            this.targetBatches = targetBatches;
+            this.craftableBatches = craftableBatches;
+            this.shortages = shortages;
+            this.totalMissing = totalMissing;
+        }
+
+        private double getCompletionRatio() {
+            if (targetBatches <= 0) {
+                return 0D;
+            }
+            return Math.min(craftableBatches, targetBatches) / (double) targetBatches;
+        }
+    }
+
+    private static final class RecipeShortage {
+        private final String name;
+        private final int currentCount;
+        private final int requiredCount;
+        private final int missingCount;
+        private final int unitPrice;
+
+        private RecipeShortage(String name,
+                               int currentCount,
+                               int requiredCount,
+                               int missingCount,
+                               int unitPrice) {
+            this.name = name;
             this.currentCount = currentCount;
-            this.buyPrice = buyPrice;
-            this.marketPrice = marketPrice;
-            this.suggestedPrice = suggestedPrice;
-            this.score = score;
+            this.requiredCount = requiredCount;
+            this.missingCount = missingCount;
+            this.unitPrice = unitPrice;
+        }
+
+        private String getName() {
+            return name;
+        }
+
+        private int getMissingCount() {
+            return missingCount;
         }
     }
 
@@ -505,24 +627,13 @@ public class HerbBacklogAnalyzer {
             return needByName.containsKey(herbName);
         }
 
-        private boolean canCraft(Map<String, Integer> herbCounts) {
-            for (Map.Entry<String, Integer> entry : needByName.entrySet()) {
-                if (herbCounts.getOrDefault(entry.getKey(), 0) < entry.getValue()) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        private List<Ingredient> findShortages(Map<String, Integer> herbCounts) {
-            List<Ingredient> shortages = new ArrayList<>();
+        private Ingredient firstIngredient(String herbName) {
             for (Ingredient ingredient : ingredients) {
-                int current = herbCounts.getOrDefault(ingredient.name, 0);
-                if (current < needByName.getOrDefault(ingredient.name, ingredient.count)) {
-                    shortages.add(ingredient);
+                if (ingredient.name.equals(herbName)) {
+                    return ingredient;
                 }
             }
-            return shortages;
+            return null;
         }
 
         private int getProfit() {
