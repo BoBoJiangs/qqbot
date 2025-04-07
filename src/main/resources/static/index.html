@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>价格走势图</title>
+    <!-- 其他头部内容 -->
+</head>
+<div id ="play">
+    <div id="stats"></div>
+    <canvas id="myChart"></canvas>
+</div>
+
+<script src="js/chart.js"></script>
+<script src="js/chartjs-plugin-datalabels.js"></script>
+<script src="js/jquery-3.3.1.min.js"></script>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+    }
+    #stats {
+        text-align: center;
+        margin-bottom: 20px;
+        font-size: 1.2em;
+        color: #333;
+    }
+    .price-info {
+        display: inline-block;
+        padding: 5px 10px;
+        background-color: #f0f0f0;
+        border-radius: 5px;
+        margin: 0 10px;
+    }
+</style>
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    var name = urlParams.get('name');
+    let rowData = [];
+
+    // 发送AJAX请求获取数据
+    $.ajax({
+        url: '/price/' + name,
+        contentType: 'application/json;charset=utf-8',
+        type: 'get',
+        success: function (data) {
+            console.log(data);
+            rowData = data;
+
+            // 准备数据
+            const labels = rowData.map(item => item.time2);
+            const prices = rowData.map(item => item.price);
+
+            // 计算最高价、最低价和平均价
+            let maxPrice = Math.max(...prices);
+            if(maxPrice>=10000){
+                maxPrice = (maxPrice/10000).toFixed(1)+"亿";
+            }else {
+                maxPrice = maxPrice.toFixed(0)+"万";
+            }
+            let minPrice = Math.min(...prices);
+            if(minPrice>=10000){
+                minPrice = (minPrice/10000).toFixed(1)+"亿";
+            }else {
+                minPrice = minPrice.toFixed(0)+"万";
+            }
+            let avgPrice = prices.reduce((acc, val) => acc + val, 0) / prices.length;
+            if(avgPrice>=10000){
+                avgPrice = (avgPrice/10000).toFixed(1)+"亿";
+            }else {
+                avgPrice = avgPrice.toFixed(0)+"万";
+            }
+            // 显示统计信息
+            document.getElementById('stats').innerHTML = `
+              <span class="price-info">最低价格: ${minPrice}</span>
+              <span class="price-info">最高价格: ${maxPrice}</span>
+              <span class="price-info">平均价格: ${avgPrice}</span>
+              <span class="price-info">价格变化次数: ${prices.length}</span>
+            `;
+            // 创建图表
+            const ctx = document.getElementById('myChart');
+            const priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: name,
+                        data: prices,
+                        fill: false,
+                        borderColor: 'rgb(75, 192, 192)',
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: {
+                                display: true,
+                                text: '价格 (万)'
+                            },
+                            ticks: {
+                                callback: function(value, index, values) {
+                                    if(value>=10000){
+                                        return (value/10000).toFixed(1)+"亿";
+                                    }
+                                    return value.toFixed(0)+"万";
+                                }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            labels: {
+                                font: {
+                                    size: 30
+                                }
+                            }
+                        },
+                        datalabels: {
+                            anchor: 'end', // 数据标签的位置
+                            align: 'top', // 数据标签的对齐方式
+                            formatter: function(value, context) {
+                                if(value>=10000){
+                                    return (value/10000).toFixed(1)+"亿";
+                                }
+                                return value.toFixed(0)+"万"; // 显示小数点后两位
+                            },
+                            color: '#000' // 数据标签的颜色
+                        }
+                    }
+                },
+                plugins: [ChartDataLabels] // 启用 datalabels 插件
+            });
+        },
+        error: function (error) {
+            console.error('Error fetching data:', error);
+        }
+    });
+</script>
+</html>

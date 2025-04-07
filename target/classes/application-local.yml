@@ -1,0 +1,62 @@
+bot:
+  #  类型：ws 正向连接，ws-reverse 反向连接，
+  #  以下是两个连接的使用模板，注意url里的端口每个bot需要不一样。
+  - type: ws
+    url: ws://localhost:8081
+    accessToken: 1024*1024*1024
+    #    修炼群号
+    groupId: 699784809
+    #    大号qq
+    masterQQ: 1599558112
+    # 是否开启查价格
+    enableCheckPrice: true
+    # 是否开启猜成语
+    enableGuessTheIdiom: false
+    # 是否开启查行情
+    enableCheckMarket: true
+    # 是否开启自动宗门任务
+    enableSectMission: true
+    #  悬赏令价格查询
+    enableXslPriceQuery: false
+    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
+    cultivationMode: 1
+  #    这个连接方式可能更稳定
+  - type: ws-reverse
+    url: ws://localhost:8082
+    accessToken: 1024*1024*1024
+    groupId: 699784809
+    masterQQ: 1599558112
+    # 是否开启查价格
+    enableCheckPrice: true
+    # 是否开启猜成语
+    enableGuessTheIdiom: false
+    # 是否开启查行情
+    enableCheckMarket: true
+    # 是否开启自动宗门任务
+    enableSectMission: true
+    #  悬赏令价格查询
+    enableXslPriceQuery: false
+    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
+    cultivationMode: 1
+
+spring:
+  datasource:
+    hikari:
+      jdbc-url: jdbc:h2:mem:db;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        jdbc:
+          #为spring data jpa saveAll方法提供批量插入操作 此处可以随时更改大小 建议500哦
+          batch_size: 1000
+          batch_versioned_data: true
+          order_inserts: true
+    database-platform: org.hibernate.dialect.H2Dialect
+  thymeleaf:
+    cache: false
+  task:
+    scheduling:
+      pool:
+        size: 10
