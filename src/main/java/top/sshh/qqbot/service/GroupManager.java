@@ -49,7 +49,7 @@ public class GroupManager {
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        bot.setGroupSpecialTitle(member.getUserId(), specialTitle, 43200000, group.getGroupId());
+                        bot.setGroupSpecialTitle(member.getUserId(), specialTitle, 0, group.getGroupId());
                     } catch (Exception var2) {
                     }
 
@@ -215,7 +215,7 @@ public class GroupManager {
     }
 
     @Scheduled(
-            fixedDelay = 60000L,
+            fixedDelay = 30000L,
             initialDelay = 3000L
     )
     public void 结算() {
