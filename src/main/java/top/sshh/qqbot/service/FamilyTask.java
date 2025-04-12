@@ -16,23 +16,91 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import top.sshh.qqbot.data.RemindTime;
 
+import javax.annotation.PostConstruct;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.TimeZone;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 public class FamilyTask {
-    private static final Logger log = LoggerFactory.getLogger(FamilyTask.class);
+    private static final Logger logger = LoggerFactory.getLogger(FamilyTask.class);
     public static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss") {
         {
             this.setTimeZone(TimeZone.getTimeZone("Asia/Shanghai"));
         }
     };
+    private static final String FILE_PATH = "./cache/field_remind_data.ser";
+    Map<Long, Long> remindMap = new ConcurrentHashMap();
 
     public FamilyTask() {
+    }
+
+    @PostConstruct
+    public void init() {
+        this.loadTasksFromFile();
+        logger.info("已从本地加载{}个灵田提醒任务", this.remindMap.size(), this.remindMap.size());
+    }
+
+    @Scheduled(
+            fixedDelay = 43200000L,
+            initialDelay = 600000L
+    )
+    public void autoSaveTasks() {
+        this.saveTasksToFile();
+    }
+
+    public synchronized void saveTasksToFile() {
+        try {
+            ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(FILE_PATH)));
+
+            try {
+                Iterator<Map.Entry<Long, Long>> iterator = remindMap.entrySet().iterator();
+                while (iterator.hasNext()) {
+                    Map.Entry<Long, Long> entry = iterator.next();
+                    if (entry.getValue() == 9223372036854175807L) {
+                        logger.info("移除异常时间的灵田提醒：{}", entry.getKey());
+                        iterator.remove();
+                    }
+                }
+                Map<String, Object> data = new HashMap();
+                data.put("灵田提醒", this.remindMap);
+                oos.writeObject(data);
+            } catch (Throwable var5) {
+
+            }
+
+            oos.close();
+        } catch (Exception e) {
+            logger.info("任务数据保存失败：", e);
+        }
+
+        logger.info("正在同步 {} 个灵田提醒任务", this.remindMap.size());
+    }
+
+    private synchronized void loadTasksFromFile() {
+        File dataFile = new File("./cache");
+        if (dataFile.exists()) {
+            try {
+                ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(new File(FILE_PATH).toPath()));
+                Map<String, Object> data = (Map)ois.readObject();
+                this.remindMap = (ConcurrentHashMap)data.get("灵田提醒");
+
+                ois.close();
+            } catch (Exception var4) {
+                Exception e = var4;
+                logger.info("任务数据加载失败：", e);
+            }
+        } else {
+            dataFile.mkdirs();
+            logger.info("未找到序列化文件: {}", "./cache/field_remind_data.ser");
+        }
+
     }
 
     @Scheduled(
@@ -178,14 +246,18 @@ public class FamilyTask {
                 }
 
                 double hours = Double.parseDouble(parts[1].trim());
-                bot.getBotConfig().setLastExecuteTime((long)((double)System.currentTimeMillis() + hours * 60.0 * 60.0 * 1000.0 - 1.728E8));
-                group.sendMessage((new MessageChain()).text("下次收取时间为：" + sdf.format(new Date(bot.getBotConfig().getLastExecuteTime() + 172800000L))));
+                long remindTime = (long)((double)System.currentTimeMillis() + hours * 60.0 * 60.0 * 1000.0);
+                remindMap.put(bot.getBotId(), remindTime);
+//                bot.getBotConfig().setLastExecuteTime(remindTime);
+                group.sendMessage((new MessageChain()).text("下次收取时间为：" + sdf.format(new Date(remindTime))));
             } else if (message.contains("还没有洞天福地")) {
                 System.out.println(LocalDateTime.now() + " " + group.getGroupName() + " 收到灵田领取结果,还没有洞天福地");
-                bot.getBotConfig().setLastExecuteTime(9223372036854175807L);
+//                bot.getBotConfig().setLastExecuteTime(9223372036854175807L);
+                remindMap.put(bot.getBotId(), 9223372036854175807L);
             } else if (message.contains("本次修炼到达上限")) {
                 group.sendMessage((new MessageChain()).at("3889001741").text("直接突破"));
             } else if (message.contains("道友成功收获药材")) {
+                remindMap.put(bot.getBotId(), 9223372036854175807L);
                 group.sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
             }
         }
@@ -201,20 +273,33 @@ public class FamilyTask {
         while(var1.hasNext()) {
             Bot bot = (Bot)var1.next();
             BotConfig botConfig = bot.getBotConfig();
-            if (botConfig.isEnableAutoField() && botConfig.getLastExecuteTime() + 60000L < System.currentTimeMillis() - 172800000L) {
+
+            if (botConfig.isEnableAutoField()) {
+
                 long groupId = botConfig.getGroupId();
                 if (botConfig.getTaskId() != 0L) {
                     groupId = botConfig.getTaskId();
                 }
 
-                if (botConfig.isStop()) {
-                    botConfig.setLastExecuteTime(9223372036854175807L);
-                    System.out.println("触发灵田验证");
-                    return;
+
+
+                if(remindMap.get(bot.getBotId()) == null){
+                    logger.info("bot.getBotId()=="+remindMap.get(bot.getBotId()));
+                    remindMap.put(bot.getBotId(), 9223372036854175807L);
+                    bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
+                    continue;
                 }
 
-                botConfig.setLastExecuteTime(9223372036854175807L);
-                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
+                if(remindMap.get(bot.getBotId()) + 60000L < System.currentTimeMillis()){
+                    logger.info(String.format("bot.getBotId()==%d", remindMap.get(bot.getBotId())));
+//                    botConfig.setLastExecuteTime(9223372036854175807L);
+                    remindMap.put(bot.getBotId(), 9223372036854175807L);
+                    bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
+
+                }
+
+
+
             }
         }
 

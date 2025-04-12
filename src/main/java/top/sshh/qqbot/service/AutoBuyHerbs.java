@@ -16,6 +16,7 @@ import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.ProductPrice;
@@ -27,6 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import static top.sshh.qqbot.service.DanCalculator.targetDir;
 
 @Component
 public class AutoBuyHerbs {
@@ -40,6 +43,8 @@ public class AutoBuyHerbs {
     private List<String> medicinalList = new ArrayList();
     public int page = 1;
     private Map<String, ProductPrice> herbPackMap = new ConcurrentHashMap();
+    @Autowired
+    public DanCalculator danCalculator;
 
     public AutoBuyHerbs() {
     }
@@ -183,7 +188,7 @@ public class AutoBuyHerbs {
     public void updateMedicinePrices(Map<String, ProductPrice> purchases) throws IOException {
         List<String> lines = new ArrayList();
         Map<String, String> medicineMap = new LinkedHashMap();
-        BufferedReader reader = new BufferedReader(new FileReader("C:\\Users\\Administrator\\Desktop\\修仙java脚本\\properties\\药材价格.txt"));
+        BufferedReader reader = new BufferedReader(new FileReader(targetDir+"properties/药材价格.txt"));
 
         String line;
         try {
@@ -209,7 +214,7 @@ public class AutoBuyHerbs {
             medicineMap.put(medicineName, productPrice.getPrice() + "");
         }
 
-        BufferedWriter writer = new BufferedWriter(new FileWriter("C:\\Users\\Administrator\\Desktop\\修仙java脚本\\properties\\药材价格.txt"));
+        BufferedWriter writer = new BufferedWriter(new FileWriter(targetDir+"properties/药材价格.txt"));
 
         try {
             Iterator var15 = medicineMap.entrySet().iterator();
@@ -308,8 +313,8 @@ public class AutoBuyHerbs {
                         this.herbPackMap.put(itemName, productPrice);
                     }
 
-                    if (((ProductPrice)this.herbPackMap.get(itemName)).getHerbCount() > DanCalculator.config.getLimitHerbsCount()) {
-                        if (price <= (double)existingProduct.getPrice() - (double)DanCalculator.config.getAddPrice()) {
+                    if (((ProductPrice)this.herbPackMap.get(itemName)).getHerbCount() > danCalculator.config.getLimitHerbsCount()) {
+                        if (price <= (double)existingProduct.getPrice() - (double)danCalculator.config.getAddPrice()) {
                             existingProduct.setCode(code);
                             this.autoBuyList.add(existingProduct);
                         }

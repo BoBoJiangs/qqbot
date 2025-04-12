@@ -24,6 +24,7 @@ import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
 
+import javax.annotation.PostConstruct;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -33,6 +34,8 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static top.sshh.qqbot.service.DanCalculator.targetDir;
+
 @Component
 public class PriceTask {
     @Autowired
@@ -40,13 +43,12 @@ public class PriceTask {
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
 
     public PriceTask() {
-        Timer timer = new Timer();
-        TimerTask task = new TimerTask() {
-            public void run() {
-                PriceTask.this.readPrice();
-            }
-        };
-        timer.schedule(task, 4000L);
+
+    }
+
+    @PostConstruct
+    public void init() {
+        this.readPrice();
     }
 
     @GroupMessageHandler(
@@ -63,7 +65,7 @@ public class PriceTask {
 
     private void readPrice() {
         try {
-            BufferedReader reader = new BufferedReader(new FileReader("C:\\Users\\Administrator\\Desktop\\修仙java脚本\\properties\\坊市价格.txt"));
+            BufferedReader reader = new BufferedReader(new FileReader(targetDir+"properties/坊市价格.txt"));
 
             try {
                 StringBuilder jsonStr = new StringBuilder();
@@ -76,6 +78,7 @@ public class PriceTask {
                 List<ProductPrice> personList = (List)JSON.parseObject(jsonStr.toString(), new TypeReference<List<ProductPrice>>() {
                 }, new JSONReader.Feature[0]);
                 if (this.productPriceResponse != null) {
+
                     this.productPriceResponse.saveAll(personList);
                     System.out.println("坊市价格读取成功！" + personList.size());
                 } else {
@@ -93,7 +96,7 @@ public class PriceTask {
 
     public void savePrice(Group group) {
         try {
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("C:\\Users\\Administrator\\Desktop\\修仙java脚本\\properties\\坊市价格.txt"), StandardCharsets.UTF_8));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(targetDir+"properties/坊市价格.txt"), StandardCharsets.UTF_8));
 
             try {
                 List<ProductPrice> personList = (List)this.productPriceResponse.findAll();
@@ -201,13 +204,21 @@ public class PriceTask {
                     message = textMessage.getText();
                 } while(!message.contains("道友的个人悬赏令"));
 
-                Pattern pattern = Pattern.compile("可能额外获得：(.*?)!");
+                Pattern pattern = Pattern.compile("完成几率(\\d+),基础报酬(\\d+)修为.*?可能额外获得：[^:]+:(.*?)!");
                 Matcher matcher = pattern.matcher(message);
                 StringBuilder stringBuilder = new StringBuilder();
                 int count = 0;
+                int maxPriceIndex = 0;
+                int maxPrice = 0;
+
+                int maxCultivateIndex = 0;
+                long maxCultivate = 0;
+
 
                 while(matcher.find()) {
-                    String name = matcher.group(1).replaceAll("\\s", "");
+                    int completionRate = Integer.parseInt(matcher.group(1));
+                    long cultivation = Long.parseLong(matcher.group(2));
+                    String name = matcher.group(3).replaceAll("\\s", "");
                     int colonIndex = name.indexOf(58);
                     if (colonIndex >= 0) {
                         name = name.substring(colonIndex + 1).trim();
@@ -216,18 +227,36 @@ public class PriceTask {
                     if (StringUtils.isNotBlank(name)) {
                         ++count;
                         ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
+                        if(completionRate == 100){
+                            cultivation = cultivation * 2;
+                        }
+                        if (cultivation > maxCultivate) {
+                            maxCultivate = cultivation;
+                            maxCultivateIndex = count;
+                        }
                         if (first != null) {
-                            stringBuilder.append("\n悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万").append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
+                            if (first.getPrice() > maxPrice) {
+                                maxPrice = first.getPrice();
+                                maxPriceIndex = count;
+                            }
+                            stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万")
+                                    .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
                         }
                     }
                 }
-
+//                stringBuilder.append("\n\n最高修为:接取悬赏令" + maxCultivateIndex + "\n最高价格:接取悬赏令" + maxPriceIndex );
+                stringBuilder.append("\n\n最高修为:悬赏令" + maxCultivateIndex +"(修为" + formatCultivation(maxCultivate)+")");
+                stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + maxPrice + "万)");
                 if (stringBuilder.length() > 5) {
                     stringBuilder.insert(0, "悬赏令价格查询：");
                     group.sendMessage((new MessageChain()).text(stringBuilder.toString()));
                 }
             }
         }
+    }
+
+    private String formatCultivation(long reward) {
+        return reward >= 100000000L ? String.format("%.2f亿", (double)reward / 1.0E8) : reward / 10000L + "万";
     }
 
     @GroupMessageHandler(

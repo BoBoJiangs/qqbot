@@ -9,10 +9,10 @@
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>top.sshh</groupId>
-    <artifactId>qq-bot</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>qq-bot</name>
-    <description>qq-bot</description>
+    <artifactId>bot</artifactId>
+    <version>1.0.0</version>
+    <name>bot</name>
+    <description>bot</description>
     <properties>
         <java.version>1.8</java.version>
     </properties>

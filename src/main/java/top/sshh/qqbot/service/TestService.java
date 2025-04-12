@@ -386,6 +386,9 @@ public class TestService {
 
                                 if (line.startsWith("名字：") || line.startsWith("上品") || line.startsWith("下品") || line.endsWith("功法") || line.endsWith("神通")) {
                                     String name = "";
+                                    if ((line.contains("极品神通")||line.contains("辅修")) && message.endsWith("一键炼金")) {
+                                        continue;
+                                    }
                                     if (line.startsWith("名字：")) {
                                         name = line.substring(3).trim();
                                     } else if (!line.endsWith("功法") && !line.endsWith("神通")) {
@@ -393,9 +396,6 @@ public class TestService {
                                             name = line.substring(4).trim();
                                         }
                                     } else if (line.contains("辅修")) {
-                                        if (message.endsWith("一键炼金")) {
-                                            continue;
-                                        }
 
                                         name = line.substring(0, line.length() - 8).trim();
                                     } else if (!line.startsWith("极品神通")) {

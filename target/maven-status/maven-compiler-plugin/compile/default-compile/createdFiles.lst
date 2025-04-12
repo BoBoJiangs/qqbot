@@ -22,7 +22,6 @@ top/sshh/qqbot/service/AutoBuyHerbs.class
 top/sshh/qqbot/service/AutoAlchemyTask$1.class
 top/sshh/qqbot/service/GroupManager$2.class
 top/sshh/qqbot/service/PriceTask.class
-top/sshh/qqbot/service/PriceTask$2.class
 top/sshh/qqbot/data/Config.class
 top/sshh/qqbot/QqBotApplication.class
 top/sshh/qqbot/service/AutoAlchemyTask$4.class

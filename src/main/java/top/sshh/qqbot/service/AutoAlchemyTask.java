@@ -14,6 +14,9 @@ import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.Config;
 
@@ -24,12 +27,16 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static top.sshh.qqbot.service.DanCalculator.targetDir;
+
 @Component
 public class AutoAlchemyTask {
-    public static final String targetDir = "C:\\Users\\Administrator\\Desktop\\修仙java脚本";
+    private static final Logger log = LoggerFactory.getLogger(AutoAlchemyTask.class);
+    //    public static final String targetDir = "C:\\Users\\Administrator\\Desktop\\修仙java脚本";
     private List<String> medicinalList = new ArrayList();
     public int page = 1;
-    public DanCalculator danCalculator = new DanCalculator();
+    @Autowired
+    public DanCalculator danCalculator;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
     private List<String> alchemyList = new CopyOnWriteArrayList();
     private Group group;
@@ -58,7 +65,7 @@ public class AutoAlchemyTask {
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        AutoAlchemyTask.clearFile("C:\\Users\\Administrator\\Desktop\\修仙java脚本//背包药材.txt");
+                        AutoAlchemyTask.clearFile(targetDir+"背包药材.txt");
                         group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     } catch (Exception var2) {
                     }
@@ -77,7 +84,8 @@ public class AutoAlchemyTask {
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        bot.uploadGroupFile(group.getGroupId(), "C:\\Users\\Administrator\\Desktop\\修仙java脚本//炼丹配方.txt", "炼丹配方.txt", "");
+                        File dataFile = new File(targetDir+"炼丹配方.txt");
+                        bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "炼丹配方.txt", "");
                     } catch (Exception var2) {
                         System.out.println("上传文件异常");
                     }
@@ -90,7 +98,8 @@ public class AutoAlchemyTask {
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        bot.uploadGroupFile(group.getGroupId(), "C:\\Users\\Administrator\\Desktop\\修仙java脚本\\properties//药材价格.txt", "药材价格.txt", "");
+                        File dataFile = new File(targetDir+"properties/药材价格.txt");
+                        bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "药材价格.txt", "");
                     } catch (Exception var2) {
                         System.out.println("上传文件异常");
                     }
@@ -106,11 +115,11 @@ public class AutoAlchemyTask {
         }
 
         if (message.startsWith("查丹方")) {
-            final String string = message.substring(message.indexOf("查丹方") + 3).trim();
+//            final String string = message.substring(message.indexOf("查丹方") + 3).trim();
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        AutoAlchemyTask.this.danCalculator.parseRecipes(string, group);
+                        AutoAlchemyTask.this.danCalculator.parseRecipes(message, group);
                     } catch (Exception var2) {
                         System.out.println("加载基础数据异常");
                     }
@@ -162,7 +171,7 @@ public class AutoAlchemyTask {
     )
     public void 查丹方(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (message.contains("查丹方")) {
-            final String string = message.substring(message.indexOf("查丹方") + 3).trim();
+            final String string = message.substring(message.indexOf("查丹方")).trim();
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
@@ -251,11 +260,9 @@ public class AutoAlchemyTask {
     public void 药材背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        boolean var10000;
-        if (!message.contains("" + bot.getBotId()) && !message.contains(bot.getBotName())) {
-            var10000 = false;
+        if (message.contains("" + bot.getBotId()) || message.contains(bot.getBotName())) {
+
         } else {
-            var10000 = true;
         }
 
         if (isGroup && message.contains("拥有数量") && message.contains("坊市数据") && botConfig.isStartAuto()) {
@@ -288,7 +295,8 @@ public class AutoAlchemyTask {
                     this.parseHerbList();
                 }
             } else {
-                System.out.println("message==" + message);
+//                System.out.println("message==" + message);
+
             }
         }
 
@@ -306,6 +314,7 @@ public class AutoAlchemyTask {
                     if (!var2.hasNext()) {
                         if (this.alchemyList.isEmpty() && this.group != null) {
                             this.group.sendMessage((new MessageChain()).text("未匹配到丹方，请检查丹方设置"));
+                            this.resetPram();
                         } else {
                             this.group.sendMessage((new MessageChain()).text("配到" + this.alchemyList.size() + "个丹方，准备开始自动炼丹"));
                         }
@@ -380,7 +389,8 @@ public class AutoAlchemyTask {
                 }
 
                 if (b) {
-                    System.out.println("背包药材校验成功！开始炼丹");
+//                    System.out.println("背包药材校验成功！开始炼丹");
+
                     if (StringUtils.isNotBlank(main) && StringUtils.isNotBlank(lead) && StringUtils.isNotBlank(assist)) {
                         this.alchemyList.add("配方" + main + lead + assist + "丹炉寒铁铸心炉");
                     }
@@ -418,7 +428,7 @@ public class AutoAlchemyTask {
 
     public Map<String, List<String>> parseRecipes() throws IOException {
         Map<String, List<String>> danRecipes = new LinkedHashMap();
-        BufferedReader reader = new BufferedReader(new FileReader("C:\\Users\\Administrator\\Desktop\\修仙java脚本//炼丹配方.txt"));
+        BufferedReader reader = new BufferedReader(new FileReader(targetDir+"炼丹配方.txt"));
         String currentDan = null;
         List<String> currentRecipes = null;
 
@@ -471,7 +481,7 @@ public class AutoAlchemyTask {
 
     public static int getHerbCount(String name) {
         try {
-            BufferedReader reader = new BufferedReader(new FileReader("C:\\Users\\Administrator\\Desktop\\修仙java脚本//背包药材.txt"));
+            BufferedReader reader = new BufferedReader(new FileReader(targetDir+"背包药材.txt"));
 
             while(true) {
                 try {
@@ -503,7 +513,7 @@ public class AutoAlchemyTask {
         boolean found = false;
 
         try {
-            BufferedReader reader = new BufferedReader(new FileReader("C:\\Users\\Administrator\\Desktop\\修仙java脚本//背包药材.txt"));
+            BufferedReader reader = new BufferedReader(new FileReader(targetDir+"背包药材.txt"));
 
             String line;
             try {
@@ -532,7 +542,7 @@ public class AutoAlchemyTask {
         }
 
         try {
-            FileWriter fw = new FileWriter("C:\\Users\\Administrator\\Desktop\\修仙java脚本//背包药材.txt", false);
+            FileWriter fw = new FileWriter(targetDir+"背包药材.txt", false);
 
             try {
                 BufferedWriter writer = new BufferedWriter(fw);
@@ -591,50 +601,44 @@ public class AutoAlchemyTask {
         });
     }
 
-    public void updateMedicine(String name, int quantity) throws Exception {
-        String filePath = "C:\\Users\\Administrator\\Desktop\\修仙java脚本//背包药材.txt";
-        List<String> lines = new ArrayList();
+    public void updateMedicine(String name, int quantity) {
+        String filePath = targetDir+"背包药材.txt";
+        List<String> lines = new ArrayList<>();
         boolean found = false;
-
-        BufferedReader reader = new BufferedReader(new FileReader(filePath));
-
-        try {
-            while(true) {
-                while(true) {
-                    String line;
-                    if ((line = reader.readLine()) == null) {
-                        break;
-                    }
-
-                    String[] parts = line.split("\\s+");
-                    if (parts.length >= 1 && parts[0].equals(name)) {
-                        lines.add(name + " " + quantity);
-                        found = true;
-                    } else {
-                        lines.add(line);
-                    }
+        // 读取文件内容并处理
+        try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                // 分割药材名称和数量（忽略多余空格）
+                String[] parts = line.split("\\s+");
+                if (parts.length >= 1 && parts[0].equals(name)) {
+                    lines.add(name + " " + quantity); // 替换当前行
+                    found = true;
+                } else {
+                    lines.add(line); // 保留原有行
                 }
             }
-        } catch (Throwable var11) {
+        } catch (FileNotFoundException e) {
+            // 文件不存在时无需处理
+        } catch (IOException e) {
+            e.printStackTrace();
+            return;
         }
 
+        // 如果未找到药材，添加新行
         if (!found) {
             lines.add(name + " " + quantity);
         }
 
-        BufferedWriter writer = new BufferedWriter(new FileWriter(filePath));
-
-        try {
-            Iterator var18 = lines.iterator();
-
-            while(var18.hasNext()) {
-                String line = (String)var18.next();
+        // 将修改后的内容写入文件
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
+            for (String line : lines) {
                 writer.write(line);
                 writer.newLine();
             }
-
             writer.flush();
-        } catch (Exception var9) {
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
     }

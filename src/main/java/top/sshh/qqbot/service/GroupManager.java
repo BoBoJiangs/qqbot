@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 import top.sshh.qqbot.data.RemindTime;
 
 import java.text.SimpleDateFormat;
@@ -35,6 +36,8 @@ public class GroupManager {
     Map<String, RemindTime> mjXslmap = new ConcurrentHashMap();
     Map<String, RemindTime> ltmap = new ConcurrentHashMap();
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
+    @Value("${botId}")
+    private Long botId;
 
     public GroupManager() {
     }
@@ -224,24 +227,27 @@ public class GroupManager {
     }
 
     private void checkAndNotify(Map<String, RemindTime> map, String taskType1, String taskType2) {
-        Iterator<Map.Entry<String, RemindTime>> iterator = map.entrySet().iterator();
+        if(botId != null){
+            Iterator<Map.Entry<String, RemindTime>> iterator = map.entrySet().iterator();
 
-        while(iterator.hasNext()) {
-            Map.Entry<String, RemindTime> entry = (Map.Entry)iterator.next();
-            RemindTime remindTime = (RemindTime)entry.getValue();
-            if (remindTime.getExpireTime() > 0L && remindTime.getExpireTime() < System.currentTimeMillis()) {
-                Bot bot = (Bot)BotFactory.getBots().get(3860863656L);
-                if (bot != null) {
-                    if (remindTime.getText().equals(taskType1)) {
-                        bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain()).at(remindTime.getQq() + "").text("道友，您的" + taskType1 + "可以结算了！"));
-                    } else if (remindTime.getText().equals(taskType2)) {
-                        bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain()).at(remindTime.getQq() + "").text("道友，您的" + taskType2 + "可以结算了！"));
+            while(iterator.hasNext()) {
+                Map.Entry<String, RemindTime> entry = (Map.Entry)iterator.next();
+                RemindTime remindTime = (RemindTime)entry.getValue();
+                if (remindTime.getExpireTime() > 0L && remindTime.getExpireTime() < System.currentTimeMillis()) {
+                    Bot bot = (Bot)BotFactory.getBots().get(botId);
+                    if (bot != null) {
+                        if (remindTime.getText().equals(taskType1)) {
+                            bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain()).at(remindTime.getQq() + "").text("道友，您的" + taskType1 + "可以结算了！"));
+                        } else if (remindTime.getText().equals(taskType2)) {
+                            bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain()).at(remindTime.getQq() + "").text("道友，您的" + taskType2 + "可以结算了！"));
+                        }
+
+                        iterator.remove();
                     }
-
-                    iterator.remove();
                 }
             }
         }
+
 
     }
 }
