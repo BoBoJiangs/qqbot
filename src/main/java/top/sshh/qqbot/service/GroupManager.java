@@ -21,9 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import top.sshh.qqbot.data.RemindTime;
 
 import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.Iterator;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Matcher;
@@ -36,6 +34,18 @@ public class GroupManager {
     Map<String, RemindTime> mjXslmap = new ConcurrentHashMap();
     Map<String, RemindTime> ltmap = new ConcurrentHashMap();
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
+    private static final List<String> MJ_TEXT_LIST = Arrays.asList(" 【秘境结算提醒】秘境大门即将关闭！请速速退出，否则将被传送到‘社畜加班’副本！",
+            "【秘境结算提醒】叮！秘境探索结算中，本次收获：四库全书 1 本，戏书 1 本，以及队友的嫌弃三连～",
+            "【秘境结算提醒】警告！秘境 BOSS 正在暴走，若不及时撤离，将强制触发‘与 BOSS 拼酒’支线任务！",
+            "【秘境结算提醒】您的秘境评分：D 级（全靠运气），建议下次组队带个会看地图的队友！",
+            "【秘境结算提醒】秘境探索结束，本次成就：迷路 10 次，摔进陷阱 3 次，荣获‘秘境路痴’称号！",
+            "【秘境结算提醒】您意外触发隐藏剧情，获得‘被秘境BOSS追着跑’专属表情包！");
+    private static final List<String> XSL_TEXT_LIST = Arrays.asList("【悬赏结算提醒】您的江湖信誉值 + 50！悬赏奖励已存入包裹，小心别被其他修士盯上～",
+            "【悬赏结算提醒】注意！您的暗杀任务结算失败 —— 目标竟是掌门私生子，建议连夜跑路！",
+            "【悬赏结算提醒】恭喜完成任务！奖励：灵石 x500，经验 x200，以及… 来自 NPC 的白眼‘下次别接这么菜的任务",
+            "【悬赏结算提醒】您的悬赏任务该结算了！江湖恩怨就此两清，记得查收尾款，别让仇家赖账～",
+            "【悬赏结算提醒】秘境探索结束，本次成就：迷路 10 次，摔进陷阱 3 次，荣获‘秘境路痴’称号！",
+            "【悬赏结算提醒】您意外触发隐藏剧情，获得‘被秘境BOSS追着跑’专属表情包！");
     @Value("${botId}")
     private Long botId;
 
