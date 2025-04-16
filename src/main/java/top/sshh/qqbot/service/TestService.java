@@ -41,6 +41,7 @@ public class TestService {
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
     public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_PRODUCT = new ConcurrentHashMap();
+    private boolean isStartAutoTalent = false;
 
     public TestService() {
     }
@@ -82,6 +83,15 @@ public class TestService {
                 botConfig.setStop(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
                 bot.getBotConfig().setCommand("");
+            }
+
+            if ("开始自动刷天赋".equals(message)) {
+                isStartAutoTalent = true;
+                group.sendMessage((new MessageChain()).at("3889001741").text("道具使用涅槃造化丹"));
+            }
+            if ("停止自动刷天赋".equals(message)) {
+                isStartAutoTalent = false;
+                group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
             }
 
             if ("启用悬赏令价格查询".equals(message)) {
@@ -127,6 +137,10 @@ public class TestService {
             if ("确认一键丹药炼金".equals(message)) {
                 botConfig.setCommand("确认一键丹药炼金");
                 group.sendMessage((new MessageChain()).at("3889001741").text("丹药背包"));
+            }
+            if ("确认一键装备炼金".equals(message)) {
+                botConfig.setCommand("确认一键装备炼金");
+                group.sendMessage((new MessageChain()).at("3889001741").text("我的背包"));
             }
 
             if ("确认一键药材上架".equals(message)) {
@@ -491,6 +505,7 @@ public class TestService {
             sb.append("引用背包 一键上架/炼金\n");
             sb.append("－－－－－快捷命令－－－－－\n");
             sb.append("确认一键丹药炼金\n");
+            sb.append("确认一键装备炼金\n");
             sb.append("确认一键药材上架\n");
             sb.append("－－－－－掌门命令－－－－－\n");
             sb.append("弟子听令执行××\n");
@@ -619,6 +634,15 @@ public class TestService {
             }
         }
 
+        if (isAtSelf && message.contains("的背包")) {
+            botConfig = bot.getBotConfig();
+            if (StringUtils.isNotBlank(botConfig.getCommand()) && botConfig.getCommand().equals("确认一键装备炼金")) {
+                botConfig.setCommand("");
+                group.sendMessage((new MessageChain()).reply(messageId).text("一键炼金"));
+            }
+        }
+
+
         if (isAtSelf && message.contains("的药材背包")) {
             botConfig = bot.getBotConfig();
             if (StringUtils.isNotBlank(botConfig.getCommand()) && botConfig.getCommand().equals("确认一键药材上架")) {
@@ -626,6 +650,63 @@ public class TestService {
             }
         }
 
+    }
+
+    @GroupMessageHandler(
+            senderIds = {3889001741L}
+    )
+    public void 自动刷天赋(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        boolean isAtSelf = message.contains("" + bot.getBotId()) || message.contains(bot.getBotName());
+        if (isStartAutoTalent && isAtSelf && message.contains("保留24h，超时则无法选择")) {
+            List<TextMessage> messageList = messageChain.getMessageByType(TextMessage.class);
+            String text = messageList.get(messageList.size()-1).getText();
+//            log.info(text);
+            if (checkStats(text)){
+                isStartAutoTalent = false;
+//                group.sendMessage((new MessageChain()).at("3889001741").text("确认天赋选择右边"));
+            }else{
+                group.sendMessage((new MessageChain()).at("3889001741").text("确认天赋保留左边"));
+            }
+        }
+
+        if (isStartAutoTalent && isAtSelf && message.contains("成功保留")) {
+            group.sendMessage((new MessageChain()).at("3889001741").text("道具使用涅槃造化丹"));
+        }
+
+
+
+    }
+
+    public boolean checkStats(String input) {
+        Pattern pattern = Pattern.compile("(贪狼|巨门|禄存|文曲|廉贞|武曲|破军)\\（[^）]+\\）：(\\d+)(%?) -> (\\d+)(%?)");
+        boolean luCunValid = false;
+        boolean wuQuValid = false;
+        boolean poJunValid = false;
+
+        String[] lines = input.split("\n");
+
+        for(String line : lines) {
+            Matcher matcher = pattern.matcher(line.trim());
+            if (matcher.find()) {
+                String statName = matcher.group(1);
+                int leftValue = Integer.parseInt(matcher.group(2));
+                int rightValue = Integer.parseInt(matcher.group(4));
+
+                switch (statName) {
+                    case "禄存":
+                        luCunValid = rightValue >= leftValue;
+                        break;
+                    case "武曲":
+                        wuQuValid = rightValue >= leftValue;
+                        break;
+                    case "破军":
+                        poJunValid = rightValue >= leftValue;
+                        break;
+                }
+            }
+        }
+
+        return luCunValid && wuQuValid && poJunValid;
     }
 
     @GroupMessageHandler(

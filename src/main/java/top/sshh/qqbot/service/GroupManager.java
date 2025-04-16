@@ -20,6 +20,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
 import top.sshh.qqbot.data.RemindTime;
 
+import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
+import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,13 +54,66 @@ public class GroupManager {
     private static final List<String> LT_TEXT_LIST = Arrays.asList("【灵田结算提醒】隔壁炼丹童子盯着您的灵田流口水，请速速收药！",
             "【灵田结算提醒】您的灵植正在抗议‘营养不良’，收割后记得施肥，否则下次长仙人掌！",
             "【灵田结算提醒】您的灵花即将枯萎，再不采摘，就只能做成‘干花标本’当传家宝了！",
-            "【灵田结算提醒】您的悬赏任务该结算了！江湖恩怨就此两清，记得查收尾款，别让仇家赖账～",
+            "【灵田结算提醒】叮！灵植们正在开派对，再不收割，它们就要集体进化成‘叛逆菜精’！",
             "【灵田结算提醒】注意！您的灵稻已进入‘躺平模式’，收割后可解锁‘摸鱼种粮’成就！",
             "【灵田结算提醒】您的灵田成熟啦！再不收菜，灵植就要集体跳槽去隔壁老王的田啦！");
+    private static final String FILE_PATH = "./cache/task_data.ser";
     @Value("${botId}")
     private Long botId;
 
     public GroupManager() {
+    }
+
+
+    @PostConstruct
+    public void init() {
+        this.loadTasksFromFile();
+        logger.info("已从本地加载{}个灵田任务",  this.ltmap.size());
+    }
+
+    @Scheduled(
+            fixedRate = 7200000L
+    )
+    public void autoSaveTasks() {
+        this.saveTasksToFile();
+        logger.debug("定时任务数据持久化完成");
+    }
+
+    @PreDestroy
+    public void onShutdown() {
+        this.saveTasksToFile();
+        logger.info("程序关闭时持久化任务数据完成");
+    }
+
+    public synchronized void saveTasksToFile() {
+        try {
+            ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(FILE_PATH)));
+            Map<String, Object> data = new HashMap();
+            data.put("灵田", this.ltmap);
+            oos.writeObject(data);
+            oos.close();
+        } catch (Throwable var5) {
+            logger.error("任务数据保存失败：", var5);
+        }
+
+        logger.info("正在保存 {} 个灵田任务", this.ltmap.size());
+    }
+
+    private synchronized void loadTasksFromFile() {
+        File dataFile = new File(FILE_PATH);
+        if (dataFile.exists()) {
+            try {
+                ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(dataFile.toPath()));
+                Map<String, Object> data = (Map)ois.readObject();
+                this.ltmap = (ConcurrentHashMap)data.get("灵田");
+                ois.close();
+            } catch (Exception e) {
+                logger.error("任务数据加载失败：", e);
+            }
+        } else {
+            logger.warn("未找到序列化文件: {}", "task_data.ser");
+        }
+
     }
 
     @GroupMessageHandler(
@@ -116,7 +174,7 @@ public class GroupManager {
         if (bot.getBotConfig().isEnableGroupManager()) {
             boolean isGroupQQ = false;
             if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
-                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + member.getGroupId() + "&");
+                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + group.getGroupId() + "&");
             } else {
                 isGroupQQ = group.getGroupId() == 802082768L;
             }
@@ -249,17 +307,30 @@ public class GroupManager {
             while(iterator.hasNext()) {
                 Map.Entry<String, RemindTime> entry = (Map.Entry)iterator.next();
                 RemindTime remindTime = (RemindTime)entry.getValue();
-                if (remindTime.getExpireTime() > 0L && remindTime.getExpireTime() < System.currentTimeMillis()) {
-                    Bot bot = (Bot)BotFactory.getBots().get(botId);
-                    if (bot != null) {
-                        if (remindTime.getText().equals(taskType1)) {
-                            bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain()).at(remindTime.getQq() + "").text("道友，您的" + taskType1 + "可以结算了！"));
-                        } else if (remindTime.getText().equals(taskType2)) {
-                            bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain()).at(remindTime.getQq() + "").text("道友，您的" + taskType2 + "可以结算了！"));
-                        }
+                if (remindTime.getExpireTime() > 0L && System.currentTimeMillis() >= remindTime.getExpireTime()) {
+                    if(System.currentTimeMillis() - remindTime.getExpireTime() < 1000L * 60 * 30){
+                        Bot bot = BotFactory.getBots().get(botId);
+                        if (bot != null) {
+                            switch (remindTime.getText()) {
+                                case "悬赏":
+                                    bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
+                                            .at(remindTime.getQq() + "").text(XSL_TEXT_LIST.get(new Random().nextInt(XSL_TEXT_LIST.size()))));
+                                    break;
+                                case "秘境":
+                                    bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
+                                            .at(remindTime.getQq() + "").text(MJ_TEXT_LIST.get(new Random().nextInt(MJ_TEXT_LIST.size()))));
+                                    break;
+                                case "灵田":
+                                    bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
+                                            .at(remindTime.getQq() + "").text(LT_TEXT_LIST.get(new Random().nextInt(LT_TEXT_LIST.size()))));
+                                    break;
+                            }
 
-                        iterator.remove();
+                        }
                     }
+
+                    iterator.remove();
+
                 }
             }
         }

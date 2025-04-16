@@ -1,6 +1,9 @@
 package top.sshh.qqbot.data;
 
-public class RemindTime {
+import java.io.Serializable;
+
+public class RemindTime implements Serializable {
+    private static final long serialVersionUID = 1L;
     private Long qq;
     private Long expireTime;
     private String text;

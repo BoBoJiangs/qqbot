@@ -5,18 +5,31 @@
 
 package top.sshh.qqbot.data;
 
-public class Config {
+import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
+
+public class Config implements Serializable {
     private int danNumber = 6;
     private int makeNumber = 1000;
     private int alchemyNumber = 30;
     private boolean isAlchemy = true;
     private String makeName = "极品创世丹&极品混沌丹&极品创世丹&九天蕴仙丹&金仙造化丹&大道归一丹&菩提证道丹&太清玉液丹";
+    private List<String> fixedDanName;
     private Long alchemyQQ;
     private boolean finishAutoBuyHerb;
     private int limitHerbsCount = 3;
     private int addPrice = -20;
 
     public Config() {
+    }
+
+    public List<String> getFixedDanName() {
+        return fixedDanName;
+    }
+
+    public void setFixedDanName(List<String> fixedDanName) {
+        this.fixedDanName = fixedDanName;
     }
 
     public int getLimitHerbsCount() {

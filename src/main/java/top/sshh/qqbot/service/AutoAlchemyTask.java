@@ -58,6 +58,12 @@ public class AutoAlchemyTask {
             group.sendMessage((new MessageChain()).reply(messageId).text(this.showReplyMessage(message)));
         }
 
+        if ("设置炼丹指定丹药".startsWith(message)) {
+            AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config);
+        }
+
+
+
         if ("开始自动炼丹".equals(message)) {
             this.group = group;
             this.resetPram();
@@ -130,7 +136,7 @@ public class AutoAlchemyTask {
 
         if (message.startsWith("更新炼丹配置")) {
             this.config = this.danCalculator.getConfig();
-            Pattern pattern = Pattern.compile("是否是炼金丹药：(true|false).*?炼金丹期望收益：(\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?炼丹完成是否购买药材：(true|false).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(\\d+)", 32);
+            Pattern pattern = Pattern.compile("是否是炼金丹药：(true|false).*?炼金丹期望收益：(-?\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?炼丹完成是否购买药材：(true|false).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(\\d+)", Pattern.DOTALL);
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) {
                 this.config.setAlchemy(Boolean.parseBoolean(matcher.group(1)));
