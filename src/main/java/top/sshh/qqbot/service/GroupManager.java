@@ -6,10 +6,12 @@
 package top.sshh.qqbot.service;
 
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
+import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.core.component.BotFactory;
+import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
@@ -18,6 +20,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
+import top.sshh.qqbot.data.MessageNumber;
+import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.data.RemindTime;
 
 import javax.annotation.PostConstruct;
@@ -60,6 +64,7 @@ public class GroupManager {
     private static final String FILE_PATH = "./cache/task_data.ser";
     @Value("${botId}")
     private Long botId;
+    public Map<Long, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
 
     public GroupManager() {
     }
@@ -68,11 +73,11 @@ public class GroupManager {
     @PostConstruct
     public void init() {
         this.loadTasksFromFile();
-        logger.info("已从本地加载{}个灵田任务",  this.ltmap.size());
+        logger.info("已从本地加载{}个灵田任务 {}个发言统计",  this.ltmap.size(),this.MESSAGE_NUMBER_MAP.size());
     }
 
     @Scheduled(
-            fixedRate = 7200000L
+            fixedRate = 3600000L
     )
     public void autoSaveTasks() {
         this.saveTasksToFile();
@@ -90,30 +95,41 @@ public class GroupManager {
             ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(FILE_PATH)));
             Map<String, Object> data = new HashMap();
             data.put("灵田", this.ltmap);
+            data.put("发言统计", MESSAGE_NUMBER_MAP);
             oos.writeObject(data);
             oos.close();
         } catch (Throwable var5) {
             logger.error("任务数据保存失败：", var5);
         }
 
-        logger.info("正在保存 {} 个灵田任务", this.ltmap.size());
+        logger.info("正在保存 {} 个灵田任务 {}个发言统计", this.ltmap.size(),MESSAGE_NUMBER_MAP.size());
     }
 
     private synchronized void loadTasksFromFile() {
         File dataFile = new File(FILE_PATH);
         if (dataFile.exists()) {
-            try {
-                ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(dataFile.toPath()));
+            try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(dataFile.toPath()))) {
                 Map<String, Object> data = (Map)ois.readObject();
-                this.ltmap = (ConcurrentHashMap)data.get("灵田");
-                ois.close();
+
+                // 安全初始化 map
+                this.ltmap = data.containsKey("灵田") ?
+                        (ConcurrentHashMap<String, RemindTime>)data.get("灵田") :
+                        new ConcurrentHashMap<>();
+
+                this.MESSAGE_NUMBER_MAP = data.containsKey("发言统计") ?
+                        (ConcurrentHashMap<Long, MessageNumber>)data.get("发言统计") :
+                        new ConcurrentHashMap<>();
+
             } catch (Exception e) {
-                logger.error("任务数据加载失败：", e);
+                logger.error("任务数据加载失败，初始化空map", e);
+                this.ltmap = new ConcurrentHashMap<>();
+                this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
             }
         } else {
-            logger.warn("未找到序列化文件: {}", "task_data.ser");
+            logger.warn("未找到序列化文件，初始化空map");
+            this.ltmap = new ConcurrentHashMap<>();
+            this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
         }
-
     }
 
     @GroupMessageHandler(
@@ -151,6 +167,55 @@ public class GroupManager {
 
                 }
             });
+        }
+
+    }
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
+    )
+    public void 统计群聊发言次数(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+
+
+
+        if(group!=null && group.getGroupId()>0){
+//            MESSAGE_NUMBER_MAP.compute(bot.getBotId(), (k, v) -> {
+//                if (v == null) {
+//                    return new MessageNumber(1, System.currentTimeMillis());
+//                }
+//                return new MessageNumber(v.getNumber() + 1, System.currentTimeMillis());
+//            });
+            // 确保Map存在
+            if (MESSAGE_NUMBER_MAP == null) {
+                MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
+            }
+            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId());
+            if(messageNumber == null){
+                messageNumber = new MessageNumber();
+                messageNumber.setNumber(1);
+                messageNumber.setTime(System.currentTimeMillis());
+            }else{
+                if(messageNumber.isCrossResetTime()){
+                    messageNumber.setNumber(1);
+                    messageNumber.setTime(System.currentTimeMillis());
+                }else{
+                    messageNumber.setNumber(messageNumber.getNumber()+1);
+                    messageNumber.setTime(System.currentTimeMillis());
+                }
+
+            }
+            MESSAGE_NUMBER_MAP.put(bot.getBotId(), messageNumber);
+        }
+        message = message.trim();
+        if (message.equals("发言统计")) {
+            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId());
+            if(messageNumber!=null){
+                StringBuilder sb = new StringBuilder();
+                sb.append("今日发言次数：").append(messageNumber.getNumber()).append("\n");
+                sb.append("最新更新时间：").append(sdf.format(new Date(messageNumber.getTime())));
+                group.sendMessage(new MessageChain().reply(messageId).text(sb.toString()));
+            }
+
         }
 
     }

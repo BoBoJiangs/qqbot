@@ -204,6 +204,7 @@ public class AutoAlchemyTask {
             sb.append("查询炼丹配方\n");
             sb.append("查询药材价格\n");
             sb.append("更新炼丹配置××\n");
+            sb.append("发言统计\n");
             return sb.toString();
         } else {
             if (message.equals("炼丹设置")) {

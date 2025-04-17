@@ -28,14 +28,15 @@ import java.util.stream.Collectors;
 
 @Component
 public class DanCalculator {
-    private static final Logger logger = LoggerFactory.getLogger(GroupManager.class);
+    private static final Logger logger = LoggerFactory.getLogger(DanCalculator.class);
     static List<Herb> herbs = new ArrayList<>();
     static List<Dan> sortedDans = new ArrayList<>();
     public static Map<String, Integer> herbPrices = new LinkedHashMap();
     public static Map<String, Integer> danMarketValues = new LinkedHashMap();
     public static Map<String, Integer> danAlchemyValues = new LinkedHashMap();
     public Config config = new Config();
-    private static String MAKE_DAN = "极品创世丹&混沌丹&创世丹&极品混沌丹&极品创世丹&九天蕴仙丹&金仙造化丹&大道归一丹&菩提证道丹&太清玉液丹";
+//    private static String MAKE_DAN = "极品创世丹&混沌丹&创世丹&极品混沌丹&极品创世丹&九天蕴仙丹&金仙造化丹&大道归一丹&菩提证道丹&太清玉液丹";
+    public static final Set<String> MAKE_DAN_SET = new HashSet(Arrays.asList("金仙破厄丹", "太乙炼髓丹", "混沌丹", "创世丹", "极品混沌丹", "极品创世丹", "九天蕴仙丹", "金仙造化丹", "大道归一丹", "菩提证道丹", "太清玉液丹", "太一仙丸", "无涯鬼丸", "道源丹", "六阳长生丹", "太乙碧莹丹", "天元神丹", "天尘丹", "魇龙之血"));
     public static  String targetDir = "./";
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
 
@@ -209,7 +210,7 @@ public class DanCalculator {
         String recipes = getRecipeByName(recipeName, recipeMap);
 
         int marketValue;
-        if (MAKE_DAN.contains(recipeName)) {
+        if (MAKE_DAN_SET.contains(recipeName)) {
             marketValue = danMarketValues.getOrDefault(recipeName, 0);
             if (marketValue <= 500) {
                 marketValue = (int) (marketValue * 0.95 * danNum);
@@ -232,7 +233,7 @@ public class DanCalculator {
             StringBuilder sb = new StringBuilder();
             for (String recipe : recipeArray) {
                 if (recipe.endsWith("配方")) {
-                    if(MAKE_DAN.contains(recipeName)){
+                    if(MAKE_DAN_SET.contains(recipeName)){
                         sb.append(recipeName).append(" 坊市价格："+danMarketValues.getOrDefault(recipeName, 0)+"万/个").append("\n\n");
                     }else{
                         sb.append(recipeName).append(" 炼金价格："+danAlchemyValues.getOrDefault(recipeName, 0)+"万/个").append("\n\n");

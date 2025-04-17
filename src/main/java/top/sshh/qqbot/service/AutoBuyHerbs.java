@@ -114,7 +114,7 @@ public class AutoBuyHerbs {
                     this.parseHerbList();
                 }
             } else {
-                System.out.println("message==" + message);
+//                System.out.println("message==" + message);
             }
         }
 
@@ -248,15 +248,41 @@ public class AutoBuyHerbs {
     @GroupMessageHandler(
             senderIds = {3889001741L}
     )
+    public void 验证码判断(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+
+        if (message.contains("https") && message.contains("qqbot")  && message.contains("" + bot.getBotId())) {
+            BotConfig botConfig = bot.getBotConfig();
+            boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
+            //出验证码跳过本页购买
+            if(botConfig.isStartAutoBuyHerbs() && isGroup){
+                this.autoBuyList.clear();
+            }
+
+        }
+    }
+
+    @GroupMessageHandler(
+            senderIds = {3889001741L}
+    )
     public void 成功购买药材(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
         boolean isAtSelf = message.contains("" + bot.getBotId()) || message.contains(bot.getBotName());
-        if (isGroup && isAtSelf && botConfig.isStartAutoBuyHerbs() && (message.contains("道友成功购买") || message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
+        if (isGroup && isAtSelf && botConfig.isStartAutoBuyHerbs() && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") ||
+                message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             if (message.contains("道友成功购买")) {
-                ProductPrice price = (ProductPrice)this.herbPackMap.get(((ProductPrice)this.autoBuyList.get(0)).getName());
-                price.setHerbCount(price.getHerbCount() + 1);
-                this.herbPackMap.put(price.getName(), price);
+                if(!this.autoBuyList.isEmpty()){
+                    ProductPrice price = (ProductPrice)this.herbPackMap.get(((ProductPrice)this.autoBuyList.get(0)).getName());
+                    price.setHerbCount(price.getHerbCount() + 1);
+                    this.herbPackMap.put(price.getName(), price);
+                }else{
+                    String[] parts = message.split("成功购买|，消耗");
+                    if(parts.length >= 2){
+                        logger.info("药材名称==" + parts[1].trim());
+                    }
+//                    return (parts.length >= 2) ? parts[1].trim() : null;
+                }
+
             }
 
             if (!this.autoBuyList.isEmpty()) {
@@ -267,6 +293,8 @@ public class AutoBuyHerbs {
         }
 
     }
+
+
 
     @GroupMessageHandler(
             senderIds = {3889001741L}

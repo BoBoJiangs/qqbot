@@ -34,6 +34,8 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static top.sshh.qqbot.service.DanCalculator.MAKE_DAN_SET;
+
 @Component
 public class TestService {
     private static final Logger log = LoggerFactory.getLogger(TestService.class);
@@ -433,8 +435,9 @@ public class TestService {
 
                                     name = name.replaceAll("\\s", "");
                                     if (StringUtils.isNotBlank(name)) {
-                                        boolean b = !"渡厄丹,寒铁铸心炉,陨铁炉,雕花紫铜炉".contains(name);
-                                        if (message.endsWith("一键炼金") && b) {
+                                        boolean b = !("渡厄丹,寒铁铸心炉,陨铁炉,雕花紫铜炉").contains(name);
+                                        boolean isMakeDan = !MAKE_DAN_SET.contains(name);
+                                        if (message.endsWith("一键炼金") && b && isMakeDan) {
                                             if (botConfig.isStop()) {
                                                 botConfig.setStop(false);
                                                 return;
