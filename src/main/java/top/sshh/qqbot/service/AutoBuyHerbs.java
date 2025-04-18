@@ -278,7 +278,14 @@ public class AutoBuyHerbs {
                 }else{
                     String[] parts = message.split("成功购买|，消耗");
                     if(parts.length >= 2){
+                        String herbName = parts[1].trim();
                         logger.info("药材名称==" + parts[1].trim());
+                        ProductPrice price = herbPackMap.get(herbName);
+                        if(price!=null){
+                            price.setHerbCount(price.getHerbCount() + 1);
+                            this.herbPackMap.put(price.getName(), price);
+                        }
+
                     }
 //                    return (parts.length >= 2) ? parts[1].trim() : null;
                 }

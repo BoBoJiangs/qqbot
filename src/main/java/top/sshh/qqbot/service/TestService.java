@@ -34,6 +34,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static org.aspectj.bridge.Version.getText;
 import static top.sshh.qqbot.service.DanCalculator.MAKE_DAN_SET;
 
 @Component
@@ -895,18 +896,20 @@ public class TestService {
 
                 iterator.remove();
             }
-
-            message = ((TextMessage)messageChain.get(0)).getText().trim();
-            if (message.startsWith("弟子听令执行命令")) {
-                message = message.substring(message.indexOf("弟子听令执行命令") + 8);
-                messageChain.set(0, new TextMessage(message));
-                group.sendMessage(messageChain);
-            } else if (message.startsWith("弟子听令执行")) {
-                message = message.substring(message.indexOf("弟子听令执行") + 6);
-                messageChain.set(0, new TextMessage(message));
-                messageChain.add(0, new AtMessage("3889001741"));
-                group.sendMessage(messageChain);
+            if(messageChain.get(0) instanceof TextMessage){
+                message = ((TextMessage)messageChain.get(0)).getText().trim();
+                if (message.startsWith("弟子听令执行命令")) {
+                    message = message.substring(message.indexOf("弟子听令执行命令") + 8);
+                    messageChain.set(0, new TextMessage(message));
+                    group.sendMessage(messageChain);
+                } else if (message.startsWith("弟子听令执行")) {
+                    message = message.substring(message.indexOf("弟子听令执行") + 6);
+                    messageChain.set(0, new TextMessage(message));
+                    messageChain.add(0, new AtMessage("3889001741"));
+                    group.sendMessage(messageChain);
+                }
             }
+
         }
 
     }
@@ -1098,9 +1101,9 @@ public class TestService {
             if (message.contains("道友现在什么都没干")) {
                 botConfig.setXslTime(-1L);
                 botConfig.setMjTime(-1L);
-                if (now.getHour() != 12 || now.getMinute() != 40 && now.getMinute() != 41 && now.getMinute() != 42) {
-                    proccessCultivation(group);
-                }
+//                if (now.getHour() != 12 || now.getMinute() != 40 && now.getMinute() != 41 && now.getMinute() != 42) {
+//                    proccessCultivation(group);
+//                }
             }
 
             String[] parts;

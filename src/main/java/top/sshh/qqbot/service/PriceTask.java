@@ -34,14 +34,13 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static top.sshh.qqbot.service.DanCalculator.targetDir;
 
 @Component
 public class PriceTask {
     @Autowired
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
-
+    public static  String targetDir = "./";
     public PriceTask() {
 
     }
