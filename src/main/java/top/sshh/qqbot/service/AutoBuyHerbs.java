@@ -65,6 +65,7 @@ public class AutoBuyHerbs {
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     new Timer();
                     botConfig.setStartAutoBuyHerbs(true);
+                    botConfig.setStartAuto(false);
                     break;
                 case "停止采购药材":
                     this.page = 1;
@@ -149,8 +150,14 @@ public class AutoBuyHerbs {
             String productName = message.substring("取消采购药材".length()).trim();
             productMap.remove(productName);
             group.sendMessage((new MessageChain()).reply(messageId).text(productName + "取消成功"));
+
         } else if (message.startsWith("批量取消采购药材")) {
             productMap.clear();
+            try {
+                updateMedicinePrices(productMap);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
             group.sendMessage((new MessageChain()).reply(messageId).text("批量取消成功"));
         } else if (message.startsWith("采购药材")) {
             this.addProductsToMap(bot, group, message, messageId, productMap);
@@ -205,29 +212,32 @@ public class AutoBuyHerbs {
         }
 
         reader.close();
-        Iterator var12 = purchases.entrySet().iterator();
+        if(!purchases.isEmpty()){
+            Iterator var12 = purchases.entrySet().iterator();
 
-        while(var12.hasNext()) {
-            Map.Entry<String, ProductPrice> entry = (Map.Entry)var12.next();
-            String medicineName = (String)entry.getKey();
-            ProductPrice productPrice = (ProductPrice)entry.getValue();
-            medicineMap.put(medicineName, productPrice.getPrice() + "");
-        }
-
-        BufferedWriter writer = new BufferedWriter(new FileWriter(targetDir+"properties/药材价格.txt"));
-
-        try {
-            Iterator var15 = medicineMap.entrySet().iterator();
-
-            while(var15.hasNext()) {
-                Map.Entry<String, String> entry = (Map.Entry)var15.next();
-                writer.write((String)entry.getValue() + " " + (String)entry.getKey());
-                writer.newLine();
+            while(var12.hasNext()) {
+                Map.Entry<String, ProductPrice> entry = (Map.Entry)var12.next();
+                String medicineName = (String)entry.getKey();
+                ProductPrice productPrice = (ProductPrice)entry.getValue();
+                medicineMap.put(medicineName, productPrice.getPrice() + "");
             }
-        } catch (Throwable var10) {
+
+            BufferedWriter writer = new BufferedWriter(new FileWriter(targetDir+"properties/药材价格.txt"));
+
+            try {
+                Iterator var15 = medicineMap.entrySet().iterator();
+
+                while(var15.hasNext()) {
+                    Map.Entry<String, String> entry = (Map.Entry)var15.next();
+                    writer.write((String)entry.getValue() + " " + (String)entry.getKey());
+                    writer.newLine();
+                }
+            } catch (Throwable var10) {
+            }
+
+            writer.close();
         }
 
-        writer.close();
     }
 
     private void queryPurchasedProducts(Group group, Integer messageId, Map<String, ProductPrice> productMap) {

@@ -68,6 +68,7 @@ public class AutoAlchemyTask {
             this.group = group;
             this.resetPram();
             botConfig.setStartAuto(true);
+            botConfig.setStartAutoBuyHerbs(false);
             customPool.submit(new Runnable() {
                 public void run() {
                     try {

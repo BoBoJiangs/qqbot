@@ -34,6 +34,8 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static top.sshh.qqbot.service.GroupManager.remindGroupIdList;
+
 
 @Component
 public class PriceTask {
@@ -142,7 +144,7 @@ public class PriceTask {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, Integer messageId) {
-        if (bot.getBotConfig().isEnableXslPriceQuery()) {
+        if (bot.getBotConfig().isEnableXslPriceQuery() && !remindGroupIdList.contains(group.getGroupId())) {
             List<ReplyMessage> replyMessageList = messageChain.getMessageByType(ReplyMessage.class);
             if (replyMessageList != null && !replyMessageList.isEmpty()) {
                 ReplyMessage replyMessage = (ReplyMessage)replyMessageList.get(0);
@@ -190,7 +192,7 @@ public class PriceTask {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 自动查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if ((group.getGroupId() != 730651710L || bot.getBotId() == 3860863656L) && bot.getBotConfig().isEnableXslPriceQuery() && message.contains("道友的个人悬赏令")) {
+        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery() && message.contains("道友的个人悬赏令")) {
             Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
 
             while(true) {

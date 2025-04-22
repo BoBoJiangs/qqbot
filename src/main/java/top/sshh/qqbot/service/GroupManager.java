@@ -43,30 +43,46 @@ public class GroupManager {
     Map<String, RemindTime> mjXslmap = new ConcurrentHashMap();
     Map<String, RemindTime> ltmap = new ConcurrentHashMap();
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
-    private static final List<String> MJ_TEXT_LIST = Arrays.asList(" 【秘境结算提醒】秘境大门即将关闭！请速速退出，否则将被传送到‘社畜加班’副本！",
+    private static final List<String> MJ_TEXT_LIST = Arrays.asList(" 【秘境结算提醒】秘境试炼已结束！此番奇遇定让您感悟大道，快查看收获，或许有突破境界的机缘！",
             "【秘境结算提醒】叮！秘境探索结算中，本次收获：四库全书 1 本，戏书 1 本，以及队友的嫌弃三连～",
-            "【秘境结算提醒】警告！秘境 BOSS 正在暴走，若不及时撤离，将强制触发‘与 BOSS 拼酒’支线任务！",
-            "【秘境结算提醒】您的秘境评分：D 级（全靠运气），建议下次组队带个会看地图的队友！",
+            "【秘境结算提醒】秘境探索时间已到！您在秘境中历经磨砺，珍贵法宝与上古传承正等待您开启！",
+            "【秘境结算提醒】秘境之行圆满收官！天地灵气凝聚的机缘已化作奖励，助您打破修为桎梏！",
             "【秘境结算提醒】秘境探索结束，本次成就：迷路 10 次，摔进陷阱 3 次，荣获‘秘境路痴’称号！",
-            "【秘境结算提醒】您意外触发隐藏剧情，获得‘被秘境BOSS追着跑’专属表情包！");
-    private static final List<String> XSL_TEXT_LIST = Arrays.asList("【悬赏结算提醒】您的江湖信誉值 + 50！悬赏奖励已存入包裹，小心别被其他修士盯上～",
-            "【悬赏结算提醒】注意！您的暗杀任务结算失败 —— 目标竟是掌门私生子，建议连夜跑路！",
-            "【悬赏结算提醒】恭喜完成任务！奖励：灵石 x500，经验 x200，以及… 来自 NPC 的白眼‘下次别接这么菜的任务",
-            "【悬赏结算提醒】您的悬赏任务该结算了！江湖恩怨就此两清，记得查收尾款，别让仇家赖账～",
-            "【悬赏结算提醒】悬赏奖励已到账！温馨提示：该笔收入需缴纳 10% 天道税，逃税者将触发天雷警告！",
-            "【悬赏结算提醒】任务结算啦！本次战绩：击败妖兽 3 只，采摘灵药 2 珠，建议犒劳自己顿灵膳！");
+            "【秘境结算提醒】秘境时限已至！您探索秘境的收获即将揭晓，说不定能获得改变命运的仙缘！",
+            "【秘境结算提醒】秘境任务已结算！您在秘境中的探索成果斐然，丰厚奖励助您早日飞升！",
+            "【秘境结算提醒】秘境时间到！您在秘境中积累的气运，已化作珍贵资源，快来开启这份修仙大礼！");
+    private static final List<String> XSL_TEXT_LIST = Arrays.asList("【悬赏结算提醒】悬赏令时限已至！斩妖除魔的功绩化作海量灵石，速来领取这份天道酬勤的嘉奖！",
+            "【悬赏结算提醒】通缉妖邪的期限已到，您的英勇战绩已被悬赏阁收录，丰厚奖赏静待仙友笑纳！",
+            "【悬赏结算提醒】悬赏任务圆满收官！此番降魔除祟之举，必能助您在修仙路上再添助力，速来领奖！",
+            "【悬赏结算提醒】悬赏令结算时刻已到！您的侠义之名远扬，丰厚灵石与珍贵功法正等着您来领取！",
+            "【悬赏结算提醒】悬赏令时间到！您的努力终有回报，海量资源已备好，助您在修仙之途大步迈进！",
+            "【悬赏结算提醒】悬赏任务结算啦！您的英勇无畏让修真界重归安宁，快来领取这份荣耀奖赏！",
+            "【悬赏结算提醒】悬赏令结算时刻来临！您的付出已化作修仙至宝，速来开启这份惊喜收获！");
     private static final List<String> LT_TEXT_LIST = Arrays.asList("【灵田结算提醒】隔壁炼丹童子盯着您的灵田流口水，请速速收药！",
-            "【灵田结算提醒】您的灵植正在抗议‘营养不良’，收割后记得施肥，否则下次长仙人掌！",
-            "【灵田结算提醒】您的灵花即将枯萎，再不采摘，就只能做成‘干花标本’当传家宝了！",
-            "【灵田结算提醒】叮！灵植们正在开派对，再不收割，它们就要集体进化成‘叛逆菜精’！",
-            "【灵田结算提醒】注意！您的灵稻已进入‘躺平模式’，收割后可解锁‘摸鱼种粮’成就！",
-            "【灵田结算提醒】您的灵田成熟啦！再不收菜，灵植就要集体跳槽去隔壁老王的田啦！");
+            "【灵田结算提醒】灵田中的灵植已成熟！饱满的灵果蕴含天地精华，采摘后可助您炼丹突破，福泽深厚！",
+            "【灵田结算提醒】灵植成熟，丰收已至！这片灵田的产出，将为您的修仙大业增添无限生机与灵力！",
+            "【灵田结算提醒】灵田丰收啦！您的辛勤耕耘终有回报，成熟的灵植能炼制出逆天丹药，快来收取！",
+            "【灵田结算提醒】灵植已到收获时节！采摘灵田中的宝贝，为您的修仙之路积累丰厚资源，前程似锦！",
+            "【灵田结算提醒】灵田中的灵植焕发生机！此刻收取，定能收获满满灵气，助您修为一日千里！",
+            "【灵田结算提醒】灵植成熟可收！您的灵田培育出的珍稀作物，能为您带来意想不到的修仙助力！",
+            "【灵田结算提醒】灵田收获时间到！这片充满灵气的土地，为您孕育出了珍贵的灵植，速来采摘！");
     private static final String FILE_PATH = "./cache/task_data.ser";
     @Value("${botId}")
     private Long botId;
     public Map<Long, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
+    public static List<Long> remindGroupIdList = Arrays.asList(1023764416L,971327442L,679831529L,824484501L,690933736L);
 
     public GroupManager() {
+    }
+
+    // cron 表达式：0 55 7 * * * 表示每天早上 7 点 55 分执行
+    @Scheduled(cron = "0 58 7 * * *")
+    public void executeMessageTask() {
+        logger.info("定时清空发言统计");
+        BotFactory.getBots().values().forEach((bot) -> {
+            MESSAGE_NUMBER_MAP.put(bot.getBotId(), new MessageNumber(0,  System.currentTimeMillis()));
+
+        });
     }
 
 
@@ -236,23 +252,21 @@ public class GroupManager {
             senderIds = {3889001741L}
     )
     public void 秘境结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        if (bot.getBotConfig().isEnableGroupManager()) {
-            boolean isGroupQQ = false;
-            if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
-                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + group.getGroupId() + "&");
-            } else {
-                isGroupQQ = group.getGroupId() == 802082768L;
-            }
-
-            if (!isGroupQQ) {
-                return;
-            }
+        if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())) {
+//            boolean isGroupQQ = false;
+//            if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
+//                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + group.getGroupId() + "&");
+//            } else {
+//                isGroupQQ = group.getGroupId() == 802082768L;
+//            }
+//
+//            if (!isGroupQQ) {
+//                return;
+//            }
 
             if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
                 this.extractInfo(message, "秘境", group);
-            }
-
-            if (message.contains("进入秘境") && message.contains("探索需要花费")) {
+            }else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
                 this.extractInfo(message, "秘境", group);
             }
         }
@@ -263,17 +277,18 @@ public class GroupManager {
             senderIds = {3889001741L}
     )
     public void 悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        if (bot.getBotConfig().isEnableGroupManager() && message.contains("进行中的悬赏令") && message.contains("可结束")) {
-            boolean isGroupQQ = false;
-            if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
-                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + member.getGroupId() + "&");
-            } else {
-                isGroupQQ = group.getGroupId() == 802082768L;
-            }
-
-            if (!isGroupQQ) {
-                return;
-            }
+        if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())
+                && message.contains("进行中的悬赏令") && message.contains("可结束")) {
+//            boolean isGroupQQ = false;
+//            if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
+//                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + member.getGroupId() + "&");
+//            } else {
+//                isGroupQQ = group.getGroupId() == 802082768L;
+//            }
+//
+//            if (!isGroupQQ) {
+//                return;
+//            }
 
             this.extractInfo(message, "悬赏", group);
         }
@@ -316,17 +331,17 @@ public class GroupManager {
             senderIds = {3889001741L}
     )
     public void 灵田领取提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        if (bot.getBotConfig().isEnableGroupManager() && message.contains("灵田还不能收取")) {
-            boolean isGroupQQ = false;
-            if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
-                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + member.getGroupId() + "&");
-            } else {
-                isGroupQQ = group.getGroupId() == 802082768L;
-            }
-
-            if (!isGroupQQ) {
-                return;
-            }
+        if (bot.getBotConfig().isEnableGroupManager() && message.contains("灵田还不能收取") && !remindGroupIdList.contains(group.getGroupId())) {
+//            boolean isGroupQQ = false;
+//            if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
+//                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + member.getGroupId() + "&");
+//            } else {
+//                isGroupQQ = group.getGroupId() == 802082768L;
+//            }
+//
+//            if (!isGroupQQ) {
+//                return;
+//            }
 
             this.handleLingTianMessage(message, group);
         }

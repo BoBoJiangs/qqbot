@@ -3,6 +3,10 @@ package top.sshh.qqbot.data;
 import lombok.Getter;
 
 import java.io.Serializable;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Calendar;
 
 public class MessageNumber implements Serializable {
@@ -10,22 +14,23 @@ public class MessageNumber implements Serializable {
     private long userId;
     private int number;
     private long time;
-    private static final int RESET_HOUR = 8; // 重置时间点(早上8点)
+    private static final LocalTime RESET_TIME = LocalTime.of(7, 55); // 7:55
 
-    // getters and setters
     public boolean isCrossResetTime() {
-        Calendar lastCal = Calendar.getInstance();
-        lastCal.setTimeInMillis(this.time);
+        LocalDateTime lastTime = LocalDateTime.ofInstant(
+                Instant.ofEpochMilli(this.time), ZoneId.systemDefault());
+        LocalDateTime currentTime = LocalDateTime.now();
 
-        Calendar currentCal = Calendar.getInstance();
-        currentCal.setTimeInMillis(System.currentTimeMillis());
-
-        // 检查是否跨越了8点 (前一天 <8点 且 当前 >=8点)
-        return lastCal.get(Calendar.HOUR_OF_DAY) < RESET_HOUR &&
-                currentCal.get(Calendar.HOUR_OF_DAY) >= RESET_HOUR;
+        return lastTime.toLocalTime().isBefore(RESET_TIME) &&
+                currentTime.toLocalTime().isAfter(RESET_TIME);
     }
 
     public MessageNumber() {
+    }
+
+    public MessageNumber(int number, long time) {
+        this.number = number;
+        this.time = time;
     }
 
 
