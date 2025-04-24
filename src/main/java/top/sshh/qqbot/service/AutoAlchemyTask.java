@@ -115,10 +115,19 @@ public class AutoAlchemyTask {
             });
         }
 
-        if (message.equals("添加成功,同步炼丹配方")) {
-            this.danCalculator.loadData();
-            this.danCalculator.calculateAllDans();
-            group.sendMessage((new MessageChain()).text("已同步炼丹配方！"));
+        if (message.equals("添加成功,开始同步炼丹配方")) {
+            customPool.submit(new Runnable() {
+                public void run() {
+                    try {
+                        danCalculator.loadData();
+                        danCalculator.calculateAllDans();
+                        group.sendMessage((new MessageChain()).text("已同步炼丹配方！"));
+                    } catch (Exception var2) {
+                    }
+
+                }
+            });
+
         }
 
         if (message.startsWith("查丹方")) {
@@ -206,6 +215,8 @@ public class AutoAlchemyTask {
             sb.append("查询药材价格\n");
             sb.append("更新炼丹配置××\n");
             sb.append("发言统计\n");
+            sb.append("清空发言统计\n");
+            sb.append("同步发言统计\n");
             return sb.toString();
         } else {
             if (message.equals("炼丹设置")) {

@@ -21,8 +21,12 @@ public class MessageNumber implements Serializable {
                 Instant.ofEpochMilli(this.time), ZoneId.systemDefault());
         LocalDateTime currentTime = LocalDateTime.now();
 
-        return lastTime.toLocalTime().isBefore(RESET_TIME) &&
-                currentTime.toLocalTime().isAfter(RESET_TIME);
+        // 计算当前时间的"理论重置时间"（今天的07:55）
+        LocalDateTime todayReset = LocalDateTime.of(currentTime.toLocalDate(), RESET_TIME);
+
+        // 检查是否跨越了重置时间点
+        return lastTime.isBefore(todayReset) &&
+                currentTime.isAfter(todayReset);
     }
 
     public MessageNumber() {

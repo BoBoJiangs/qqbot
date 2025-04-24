@@ -75,6 +75,22 @@ public class GroupManager {
     public GroupManager() {
     }
 
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
+    )
+    public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+        BotConfig botConfig = bot.getBotConfig();
+        message = message.trim();
+        if (message.equals("清空发言统计")) {
+            MESSAGE_NUMBER_MAP.put(bot.getBotId(), new MessageNumber(0,  System.currentTimeMillis()));
+            group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
+        }else if (message.equals("同步发言统计")) {
+            saveTasksToFile();
+        }
+
+    }
+
     // cron 表达式：0 55 7 * * * 表示每天早上 7 点 55 分执行
     @Scheduled(cron = "0 58 7 * * *")
     public void executeMessageTask() {

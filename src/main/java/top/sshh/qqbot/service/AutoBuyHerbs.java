@@ -185,7 +185,7 @@ public class AutoBuyHerbs {
             }
 
             this.updateMedicinePrices(productMap);
-            group.sendMessage((new MessageChain()).text("添加成功,同步炼丹配方"));
+            group.sendMessage((new MessageChain()).text("添加成功,开始同步炼丹配方"));
         } catch (Exception var11) {
             logger.error("添加采购药材失败");
         }
@@ -193,26 +193,27 @@ public class AutoBuyHerbs {
     }
 
     public void updateMedicinePrices(Map<String, ProductPrice> purchases) throws IOException {
-        List<String> lines = new ArrayList();
-        Map<String, String> medicineMap = new LinkedHashMap();
-        BufferedReader reader = new BufferedReader(new FileReader(targetDir+"properties/药材价格.txt"));
 
-        String line;
-        try {
-            while((line = reader.readLine()) != null) {
-                if (!line.trim().isEmpty()) {
-                    lines.add(line);
-                    String[] parts = line.split("\\s+", 2);
-                    if (parts.length == 2) {
-                        medicineMap.put(parts[1].trim(), parts[0].trim());
+        if(!purchases.isEmpty()){
+            List<String> lines = new ArrayList();
+            Map<String, String> medicineMap = new LinkedHashMap();
+            BufferedReader reader = new BufferedReader(new FileReader(targetDir+"properties/药材价格.txt"));
+
+            String line;
+            try {
+                while((line = reader.readLine()) != null) {
+                    if (!line.trim().isEmpty()) {
+                        lines.add(line);
+                        String[] parts = line.split("\\s+", 2);
+                        if (parts.length == 2) {
+                            medicineMap.put(parts[1].trim(), parts[0].trim());
+                        }
                     }
                 }
+            } catch (Throwable var11) {
             }
-        } catch (Throwable var11) {
-        }
 
-        reader.close();
-        if(!purchases.isEmpty()){
+            reader.close();
             Iterator var12 = purchases.entrySet().iterator();
 
             while(var12.hasNext()) {
@@ -236,6 +237,8 @@ public class AutoBuyHerbs {
             }
 
             writer.close();
+        }else{
+            BufferedWriter writer = new BufferedWriter(new FileWriter(targetDir+"properties/药材价格.txt"));
         }
 
     }
