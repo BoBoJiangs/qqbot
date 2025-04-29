@@ -32,6 +32,9 @@ public class ProductPrice {
     @Transient
     @JSONField(serialize = false)
     private int herbCount = 0;
+    @Transient
+    @JSONField(serialize = false)
+    private int priceDiff = 0;
 
     @Transient
     public String getTime2() {
@@ -39,6 +42,14 @@ public class ProductPrice {
     }
 
     public ProductPrice() {
+    }
+
+    public int getPriceDiff() {
+        return priceDiff;
+    }
+
+    public void setPriceDiff(int priceDiff) {
+        this.priceDiff = priceDiff;
     }
 
     public int getHerbCount() {

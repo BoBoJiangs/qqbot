@@ -17,6 +17,7 @@ import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
@@ -71,6 +72,8 @@ public class GroupManager {
     private Long botId;
     public Map<Long, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
     public static List<Long> remindGroupIdList = Arrays.asList(1023764416L,971327442L,679831529L,824484501L,690933736L);
+    @Autowired
+    public DanCalculator danCalculator;
 
     public GroupManager() {
     }
@@ -87,6 +90,7 @@ public class GroupManager {
             group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
         }else if (message.equals("同步发言统计")) {
             saveTasksToFile();
+            group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
         }
 
     }
@@ -235,6 +239,10 @@ public class GroupManager {
                     messageNumber.setTime(System.currentTimeMillis());
                 }
 
+            }
+            if ((danCalculator.config!=null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
+                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) && group.getGroupId() == bot.getBotConfig().getGroupId()) {
+                bot.setGroupCard(group.getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
             }
             MESSAGE_NUMBER_MAP.put(bot.getBotId(), messageNumber);
         }

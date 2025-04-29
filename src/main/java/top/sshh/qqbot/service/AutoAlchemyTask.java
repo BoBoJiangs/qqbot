@@ -81,10 +81,15 @@ public class AutoAlchemyTask {
             });
         }
 
-        if ("停止自动炼丹".equals(message)) {
+        if ("停止自动炼丹".equals(message) ) {
             this.resetPram();
             botConfig.setStartAuto(false);
             group.sendMessage((new MessageChain()).text("已停止自动炼丹"));
+        }
+
+        if("未匹配到丹方，请检查丹方设置".equals(message)){
+            this.resetPram();
+            botConfig.setStartAuto(false);
         }
 
         if (message.equals("查询炼丹配方")) {
@@ -333,6 +338,7 @@ public class AutoAlchemyTask {
                     if (!var2.hasNext()) {
                         if (this.alchemyList.isEmpty() && this.group != null) {
                             this.group.sendMessage((new MessageChain()).text("未匹配到丹方，请检查丹方设置"));
+
                             this.resetPram();
                         } else {
                             this.group.sendMessage((new MessageChain()).text("配到" + this.alchemyList.size() + "个丹方，准备开始自动炼丹"));

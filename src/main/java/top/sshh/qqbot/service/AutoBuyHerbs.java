@@ -22,6 +22,10 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.ProductPrice;
 
 import java.io.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,6 +49,7 @@ public class AutoBuyHerbs {
     private Map<String, ProductPrice> herbPackMap = new ConcurrentHashMap();
     @Autowired
     public DanCalculator danCalculator;
+    private int noQueriedCount = 0;
 
     public AutoBuyHerbs() {
     }
@@ -58,19 +63,14 @@ public class AutoBuyHerbs {
         if (!message.contains("可用命令")) {
             switch (message) {
                 case "开始采购药材":
-                    this.page = 1;
-                    this.herbPackMap.clear();
-                    this.autoBuyList.clear();
+                    resetPram();
                     botConfig.setStop(true);
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
-                    new Timer();
                     botConfig.setStartAutoBuyHerbs(true);
                     botConfig.setStartAuto(false);
                     break;
                 case "停止采购药材":
-                    this.page = 1;
-                    this.autoBuyList.clear();
-                    this.herbPackMap.clear();
+                    resetPram();
                     botConfig.setStartAutoBuyHerbs(false);
                     group.sendMessage((new MessageChain()).reply(messageId).text("停止采购"));
                     break;
@@ -79,6 +79,13 @@ public class AutoBuyHerbs {
             }
         }
 
+    }
+
+    private void resetPram() {
+        this.page = 1;
+        noQueriedCount = 0;
+        this.herbPackMap.clear();
+        this.autoBuyList.clear();
     }
 
     @GroupMessageHandler(
@@ -154,7 +161,7 @@ public class AutoBuyHerbs {
         } else if (message.startsWith("批量取消采购药材")) {
             productMap.clear();
             try {
-                updateMedicinePrices(productMap);
+                updateMedicinePrices(new ArrayList<>());
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -170,7 +177,7 @@ public class AutoBuyHerbs {
     private void addProductsToMap(Bot bot, Group group, String message, Integer messageId, Map<String, ProductPrice> productMap) {
         try {
             String[] lines = message.split("\n");
-
+            List<ProductPrice> priceList = new ArrayList<>();
             for(int i = 0; i < lines.length; ++i) {
                 String line = lines[i];
                 String[] parts = line.split(" ");
@@ -181,66 +188,66 @@ public class AutoBuyHerbs {
                     productPrice.setTime(LocalDateTime.now());
                     productPrice.setId((long)i);
                     productMap.put(productPrice.getName(), productPrice);
+                    priceList.add(productPrice);
                 }
             }
 
-            this.updateMedicinePrices(productMap);
+            this.updateMedicinePrices(priceList);
             group.sendMessage((new MessageChain()).text("添加成功,开始同步炼丹配方"));
-        } catch (Exception var11) {
+        } catch (Exception e) {
+            e.printStackTrace();
             logger.error("添加采购药材失败");
         }
 
     }
 
-    public void updateMedicinePrices(Map<String, ProductPrice> purchases) throws IOException {
+    public void updateMedicinePrices(List<ProductPrice> purchases) throws IOException {
+        Path filePath = Paths.get(targetDir, "properties", "药材价格.txt");
 
-        if(!purchases.isEmpty()){
-            List<String> lines = new ArrayList();
-            Map<String, String> medicineMap = new LinkedHashMap();
-            BufferedReader reader = new BufferedReader(new FileReader(targetDir+"properties/药材价格.txt"));
-
-            String line;
-            try {
-                while((line = reader.readLine()) != null) {
-                    if (!line.trim().isEmpty()) {
-                        lines.add(line);
-                        String[] parts = line.split("\\s+", 2);
-                        if (parts.length == 2) {
-                            medicineMap.put(parts[1].trim(), parts[0].trim());
-                        }
-                    }
-                }
-            } catch (Throwable var11) {
+        // 如果purchases为空，清空文件
+        if (purchases == null || purchases.isEmpty()) {
+            try (BufferedWriter writer = Files.newBufferedWriter(filePath,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.CREATE)) {
+                // 空操作，打开文件时TRUNCATE_EXISTING选项会自动清空文件
             }
-
-            reader.close();
-            Iterator var12 = purchases.entrySet().iterator();
-
-            while(var12.hasNext()) {
-                Map.Entry<String, ProductPrice> entry = (Map.Entry)var12.next();
-                String medicineName = (String)entry.getKey();
-                ProductPrice productPrice = (ProductPrice)entry.getValue();
-                medicineMap.put(medicineName, productPrice.getPrice() + "");
-            }
-
-            BufferedWriter writer = new BufferedWriter(new FileWriter(targetDir+"properties/药材价格.txt"));
-
-            try {
-                Iterator var15 = medicineMap.entrySet().iterator();
-
-                while(var15.hasNext()) {
-                    Map.Entry<String, String> entry = (Map.Entry)var15.next();
-                    writer.write((String)entry.getValue() + " " + (String)entry.getKey());
-                    writer.newLine();
-                }
-            } catch (Throwable var10) {
-            }
-
-            writer.close();
-        }else{
-            BufferedWriter writer = new BufferedWriter(new FileWriter(targetDir+"properties/药材价格.txt"));
+            return;
         }
 
+        Map<String, String> medicineMap = new LinkedHashMap<>();
+
+        // 读取现有文件内容
+        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                line = line.trim();
+                if (!line.isEmpty()) {
+                    String[] parts = line.split("\\s+", 2);
+                    if (parts.length == 2) {
+                        medicineMap.put(parts[1].trim(), parts[0].trim());
+                    }
+                }
+            }
+        } catch (IOException e) {
+            // 文件可能不存在，继续执行将创建新文件
+        }
+
+        // 更新价格
+        for (ProductPrice productPrice : purchases) {
+            if (productPrice != null) {
+                medicineMap.put(productPrice.getName(), String.valueOf(productPrice.getPrice()));
+            }
+        }
+
+        // 写回文件
+        try (BufferedWriter writer = Files.newBufferedWriter(filePath,
+                StandardOpenOption.CREATE,
+                StandardOpenOption.TRUNCATE_EXISTING)) {
+            for (Map.Entry<String, String> entry : medicineMap.entrySet()) {
+                writer.write(entry.getValue() + " " + entry.getKey());
+                writer.newLine();
+            }
+        }
     }
 
     private void queryPurchasedProducts(Group group, Integer messageId, Map<String, ProductPrice> productMap) {
@@ -292,7 +299,6 @@ public class AutoBuyHerbs {
                     String[] parts = message.split("成功购买|，消耗");
                     if(parts.length >= 2){
                         String herbName = parts[1].trim();
-                        logger.info("药材名称==" + parts[1].trim());
                         ProductPrice price = herbPackMap.get(herbName);
                         if(price!=null){
                             price.setHerbCount(price.getHerbCount() + 1);
@@ -303,6 +309,14 @@ public class AutoBuyHerbs {
 //                    return (parts.length >= 2) ? parts[1].trim() : null;
                 }
 
+            }
+
+            if(message.contains("未查询")){
+                noQueriedCount = noQueriedCount + 1;
+                if(noQueriedCount >= 3){
+                    this.autoBuyList.clear();
+                    noQueriedCount = 0;
+                }
             }
 
             if (!this.autoBuyList.isEmpty()) {
@@ -364,10 +378,12 @@ public class AutoBuyHerbs {
                     if (((ProductPrice)this.herbPackMap.get(itemName)).getHerbCount() > danCalculator.config.getLimitHerbsCount()) {
                         if (price <= (double)existingProduct.getPrice() - (double)danCalculator.config.getAddPrice()) {
                             existingProduct.setCode(code);
+                            existingProduct.setPriceDiff((int) (existingProduct.getPrice() - price));
                             this.autoBuyList.add(existingProduct);
                         }
                     } else {
                         existingProduct.setCode(code);
+                        existingProduct.setPriceDiff((int) (existingProduct.getPrice() - price));
                         this.autoBuyList.add(existingProduct);
                     }
                 }
@@ -375,6 +391,7 @@ public class AutoBuyHerbs {
         }
 
         this.autoBuyList.sort(Comparator.comparingLong(ProductPrice::getId));
+        this.autoBuyList.sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
         this.buyHerbs(group, bot.getBotConfig());
     }
 
@@ -442,6 +459,7 @@ public class AutoBuyHerbs {
                     try {
                         bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
                         botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
+                        noQueriedCount = 0;
                     } catch (Exception var6) {
                         logger.error("定时查询坊市失败");
                         Thread.currentThread().interrupt();
