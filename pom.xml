@@ -81,6 +81,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
+                    <finalName>bot</finalName> <!-- 打包成 bot.jar -->
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>
