@@ -261,7 +261,8 @@ public class PriceTask {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 新版查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery() && message.contains("天机悬赏令")) {
+        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery()
+                && message.contains("天机悬赏令") && !message.contains("今日悬赏令刷新次数已用尽")) {
             Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
 
             while(true) {

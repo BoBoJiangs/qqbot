@@ -319,6 +319,36 @@ public class GroupManager {
 
     }
 
+    @GroupMessageHandler(
+            senderIds = {3889001741L}
+    )
+    public void 新版悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+        if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())
+                && (message.contains("悬赏令进行中")  || message.contains("悬赏令接取成功")) && message.contains("预计")) {
+            // 提取QQ号
+            Pattern qqPattern = Pattern.compile("@(\\d+)");
+            Matcher qqMatcher = qqPattern.matcher(message);
+            String qq = qqMatcher.find() ? qqMatcher.group(1) : "未找到QQ号";
+
+            // 提取预计时间
+            Pattern timePattern = null;
+            if(message.contains("预计时间")){
+                timePattern = Pattern.compile("预计时间：(\\d+\\.?\\d*)分钟");
+            }
+            if(message.contains("预计剩余时间")){
+                timePattern = Pattern.compile("预计剩余时间：(\\d+\\.?\\d*)分钟");
+            }
+            if(timePattern!=null){
+                Matcher timeMatcher = timePattern.matcher(message);
+                String time = timeMatcher.find() ? timeMatcher.group(1) : "未找到预计时间";
+                addXslMap(qq,"悬赏",group,time);
+            }
+
+//            this.extractInfo(message, "悬赏", group);
+        }
+
+    }
+
     public void extractInfo(String input, String type, Group group) {
         String qqPattern = "@(\\d+)";
         String timePattern = "(\\d+\\.?\\d*)(?:\\(原\\d+\\.?\\d*\\))?(?:分钟|分钟后)";
@@ -340,6 +370,19 @@ public class GroupManager {
             logger.warn("未找到时间");
         }
 
+//        if (StringUtils.isNotBlank(qq) && StringUtils.isNotBlank(time)) {
+//            RemindTime remindTime = new RemindTime();
+//            remindTime.setQq(Long.parseLong(qq));
+//            remindTime.setExpireTime((long)(Double.parseDouble(time) * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
+//            remindTime.setText(type);
+//            remindTime.setGroupId(group.getGroupId());
+//            this.mjXslmap.put(qq, remindTime);
+//        }
+        addXslMap(qq,type,group,time);
+
+    }
+
+    private void addXslMap(String qq,String type, Group group,String time){
         if (StringUtils.isNotBlank(qq) && StringUtils.isNotBlank(time)) {
             RemindTime remindTime = new RemindTime();
             remindTime.setQq(Long.parseLong(qq));
@@ -348,7 +391,6 @@ public class GroupManager {
             remindTime.setGroupId(group.getGroupId());
             this.mjXslmap.put(qq, remindTime);
         }
-
     }
 
     @GroupMessageHandler(
