@@ -256,6 +256,80 @@ public class PriceTask {
         }
     }
 
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 新版查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery() && message.contains("天机悬赏令")) {
+            Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
+
+            while(true) {
+                do {
+                    if (!var7.hasNext()) {
+                        return;
+                    }
+
+                    TextMessage textMessage = (TextMessage)var7.next();
+                    message = textMessage.getText();
+                } while(!message.contains("天机悬赏令"));
+
+                Pattern pattern = Pattern.compile(
+                        "成功率：(\\d+)%.*?" +
+                                "基础奖励(\\d+)修为.*?" +
+                                "额外机缘：[^「]+「([^」]+)」",
+                        Pattern.DOTALL
+                );
+                Matcher matcher = pattern.matcher(message);
+                StringBuilder stringBuilder = new StringBuilder();
+                int count = 0;
+                int maxPriceIndex = 0;
+                int maxPrice = 0;
+
+                int maxCultivateIndex = 0;
+                long maxCultivate = 0;
+
+
+                while(matcher.find()) {
+                    int completionRate = Integer.parseInt(matcher.group(1));
+                    long cultivation = Long.parseLong(matcher.group(2));
+                    String name = matcher.group(3).replaceAll("\\s", "");
+                    int colonIndex = name.indexOf(58);
+                    if (colonIndex >= 0) {
+                        name = name.substring(colonIndex + 1).trim();
+                    }
+
+                    if (StringUtils.isNotBlank(name)) {
+                        ++count;
+                        ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
+                        if(completionRate == 100){
+                            cultivation = cultivation * 2;
+                        }
+                        if (cultivation > maxCultivate) {
+                            maxCultivate = cultivation;
+                            maxCultivateIndex = count;
+                        }
+                        if (first != null) {
+                            if (first.getPrice() > maxPrice) {
+                                maxPrice = first.getPrice();
+                                maxPriceIndex = count;
+                            }
+                            stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万")
+                                    .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
+                        }
+                    }
+                }
+//                stringBuilder.append("\n\n最高修为:接取悬赏令" + maxCultivateIndex + "\n最高价格:接取悬赏令" + maxPriceIndex );
+                stringBuilder.append("\n\n最高修为:悬赏令" + maxCultivateIndex +"(修为" + formatCultivation(maxCultivate)+")");
+                stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + maxPrice + "万)");
+                if (stringBuilder.length() > 5) {
+                    stringBuilder.insert(0, "悬赏令价格查询：");
+                    group.sendMessage((new MessageChain()).text(stringBuilder.toString()));
+                }
+            }
+        }
+    }
+
     private String formatCultivation(long reward) {
         return reward >= 100000000L ? String.format("%.2f亿", (double)reward / 1.0E8) : reward / 10000L + "万";
     }
