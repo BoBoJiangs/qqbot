@@ -88,8 +88,8 @@ public class FamilyTask {
         if (dataFile.exists()) {
             try {
                 ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(new File(FILE_PATH).toPath()));
-                Map<String, Object> data = (Map)ois.readObject();
-                this.remindMap = (ConcurrentHashMap)data.get("灵田提醒");
+                Map<String, Object> data = (Map) ois.readObject();
+                this.remindMap = (ConcurrentHashMap) data.get("灵田提醒");
 
                 ois.close();
             } catch (Exception var4) {
@@ -210,23 +210,42 @@ public class FamilyTask {
                 botConfig.setFamilyTaskStatus(4);
             }
 
+            if (message.contains("时间还没到") && message.contains("歇会歇会")) {
+                botConfig.setLastRefreshTime(System.currentTimeMillis() + 60000L);
+            }
+
+
             if (botConfig.getSectMode() == 1) {
-                if (message.contains("邪修抢夺灵石") || message.contains("私自架设小型窝点")) {
+                if (message.contains("邪修抢夺灵石") || message.contains("私自架设小型窝点") || message.contains("宗门密令") ||
+                        message.contains("除魔令")) {
                     botConfig.setLastRefreshTime(System.currentTimeMillis());
                     botConfig.setFamilyTaskStatus(3);
                 }
 
-                if (message.contains("被追打催债") || message.contains("为宗门购买一些") || message.contains("请道友下山购买")) {
+                if (message.contains("被追打催债") ||
+                        message.contains("坊市通告") ||
+                        message.contains("九转仙丹") ||
+                        message.contains("仗义疏财")
+                        || message.contains("为宗门购买一些") || message.contains("请道友下山购买")) {
                     botConfig.setFamilyTaskStatus(2);
                     botConfig.setLastRefreshTime(System.currentTimeMillis());
                 }
             }
 
-            if (botConfig.getSectMode() == 2 && (message.contains("邪修抢夺灵石") || message.contains("私自架设小型窝点") || message.contains("被追打催债") || message.contains("请道友下山购买") || message.contains("为宗门购买一些"))) {
+            if (botConfig.getSectMode() == 2 && (message.contains("邪修抢夺灵石") ||
+                    message.contains("私自架设小型窝点") || message.contains("被追打催债")
+                    || message.contains("请道友下山购买") ||
+                    message.contains("为宗门购买一些") ||
+                    message.contains("宗门密令") ||
+                    message.contains("除魔令") ||
+                    message.contains("坊市通告") ||
+                    message.contains("九转仙丹") ||
+                    message.contains("仗义疏财"))) {
                 botConfig.setLastRefreshTime(System.currentTimeMillis());
                 botConfig.setFamilyTaskStatus(5);
             }
         }
+
 
     }
 
@@ -246,7 +265,7 @@ public class FamilyTask {
                 }
 
                 double hours = Double.parseDouble(parts[1].trim());
-                long remindTime = (long)((double)System.currentTimeMillis() + hours * 60.0 * 60.0 * 1000.0);
+                long remindTime = (long) ((double) System.currentTimeMillis() + hours * 60.0 * 60.0 * 1000.0);
                 remindMap.put(bot.getBotId(), remindTime);
 //                bot.getBotConfig().setLastExecuteTime(remindTime);
                 group.sendMessage((new MessageChain()).text("下次收取时间为：" + sdf.format(new Date(remindTime))));
@@ -270,8 +289,8 @@ public class FamilyTask {
     public void 灵田领取() throws InterruptedException {
         Iterator var1 = BotFactory.getBots().values().iterator();
 
-        while(var1.hasNext()) {
-            Bot bot = (Bot)var1.next();
+        while (var1.hasNext()) {
+            Bot bot = (Bot) var1.next();
             BotConfig botConfig = bot.getBotConfig();
 
             if (botConfig.isEnableAutoField()) {
@@ -282,22 +301,20 @@ public class FamilyTask {
                 }
 
 
-
-                if(remindMap.get(bot.getBotId()) == null){
-                    logger.info("bot.getBotId()=="+remindMap.get(bot.getBotId()));
+                if (remindMap.get(bot.getBotId()) == null) {
+                    logger.info("bot.getBotId()==" + remindMap.get(bot.getBotId()));
                     remindMap.put(bot.getBotId(), 9223372036854175807L);
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
                     continue;
                 }
 
-                if(remindMap.get(bot.getBotId()) + 60000L < System.currentTimeMillis()){
+                if (remindMap.get(bot.getBotId()) + 60000L < System.currentTimeMillis()) {
                     logger.info(String.format("bot.getBotId()==%d", remindMap.get(bot.getBotId())));
 //                    botConfig.setLastExecuteTime(9223372036854175807L);
                     remindMap.put(bot.getBotId(), 9223372036854175807L);
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
 
                 }
-
 
 
             }

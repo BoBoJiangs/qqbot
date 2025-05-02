@@ -16,7 +16,7 @@ public class Config implements Serializable {
     private boolean isAlchemy = true;
     private String makeName = "极品创世丹&极品混沌丹&极品创世丹&九天蕴仙丹&金仙造化丹&大道归一丹&菩提证道丹&太清玉液丹";
     private List<String> fixedDanName;
-    private Long alchemyQQ;
+    private Long alchemyQQ = 0L;
     private boolean finishAutoBuyHerb;
     private int limitHerbsCount = 3;
     private int addPrice = -20;

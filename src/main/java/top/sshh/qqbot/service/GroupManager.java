@@ -240,7 +240,7 @@ public class GroupManager {
                 }
 
             }
-            if ((danCalculator.config!=null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
+            if ((danCalculator!=null && danCalculator.config!=null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
                     (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) && group.getGroupId() == bot.getBotConfig().getGroupId()) {
                 bot.setGroupCard(group.getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
             }

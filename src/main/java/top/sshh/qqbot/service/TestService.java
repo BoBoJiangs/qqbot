@@ -1159,18 +1159,22 @@ public class TestService {
                 proccessCultivation(group);
             }
 
-            if (message.contains("进行中的悬赏令") && message.contains("可结束")) {
-                String[] parts;
-                if (message.contains("(原")) {
-                    parts = message.split("预计|\\(原");
-                } else {
-                    parts = message.split("预计|分钟");
+            if (message.contains("进行中的悬赏令") && message.contains("可结束") || message.contains("悬赏令进行中") && message.contains("预计剩余时间") || message.contains("悬赏令接取成功") && message.contains("预计时间")) {
+                Pattern pattern = Pattern.compile("预计[^\\d]*(\\d+\\.?\\d*)");
+                Matcher matcher = pattern.matcher(message);
+                if (matcher.find()) {
+                    try {
+                        double minutes = Double.parseDouble(matcher.group(1));
+                        long timeMillis = (long)(Math.ceil(minutes) * 60.0 * 1000.0);
+                        botConfig.setXslTime(System.currentTimeMillis() + timeMillis);
+                    } catch (NumberFormatException var16) {
+                        NumberFormatException e = var16;
+                        e.printStackTrace();
+                    }
                 }
-
-                botConfig.setXslTime((long)(Math.ceil(Double.parseDouble(parts[1])) * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
             }
 
-            if (message.contains("进行中的悬赏令") && message.contains("已结束")) {
+            if (message.contains("进行中的悬赏令") && message.contains("已结束") || message.contains("悬赏令完成通知") && message.contains("已完成")) {
                 botConfig.setXslTime(-1L);
                 botConfig.setMjTime(-1L);
                 botConfig.setStartScheduled(true);
@@ -1189,7 +1193,7 @@ public class TestService {
     )
     public void 悬赏令接取(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        if ((botConfig.getRewardMode() == 3 || botConfig.getRewardMode() == 4 || botConfig.getRewardMode() == 5) && message.contains("" + bot.getBotId()) && message.contains("道友的个人悬赏令")) {
+        if ((botConfig.getRewardMode() == 3 || botConfig.getRewardMode() == 4 || botConfig.getRewardMode() == 5) && message.contains("" + bot.getBotId()) && (message.contains("道友的个人悬赏令") || message.contains("天机悬赏令"))) {
             Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
             if (message.contains("仙阶极品") && !message.contains("两仪心经") && botConfig.getMasterQQ() == 819463350L) {
                 group.sendMessage((new MessageChain()).at("" + botConfig.getMasterQQ()).text("悬赏令出货了！！！"));
@@ -1208,9 +1212,9 @@ public class TestService {
 
                             TextMessage textMessage = (TextMessage)var7.next();
                             message = textMessage.getText();
-                        } while(!message.contains("道友的个人悬赏令"));
+                        } while(!message.contains("道友的个人悬赏令") && !message.contains("天机悬赏令"));
 
-                        Pattern pattern = Pattern.compile("可能额外获得：(.*?)!");
+                        Pattern pattern = Pattern.compile("(?:可能额外获得|额外机缘)[：:](.*?)(?=[!」])");
                         Matcher matcher = pattern.matcher(message);
                         int count = 0;
                         index = 0;
@@ -1219,11 +1223,14 @@ public class TestService {
 
                         while(matcher.find()) {
                             String name = matcher.group(1).replaceAll("\\s", "");
-                            int colonIndex = name.indexOf(58);
-                            if (colonIndex >= 0) {
-                                name = name.substring(colonIndex + 1).trim();
+                            String[] parts = name.split("[:「]");
+                            if (parts.length > 1) {
+                                name = parts[1].replaceAll("[」]", "").trim();
+                            } else {
+                                name = parts[0].trim();
                             }
 
+                            System.out.println("物品" + name);
                             if (StringUtils.isNotBlank(name)) {
                                 ++count;
                                 ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
@@ -1262,13 +1269,14 @@ public class TestService {
 
     public static List<Long> extractRewards(String input) {
         List<Long> rewards = new ArrayList();
-        Pattern pattern = Pattern.compile("基础报酬(\\d+)修为");
+        Pattern pattern = Pattern.compile("基础(?:报酬|奖励)(\\d+)修为");
         Matcher matcher = pattern.matcher(input);
 
         while(matcher.find()) {
             rewards.add(Long.parseLong(matcher.group(1)));
         }
 
+        System.out.println("报酬修为" + rewards);
         return rewards;
     }
 
@@ -1290,28 +1298,31 @@ public class TestService {
         }
     }
 
-    public static List<Integer> extractDurations(String input) {
-        List<Integer> durations = new ArrayList();
-        Pattern pattern = Pattern.compile("预计需(\\d+)分钟");
+    public static List<Double> extractDurations(String input) {
+        List<Double> durations = new ArrayList();
+        Pattern pattern = Pattern.compile("预计[^\\d]*(\\d+\\.?\\d*)\\s*分钟");
         Matcher matcher = pattern.matcher(input);
 
         while(matcher.find()) {
-            durations.add(Integer.parseInt(matcher.group(1)));
+            String numberStr = matcher.group(1);
+            double number = Double.parseDouble(numberStr);
+            durations.add(number);
         }
 
+        System.out.println("时间" + durations);
         return durations;
     }
 
-    public static int findShortestDurationIndex(List<Integer> durations) {
+    public static int findShortestDurationIndex(List<Double> durations) {
         if (durations.isEmpty()) {
             return 0;
         } else {
             int shortestIndex = 0;
-            int shortestDuration = (Integer)durations.get(0);
+            double shortestDuration = (Double)durations.get(0);
 
             for(int i = 1; i < durations.size(); ++i) {
-                if ((Integer)durations.get(i) < shortestDuration) {
-                    shortestDuration = (Integer)durations.get(i);
+                if ((Double)durations.get(i) < shortestDuration) {
+                    shortestDuration = (Double)durations.get(i);
                     shortestIndex = i;
                 }
             }
