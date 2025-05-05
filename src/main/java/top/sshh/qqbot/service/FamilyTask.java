@@ -191,7 +191,8 @@ public class FamilyTask {
     )
     public void 宗门任务状态管理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        if ((group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId()) && message.contains("" + bot.getBotId())) {
+        boolean isAtSelf = isAtSelf(message,bot);
+        if (isAtSelf) {
             if (message.startsWith("道友目前还没有宗门任务")) {
                 botConfig.setFamilyTaskStatus(1);
             }
@@ -248,6 +249,9 @@ public class FamilyTask {
 
 
     }
+    private boolean isAtSelf(String message,Bot bot){
+        return message.contains("@" + bot.getBotId()) || message.contains("@" +bot.getBotName()) ;
+    }
 
     @GroupMessageHandler(
             senderIds = {3889001741L}
@@ -255,7 +259,7 @@ public class FamilyTask {
     public void 灵田领取结果(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        boolean isAtSelf = message.contains("" + bot.getBotId()) || message.contains(bot.getBotName());
+        boolean isAtSelf = isAtSelf(message,bot);
         if (isGroup && isAtSelf) {
             if (message.contains("灵田还不能收取")) {
                 String[] parts = message.split("：|小时");
@@ -331,7 +335,7 @@ public class FamilyTask {
             if (message.contains("你的灵石还不够呢")) {
                 botConfig.setStartAutoLingG(false);
             } else {
-                boolean isAtSelf = message.contains("" + bot.getBotId()) || message.contains(bot.getBotName());
+                boolean isAtSelf = isAtSelf(message,bot);
                 if (isAtSelf && message.contains("逆天之行") && message.contains("新的灵根为")) {
                     if (!message.contains("异世界之力") && !message.contains("机械核心")) {
                         group.sendMessage((new MessageChain()).at("3889001741").text("重入仙途"));

@@ -50,6 +50,8 @@ public class AutoBuyHerbs {
     @Autowired
     public DanCalculator danCalculator;
     private int noQueriedCount = 0;
+    private List<Integer> makeDrugIndexList = new ArrayList<>();
+    private int drugIndex = 0;
 
     public AutoBuyHerbs() {
     }
@@ -74,9 +76,24 @@ public class AutoBuyHerbs {
                     botConfig.setStartAutoBuyHerbs(false);
                     group.sendMessage((new MessageChain()).reply(messageId).text("停止采购"));
                     break;
+
                 default:
                     this.handlePurchaseCommands(bot, group, message, messageId);
             }
+        }
+
+        if (message.startsWith("刷新指定药材坊市")) {
+            String[] indexs = message.substring(message.indexOf("刷新指定药材坊市") + 8).trim().split("&");
+//            logger.info(indexs);
+            for (String s : indexs) {
+                makeDrugIndexList.add(Integer.parseInt(s));
+            }
+            group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+        }
+
+        if ("取消刷新指定药材坊市".startsWith(message)) {
+            makeDrugIndexList.clear();
+            group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
         }
 
     }
@@ -84,6 +101,7 @@ public class AutoBuyHerbs {
     private void resetPram() {
         this.page = 1;
         noQueriedCount = 0;
+        drugIndex = 0;
         this.herbPackMap.clear();
         this.autoBuyList.clear();
     }
@@ -287,7 +305,7 @@ public class AutoBuyHerbs {
     public void 成功购买药材(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        boolean isAtSelf = message.contains("" + bot.getBotId()) || message.contains(bot.getBotName());
+        boolean isAtSelf = isAtSelf(message,bot);
         if (isGroup && isAtSelf && botConfig.isStartAutoBuyHerbs() && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") ||
                 message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             if (message.contains("道友成功购买")) {
@@ -326,6 +344,10 @@ public class AutoBuyHerbs {
             this.buyHerbs(group, bot.getBotConfig());
         }
 
+    }
+
+    private boolean isAtSelf(String message,Bot bot){
+        return message.contains("@" + bot.getBotId()) || message.contains("@" +bot.getBotName()) ;
     }
 
 
@@ -451,20 +473,32 @@ public class AutoBuyHerbs {
             BotConfig botConfig = bot.getBotConfig();
             if (!botConfig.isStop() && this.autoBuyList.isEmpty() && botConfig.isStartAutoBuyHerbs()) {
                 long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
-                if (botConfig.getTaskStatusHerbs() == 8) {
-                    botConfig.setTaskStatusHerbs(1);
-                }
 
-                if (botConfig.getTaskStatusHerbs() < 8) {
-                    try {
-                        bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
-                        botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
-                        noQueriedCount = 0;
-                    } catch (Exception var6) {
-                        logger.error("定时查询坊市失败");
-                        Thread.currentThread().interrupt();
+                if(!makeDrugIndexList.isEmpty()){
+                    bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + makeDrugIndexList.get(drugIndex)));
+
+                    if(drugIndex == makeDrugIndexList.size() - 1){
+                        drugIndex = 0;
+                    }else{
+                        drugIndex = drugIndex + 1;
+                    }
+                }else{
+                    if (botConfig.getTaskStatusHerbs() == 8) {
+                        botConfig.setTaskStatusHerbs(1);
+                    }
+
+                    if (botConfig.getTaskStatusHerbs() < 8) {
+                        try {
+                            bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
+                            botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
+                            noQueriedCount = 0;
+                        } catch (Exception var6) {
+                            logger.error("定时查询坊市失败");
+                            Thread.currentThread().interrupt();
+                        }
                     }
                 }
+
             }
 
         });

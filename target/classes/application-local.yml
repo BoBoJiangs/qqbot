@@ -1,14 +1,16 @@
-botId: 1111111
+botId: 0
 bot:
   #  类型：ws 正向连接，ws-reverse 反向连接，
   #  以下是两个连接的使用模板，注意url里的端口每个bot需要不一样。
-  - type: ws
+  - type: ws-reverse
     url: ws://localhost:8081
     accessToken: 1024*1024*1024
     #    修炼群号
-    groupId: 699784809
+    groupId: 971327442
     #    大号qq
-    masterQQ: 1599558112
+    controlQQ: 819463350&1018454301
+    #    大号qq
+    masterQQ: 819463350
     # 是否开启查价格
     enableCheckPrice: true
     # 是否开启猜成语
@@ -20,25 +22,35 @@ bot:
     #  悬赏令价格查询
     enableXslPriceQuery: false
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-    cultivationMode: 1
+    cultivationMode: 3
+    enableAutoField: false
+    #群管提醒
+    enableGroupManager: true
+
   #    这个连接方式可能更稳定
   - type: ws-reverse
     url: ws://localhost:8082
     accessToken: 1024*1024*1024
-    groupId: 699784809
-    masterQQ: 1599558112
+    #    修炼群号
+    groupId: 971327442
+    #    大号qq
+    masterQQ: 819463350
     # 是否开启查价格
     enableCheckPrice: true
     # 是否开启猜成语
     enableGuessTheIdiom: false
     # 是否开启查行情
     enableCheckMarket: true
-    # 是否开启自动宗门任务
-    enableSectMission: true
     #  悬赏令价格查询
     enableXslPriceQuery: false
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-    cultivationMode: 1
+    cultivationMode: 2
+    # 悬赏令模式
+    rewardMode: 4
+    #宗门任务1：邪修和查抄 2：所有任务
+    sectMode: 2
+    #无偿双修
+    enableAutoRepair: true
 
 spring:
   datasource:

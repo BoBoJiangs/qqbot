@@ -27,6 +27,8 @@
             <groupId>com.zhuangxv</groupId>
             <artifactId>bot-core</artifactId>
             <version>1.0.0</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/lib/bot-core-1.0.0.jar</systemPath>
         </dependency>
 
         <dependency>
@@ -81,6 +83,7 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <configuration>
+                    <includeSystemScope>true</includeSystemScope> <!-- 关键配置 -->
                     <finalName>bot</finalName> <!-- 打包成 bot.jar -->
                     <excludes>
                         <exclude>
