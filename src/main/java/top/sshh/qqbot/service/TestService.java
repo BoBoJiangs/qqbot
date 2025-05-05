@@ -1227,7 +1227,7 @@ public class TestService {
                         String[] parts = name.split("[:「]");
                         name = parts.length > 1 ? parts[1].replaceAll("[」]", "").trim() : parts[0].trim();
 
-                        System.out.println("物品" + name);
+//                        System.out.println("物品" + name);
 
                         if (StringUtils.isNotBlank(name)) {
                             count++;
@@ -1275,7 +1275,7 @@ public class TestService {
             rewards.add(Long.parseLong(matcher.group(1)));
         }
 
-        System.out.println("报酬修为" + rewards);
+//        System.out.println("报酬修为" + rewards);
         return rewards;
     }
 
@@ -1309,7 +1309,7 @@ public class TestService {
             durations.add(number);
         }
 
-        System.out.println("时间" + durations);
+//        System.out.println("时间" + durations);
         return durations;
     }
 
