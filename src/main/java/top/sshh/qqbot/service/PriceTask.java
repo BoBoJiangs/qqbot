@@ -188,147 +188,244 @@ public class PriceTask {
 
     }
 
+//    @GroupMessageHandler(
+//            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+//    )
+//    public void 自动查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+//        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery() && message.contains("道友的个人悬赏令")) {
+//            Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
+//
+//            while(true) {
+//                do {
+//                    if (!var7.hasNext()) {
+//                        return;
+//                    }
+//
+//                    TextMessage textMessage = (TextMessage)var7.next();
+//                    message = textMessage.getText();
+//                } while(!message.contains("道友的个人悬赏令"));
+//
+//                Pattern pattern = Pattern.compile("完成几率(\\d+),基础报酬(\\d+)修为.*?可能额外获得：[^:]+:(.*?)!");
+//                Matcher matcher = pattern.matcher(message);
+//                StringBuilder stringBuilder = new StringBuilder();
+//                int count = 0;
+//                int maxPriceIndex = 0;
+//                int maxPrice = 0;
+//
+//                int maxCultivateIndex = 0;
+//                long maxCultivate = 0;
+//
+//
+//                while(matcher.find()) {
+//                    int completionRate = Integer.parseInt(matcher.group(1));
+//                    long cultivation = Long.parseLong(matcher.group(2));
+//                    String name = matcher.group(3).replaceAll("\\s", "");
+//                    int colonIndex = name.indexOf(58);
+//                    if (colonIndex >= 0) {
+//                        name = name.substring(colonIndex + 1).trim();
+//                    }
+//
+//                    if (StringUtils.isNotBlank(name)) {
+//                        ++count;
+//                        ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
+//                        if(completionRate == 100){
+//                            cultivation = cultivation * 2;
+//                        }
+//                        if (cultivation > maxCultivate) {
+//                            maxCultivate = cultivation;
+//                            maxCultivateIndex = count;
+//                        }
+//                        if (first != null) {
+//                            if (first.getPrice() > maxPrice) {
+//                                maxPrice = first.getPrice();
+//                                maxPriceIndex = count;
+//                            }
+//                            stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万")
+//                                    .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
+//                        }
+//                    }
+//                }
+//                stringBuilder.append("\n\n最高修为:悬赏令" + maxCultivateIndex +"(修为" + formatCultivation(maxCultivate)+")");
+//                stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + maxPrice + "万)");
+//                if (stringBuilder.length() > 5) {
+//                    stringBuilder.insert(0, "悬赏令价格查询：");
+//                    group.sendMessage((new MessageChain()).text(stringBuilder.toString()));
+//                }
+//            }
+//        }
+//    }
+//
+//
+//    @GroupMessageHandler(
+//            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+//    )
+//    public void 新版查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+//        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery()
+//                && message.contains("天机悬赏令") && !message.contains("今日悬赏令刷新次数已用尽")) {
+//            Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
+//
+//            while(true) {
+//                do {
+//                    if (!var7.hasNext()) {
+//                        return;
+//                    }
+//
+//                    TextMessage textMessage = (TextMessage)var7.next();
+//                    message = textMessage.getText();
+//                } while(!message.contains("天机悬赏令"));
+//
+//                Pattern pattern = Pattern.compile(
+//                        "成功率：(\\d+)%.*?" +
+//                                "基础奖励(\\d+)修为.*?" +
+//                                "额外机缘：[^「]+「([^」]+)」",
+//                        Pattern.DOTALL
+//                );
+//                Matcher matcher = pattern.matcher(message);
+//                StringBuilder stringBuilder = new StringBuilder();
+//                int count = 0;
+//                int maxPriceIndex = 0;
+//                int maxPrice = 0;
+//
+//                int maxCultivateIndex = 0;
+//                long maxCultivate = 0;
+//
+//
+//                while(matcher.find()) {
+//                    int completionRate = Integer.parseInt(matcher.group(1));
+//                    long cultivation = Long.parseLong(matcher.group(2));
+//                    String name = matcher.group(3).replaceAll("\\s", "");
+//                    int colonIndex = name.indexOf(58);
+//                    if (colonIndex >= 0) {
+//                        name = name.substring(colonIndex + 1).trim();
+//                    }
+//
+//                    if (StringUtils.isNotBlank(name)) {
+//                        ++count;
+//                        ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
+//                        if(completionRate == 100){
+//                            cultivation = cultivation * 2;
+//                        }
+//                        if (cultivation > maxCultivate) {
+//                            maxCultivate = cultivation;
+//                            maxCultivateIndex = count;
+//                        }
+//                        if (first != null) {
+//                            if (first.getPrice() > maxPrice) {
+//                                maxPrice = first.getPrice();
+//                                maxPriceIndex = count;
+//                            }
+//                            stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万")
+//                                    .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
+//                        }
+//                    }
+//                }
+////                stringBuilder.append("\n\n最高修为:接取悬赏令" + maxCultivateIndex + "\n最高价格:接取悬赏令" + maxPriceIndex );
+//                stringBuilder.append("\n\n最高修为:悬赏令" + maxCultivateIndex +"(修为" + formatCultivation(maxCultivate)+")");
+//                stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + maxPrice + "万)");
+//                if (stringBuilder.length() > 5) {
+//                    stringBuilder.insert(0, "悬赏令价格查询：");
+//                    group.sendMessage((new MessageChain()).text(stringBuilder.toString()));
+//                }
+//            }
+//        }
+//    }
+
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
-    public void 自动查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery() && message.contains("道友的个人悬赏令")) {
-            Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
+    public void 查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery()) {
+            boolean isPersonal = message.contains("道友的个人悬赏令");
+            boolean isNewVersion = message.contains("天机悬赏令") && !message.contains("今日悬赏令刷新次数已用尽");
 
-            while(true) {
-                do {
-                    if (!var7.hasNext()) {
-                        return;
-                    }
+            if (!isPersonal && !isNewVersion) {
+                return;
+            }
 
-                    TextMessage textMessage = (TextMessage)var7.next();
-                    message = textMessage.getText();
-                } while(!message.contains("道友的个人悬赏令"));
+            // 定义需要特殊提醒的功法列表
+            Set<String> specialSkills = new HashSet<>(Arrays.asList(
+                    "五指拳心剑", "袖里乾坤", "真龙九变", "灭剑血胧",
+                    "万剑归宗", "华光猎影", "千慄鬼噬"
+            ));
 
-                Pattern pattern = Pattern.compile("完成几率(\\d+),基础报酬(\\d+)修为.*?可能额外获得：[^:]+:(.*?)!");
-                Matcher matcher = pattern.matcher(message);
-                StringBuilder stringBuilder = new StringBuilder();
-                int count = 0;
-                int maxPriceIndex = 0;
-                int maxPrice = 0;
+            for (TextMessage textMessage : messageChain.getMessageByType(TextMessage.class)) {
+                message = textMessage.getText();
+                if ((isPersonal && message.contains("道友的个人悬赏令")) ||
+                        (isNewVersion && message.contains("天机悬赏令"))) {
 
-                int maxCultivateIndex = 0;
-                long maxCultivate = 0;
+                    Pattern pattern = isPersonal ?
+                            Pattern.compile("完成几率(\\d+),基础报酬(\\d+)修为.*?可能额外获得：[^:]+:(.*?)!") :
+                            Pattern.compile("成功率：(\\d+)%.*?基础奖励(\\d+)修为.*?额外机缘：[^「]+「([^」]+)」", Pattern.DOTALL);
 
+                    Matcher matcher = pattern.matcher(message);
+                    StringBuilder stringBuilder = new StringBuilder();
+                    int count = 0;
+                    int maxPriceIndex = 0;
+                    int maxPrice = 0;
+                    int maxCultivateIndex = 0;
+                    long maxCultivate = 0;
+                    List<String> specialSkillMessages = new ArrayList<>();
 
-                while(matcher.find()) {
-                    int completionRate = Integer.parseInt(matcher.group(1));
-                    long cultivation = Long.parseLong(matcher.group(2));
-                    String name = matcher.group(3).replaceAll("\\s", "");
-                    int colonIndex = name.indexOf(58);
-                    if (colonIndex >= 0) {
-                        name = name.substring(colonIndex + 1).trim();
-                    }
-
-                    if (StringUtils.isNotBlank(name)) {
-                        ++count;
-                        ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
-                        if(completionRate == 100){
-                            cultivation = cultivation * 2;
+                    while(matcher.find()) {
+                        int completionRate = Integer.parseInt(matcher.group(1));
+                        long cultivation = Long.parseLong(matcher.group(2));
+                        String name = matcher.group(3).replaceAll("\\s", "");
+                        int colonIndex = name.indexOf(58);
+                        if (colonIndex >= 0) {
+                            name = name.substring(colonIndex + 1).trim();
                         }
-                        if (cultivation > maxCultivate) {
-                            maxCultivate = cultivation;
-                            maxCultivateIndex = count;
-                        }
-                        if (first != null) {
-                            if (first.getPrice() > maxPrice) {
-                                maxPrice = first.getPrice();
-                                maxPriceIndex = count;
+
+                        if (StringUtils.isNotBlank(name)) {
+                            ++count;
+                            ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
+                            if(completionRate == 100){
+                                cultivation = cultivation * 2;
                             }
-                            stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万")
-                                    .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
+                            if (cultivation > maxCultivate) {
+                                maxCultivate = cultivation;
+                                maxCultivateIndex = count;
+                            }
+                            if (first != null) {
+                                if (first.getPrice() > maxPrice) {
+                                    maxPrice = first.getPrice();
+                                    maxPriceIndex = count;
+                                }
+                                stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万")
+                                        .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
+
+
+                            }
+                            // 检查是否是特殊功法
+                            if (specialSkills.contains(name)) {
+                                specialSkillMessages.add("恭喜道友获得：" + name + "（悬赏令" + count + "）！！！");
+                            }
                         }
                     }
-                }
-//                stringBuilder.append("\n\n最高修为:接取悬赏令" + maxCultivateIndex + "\n最高价格:接取悬赏令" + maxPriceIndex );
-                stringBuilder.append("\n\n最高修为:悬赏令" + maxCultivateIndex +"(修为" + formatCultivation(maxCultivate)+")");
-                stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + maxPrice + "万)");
-                if (stringBuilder.length() > 5) {
-                    stringBuilder.insert(0, "悬赏令价格查询：");
-                    group.sendMessage((new MessageChain()).text(stringBuilder.toString()));
+
+
+
+                    // 如果有特殊功法，优先发送提醒
+                    if (!specialSkillMessages.isEmpty()) {
+                        stringBuilder.append("\n");
+                        for (String skillMsg : specialSkillMessages) {
+//                            group.sendMessage((new MessageChain()).text(skillMsg));
+                            stringBuilder.append("\n");
+                            stringBuilder.append(skillMsg);
+                        }
+                    }else{
+                        stringBuilder.append("\n\n最高修为:悬赏令" + maxCultivateIndex +"(修为" + formatCultivation(maxCultivate)+")");
+                        stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + maxPrice + "万)");
+                    }
+
+
+                    if (stringBuilder.length() > 5) {
+                        stringBuilder.insert(0, "悬赏令价格查询：");
+                        group.sendMessage((new MessageChain()).text(stringBuilder.toString()));
+                    }
                 }
             }
         }
-    }
 
-
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
-    public void 新版查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery()
-                && message.contains("天机悬赏令") && !message.contains("今日悬赏令刷新次数已用尽")) {
-            Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
-
-            while(true) {
-                do {
-                    if (!var7.hasNext()) {
-                        return;
-                    }
-
-                    TextMessage textMessage = (TextMessage)var7.next();
-                    message = textMessage.getText();
-                } while(!message.contains("天机悬赏令"));
-
-                Pattern pattern = Pattern.compile(
-                        "成功率：(\\d+)%.*?" +
-                                "基础奖励(\\d+)修为.*?" +
-                                "额外机缘：[^「]+「([^」]+)」",
-                        Pattern.DOTALL
-                );
-                Matcher matcher = pattern.matcher(message);
-                StringBuilder stringBuilder = new StringBuilder();
-                int count = 0;
-                int maxPriceIndex = 0;
-                int maxPrice = 0;
-
-                int maxCultivateIndex = 0;
-                long maxCultivate = 0;
-
-
-                while(matcher.find()) {
-                    int completionRate = Integer.parseInt(matcher.group(1));
-                    long cultivation = Long.parseLong(matcher.group(2));
-                    String name = matcher.group(3).replaceAll("\\s", "");
-                    int colonIndex = name.indexOf(58);
-                    if (colonIndex >= 0) {
-                        name = name.substring(colonIndex + 1).trim();
-                    }
-
-                    if (StringUtils.isNotBlank(name)) {
-                        ++count;
-                        ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
-                        if(completionRate == 100){
-                            cultivation = cultivation * 2;
-                        }
-                        if (cultivation > maxCultivate) {
-                            maxCultivate = cultivation;
-                            maxCultivateIndex = count;
-                        }
-                        if (first != null) {
-                            if (first.getPrice() > maxPrice) {
-                                maxPrice = first.getPrice();
-                                maxPriceIndex = count;
-                            }
-                            stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万")
-                                    .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
-                        }
-                    }
-                }
-//                stringBuilder.append("\n\n最高修为:接取悬赏令" + maxCultivateIndex + "\n最高价格:接取悬赏令" + maxPriceIndex );
-                stringBuilder.append("\n\n最高修为:悬赏令" + maxCultivateIndex +"(修为" + formatCultivation(maxCultivate)+")");
-                stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + maxPrice + "万)");
-                if (stringBuilder.length() > 5) {
-                    stringBuilder.insert(0, "悬赏令价格查询：");
-                    group.sendMessage((new MessageChain()).text(stringBuilder.toString()));
-                }
-            }
-        }
     }
 
     private String formatCultivation(long reward) {
