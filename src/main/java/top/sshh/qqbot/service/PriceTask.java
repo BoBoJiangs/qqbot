@@ -390,7 +390,7 @@ public class PriceTask {
                                     maxPrice = first.getPrice();
                                     maxPriceIndex = count;
                                 }
-                                stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万")
+                                stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(formatCultivation(first.getPrice()*10000L))
                                         .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
 
 
@@ -414,7 +414,7 @@ public class PriceTask {
                         }
                     }else{
                         stringBuilder.append("\n\n最高修为:悬赏令" + maxCultivateIndex +"(修为" + formatCultivation(maxCultivate)+")");
-                        stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + maxPrice + "万)");
+                        stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + formatCultivation(maxPrice*10000L) + ")");
                     }
 
 

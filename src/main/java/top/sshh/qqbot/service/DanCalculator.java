@@ -6,8 +6,10 @@
 package top.sshh.qqbot.service;
 
 import com.alibaba.fastjson2.JSON;
+import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.MessageChain;
+import com.zhuangxv.bot.message.support.ForwardNodeMessage;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -185,7 +187,7 @@ public class DanCalculator {
         }
     }
 
-    public void parseRecipes(String text, Group group) throws IOException {
+    public void parseRecipes(String text, Group group, Bot bot) throws IOException {
 
         Pattern textPattern = Pattern.compile("[\\u4e00-\\u9fff]{2,}");
         Matcher textMatcher = textPattern.matcher(text);
@@ -253,7 +255,12 @@ public class DanCalculator {
                 }
                 sb.append(recipe).append(" 收益").append(price).append(" ").append(danNum).append("丹").append("\n\n");
             }
-            group.sendMessage((new MessageChain()).text(sb.toString()));
+            List<ForwardNodeMessage> forwardNodes = new ArrayList();
+            forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方查询助手", (new MessageChain()).text(sb.toString())));
+//            forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方小助手", (new MessageChain()).text(part1.toString())));
+            forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方查询助手", (new MessageChain()).text("ps：仅输出利润前20条！\n药材价格仅供参考，以实际坊市价格为准！")));
+            group.sendGroupForwardMessage(forwardNodes);
+//            group.sendMessage((new MessageChain()).text(sb.toString()));
 //            System.out.println(sb); // 输出每个丹方
         }
     }

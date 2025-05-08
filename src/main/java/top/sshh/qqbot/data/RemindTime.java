@@ -8,6 +8,15 @@ public class RemindTime implements Serializable {
     private Long expireTime;
     private String text;
     private Long groupId;
+    private Long remindQq;
+
+    public Long getRemindQq() {
+        return remindQq;
+    }
+
+    public void setRemindQq(Long remindQq) {
+        this.remindQq = remindQq;
+    }
 
     public Long getGroupId() {
         return groupId;

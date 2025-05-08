@@ -142,7 +142,7 @@ public class AutoAlchemyTask {
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        AutoAlchemyTask.this.danCalculator.parseRecipes(message, group);
+                        AutoAlchemyTask.this.danCalculator.parseRecipes(message, group,bot);
                     } catch (Exception var2) {
                         System.out.println("加载基础数据异常");
                     }
@@ -215,7 +215,7 @@ public class AutoAlchemyTask {
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        AutoAlchemyTask.this.danCalculator.parseRecipes(string, group);
+                        AutoAlchemyTask.this.danCalculator.parseRecipes(string, group,bot);
                     } catch (Exception var2) {
                         System.out.println("加载基础数据异常");
                     }

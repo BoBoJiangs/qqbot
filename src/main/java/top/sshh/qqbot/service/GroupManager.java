@@ -68,10 +68,10 @@ public class GroupManager {
             "【灵田结算提醒】灵植成熟可收！您的灵田培育出的珍稀作物，能为您带来意想不到的修仙助力！",
             "【灵田结算提醒】灵田收获时间到！这片充满灵气的土地，为您孕育出了珍贵的灵植，速来采摘！");
     private static final String FILE_PATH = "./cache/task_data.ser";
-    @Value("${botId}")
-    private Long botId;
+//    @Value("${botId}")
+//    private Long botId;
     public Map<Long, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
-    public static List<Long> remindGroupIdList = Arrays.asList(1023764416L,971327442L,679831529L,824484501L,690933736L);
+    public static List<Long> remindGroupIdList = Arrays.asList(1023764416L,971327442L,679831529L,824484501L,690933736L,978207420L);
     @Autowired
     public DanCalculator danCalculator;
 
@@ -241,8 +241,8 @@ public class GroupManager {
 
             }
             if ((danCalculator!=null && danCalculator.config!=null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
-                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) && group.getGroupId() == bot.getBotConfig().getGroupId()) {
-                bot.setGroupCard(group.getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
+                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) ) {
+                bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
             }
             MESSAGE_NUMBER_MAP.put(bot.getBotId(), messageNumber);
         }
@@ -289,9 +289,9 @@ public class GroupManager {
 //            }
 
             if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
-                this.extractInfo(message, "秘境", group);
+                this.extractInfo(message, "秘境", group,bot);
             }else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
-                this.extractInfo(message, "秘境", group);
+                this.extractInfo(message, "秘境", group,bot);
             }
         }
 
@@ -314,7 +314,7 @@ public class GroupManager {
 //                return;
 //            }
 
-            this.extractInfo(message, "悬赏", group);
+            this.extractInfo(message, "悬赏", group,bot);
         }
 
     }
@@ -341,7 +341,7 @@ public class GroupManager {
             if(timePattern!=null){
                 Matcher timeMatcher = timePattern.matcher(message);
                 String time = timeMatcher.find() ? timeMatcher.group(1) : "未找到预计时间";
-                addXslMap(qq,"悬赏",group,time);
+                addXslMap(qq,"悬赏",group,time,bot);
             }
 
 //            this.extractInfo(message, "悬赏", group);
@@ -349,7 +349,7 @@ public class GroupManager {
 
     }
 
-    public void extractInfo(String input, String type, Group group) {
+    public void extractInfo(String input, String type, Group group,Bot bot) {
         String qqPattern = "@(\\d+)";
         String timePattern = "(\\d+\\.?\\d*)(?:\\(原\\d+\\.?\\d*\\))?(?:分钟|分钟后)";
         Pattern qqRegex = Pattern.compile(qqPattern);
@@ -378,17 +378,18 @@ public class GroupManager {
 //            remindTime.setGroupId(group.getGroupId());
 //            this.mjXslmap.put(qq, remindTime);
 //        }
-        addXslMap(qq,type,group,time);
+        addXslMap(qq,type,group,time,bot);
 
     }
 
-    private void addXslMap(String qq,String type, Group group,String time){
+    private void addXslMap(String qq,String type, Group group,String time,Bot bot){
         if (StringUtils.isNotBlank(qq) && StringUtils.isNotBlank(time)) {
             RemindTime remindTime = new RemindTime();
             remindTime.setQq(Long.parseLong(qq));
             remindTime.setExpireTime((long)(Double.parseDouble(time) * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
             remindTime.setText(type);
             remindTime.setGroupId(group.getGroupId());
+            remindTime.setRemindQq(bot.getBotId());
             this.mjXslmap.put(qq, remindTime);
         }
     }
@@ -409,12 +410,12 @@ public class GroupManager {
 //                return;
 //            }
 
-            this.handleLingTianMessage(message, group);
+            this.handleLingTianMessage(message, group,bot);
         }
 
     }
 
-    private void handleLingTianMessage(String message, Group group) {
+    private void handleLingTianMessage(String message, Group group,Bot bot) {
         String regex = "@(\\d{5,12}).*?(\\d+\\.\\d+)小时";
         Pattern pattern = Pattern.compile(regex);
         Matcher matcher = pattern.matcher(message);
@@ -431,6 +432,7 @@ public class GroupManager {
             remindTime.setQq(Long.parseLong(qqNumber));
             remindTime.setExpireTime((long)(Double.parseDouble(time) * 60.0 * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
             remindTime.setGroupId(group.getGroupId());
+            remindTime.setRemindQq(bot.getBotId());
             this.ltmap.put(qqNumber, remindTime);
             group.sendMessage((new MessageChain()).at(qqNumber).text("灵田收取时间为：" + sdf.format(new Date(remindTime.getExpireTime()))));
         }
@@ -447,37 +449,35 @@ public class GroupManager {
     }
 
     private void checkAndNotify(Map<String, RemindTime> map, String taskType1, String taskType2) {
-        if(botId != null){
-            Iterator<Map.Entry<String, RemindTime>> iterator = map.entrySet().iterator();
+        Iterator<Map.Entry<String, RemindTime>> iterator = map.entrySet().iterator();
 
-            while(iterator.hasNext()) {
-                Map.Entry<String, RemindTime> entry = (Map.Entry)iterator.next();
-                RemindTime remindTime = (RemindTime)entry.getValue();
-                if (remindTime.getExpireTime() > 0L && System.currentTimeMillis() >= remindTime.getExpireTime()) {
-                    if(System.currentTimeMillis() - remindTime.getExpireTime() < 1000L * 60 * 30){
-                        Bot bot = BotFactory.getBots().get(botId);
-                        if (bot != null) {
-                            switch (remindTime.getText()) {
-                                case "悬赏":
-                                    bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
-                                            .at(remindTime.getQq() + "").text(XSL_TEXT_LIST.get(new Random().nextInt(XSL_TEXT_LIST.size()))));
-                                    break;
-                                case "秘境":
-                                    bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
-                                            .at(remindTime.getQq() + "").text(MJ_TEXT_LIST.get(new Random().nextInt(MJ_TEXT_LIST.size()))));
-                                    break;
-                                case "灵田":
-                                    bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
-                                            .at(remindTime.getQq() + "").text(LT_TEXT_LIST.get(new Random().nextInt(LT_TEXT_LIST.size()))));
-                                    break;
-                            }
-
+        while(iterator.hasNext()) {
+            Map.Entry<String, RemindTime> entry = (Map.Entry)iterator.next();
+            RemindTime remindTime = (RemindTime)entry.getValue();
+            if (remindTime.getExpireTime() > 0L && System.currentTimeMillis() >= remindTime.getExpireTime()) {
+                if(System.currentTimeMillis() - remindTime.getExpireTime() < 1000L * 60 * 30){
+                    Bot bot = BotFactory.getBots().get(remindTime.getRemindQq());
+                    if (bot != null) {
+                        switch (remindTime.getText()) {
+                            case "悬赏":
+                                bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
+                                        .at(remindTime.getQq() + "").text(XSL_TEXT_LIST.get(new Random().nextInt(XSL_TEXT_LIST.size()))));
+                                break;
+                            case "秘境":
+                                bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
+                                        .at(remindTime.getQq() + "").text(MJ_TEXT_LIST.get(new Random().nextInt(MJ_TEXT_LIST.size()))));
+                                break;
+                            case "灵田":
+                                bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
+                                        .at(remindTime.getQq() + "").text(LT_TEXT_LIST.get(new Random().nextInt(LT_TEXT_LIST.size()))));
+                                break;
                         }
+
                     }
-
-                    iterator.remove();
-
                 }
+
+                iterator.remove();
+
             }
         }
 

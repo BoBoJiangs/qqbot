@@ -25,7 +25,7 @@ bot:
     cultivationMode: 3
     enableAutoField: false
     #群管提醒
-    enableGroupManager: true
+    enableGroupManager: false
 
   #    这个连接方式可能更稳定
   - type: ws-reverse
