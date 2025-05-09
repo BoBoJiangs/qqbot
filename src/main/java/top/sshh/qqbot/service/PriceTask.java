@@ -386,14 +386,16 @@ public class PriceTask {
                             ++count;
                             ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
 
-                            // 存储悬赏信息用于推荐
-                            bountyInfos.add(new BountyInfo(count, completionRate, cultivation, first != null ? first.getPrice() : 0));
+
 
                             if(completionRate == 100){
                                 cultivation = cultivation * 2;
                             } else {
                                 hasNon100Rate = true;
                             }
+
+                            // 存储悬赏信息用于推荐
+                            bountyInfos.add(new BountyInfo(count, completionRate, cultivation, first != null ? first.getPrice() : 0));
 
                             if (cultivation > maxCultivate) {
                                 maxCultivate = cultivation;
