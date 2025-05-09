@@ -20,6 +20,7 @@ import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.sshh.qqbot.data.BountyInfo;
 import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
@@ -364,7 +365,13 @@ public class PriceTask {
                     int maxPrice = 0;
                     int maxCultivateIndex = 0;
                     long maxCultivate = 0;
+                    boolean hasNon100Rate = false;
                     List<String> specialSkillMessages = new ArrayList<>();
+
+                    // 新增变量用于推荐逻辑
+                    int recommendIndex = 0;
+
+                    List<BountyInfo> bountyInfos = new ArrayList<>();
 
                     while(matcher.find()) {
                         int completionRate = Integer.parseInt(matcher.group(1));
@@ -378,13 +385,21 @@ public class PriceTask {
                         if (StringUtils.isNotBlank(name)) {
                             ++count;
                             ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
+
+                            // 存储悬赏信息用于推荐
+                            bountyInfos.add(new BountyInfo(count, completionRate, cultivation, first != null ? first.getPrice() : 0));
+
                             if(completionRate == 100){
                                 cultivation = cultivation * 2;
+                            } else {
+                                hasNon100Rate = true;
                             }
+
                             if (cultivation > maxCultivate) {
                                 maxCultivate = cultivation;
                                 maxCultivateIndex = count;
                             }
+
                             if (first != null) {
                                 if (first.getPrice() > maxPrice) {
                                     maxPrice = first.getPrice();
@@ -392,9 +407,8 @@ public class PriceTask {
                                 }
                                 stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(formatCultivation(first.getPrice()*10000L))
                                         .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
-
-
                             }
+
                             // 检查是否是特殊功法
                             if (specialSkills.contains(name)) {
                                 specialSkillMessages.add("恭喜道友获得：" + name + "（悬赏令" + count + "）！！！");
@@ -402,21 +416,53 @@ public class PriceTask {
                         }
                     }
 
+                    // 如果有非100%完成率的悬赏令，计算推荐接取
+                    if (hasNon100Rate) {
+                        // 按完成率降序、价格降序、修为降序排序
+                        bountyInfos.sort((a, b) -> {
+                            if (b.completionRate != a.completionRate) {
+                                return b.completionRate - a.completionRate;
+                            } else if (b.price >= 800 || a.price >= 800) {
+                                return b.price - a.price;
+                            } else {
+                                return Long.compare(b.cultivation, a.cultivation);
+                            }
+                        });
 
+                        // 找到第一个非100%完成率的悬赏令
+                        for (BountyInfo info : bountyInfos) {
+                            if (info.completionRate < 100) {
+                                recommendIndex = info.index;
+                                break;
+                            }
+                        }
+                    }
 
                     // 如果有特殊功法，优先发送提醒
                     if (!specialSkillMessages.isEmpty()) {
                         stringBuilder.append("\n");
                         for (String skillMsg : specialSkillMessages) {
-//                            group.sendMessage((new MessageChain()).text(skillMsg));
-                            stringBuilder.append("\n");
-                            stringBuilder.append(skillMsg);
+                            stringBuilder.append("\n").append(skillMsg);
                         }
-                    }else{
-                        stringBuilder.append("\n\n最高修为:悬赏令" + maxCultivateIndex +"(修为" + formatCultivation(maxCultivate)+")");
-                        stringBuilder.append("\n最高价格:悬赏令" + maxPriceIndex +"(价格" + formatCultivation(maxPrice*10000L) + ")");
-                    }
+                    } else {
+                        stringBuilder.append("\n\n最高修为:悬赏令").append(maxCultivateIndex)
+                                .append("(修为").append(formatCultivation(maxCultivate)).append(")");
+                        stringBuilder.append("\n最高价格:悬赏令").append(maxPriceIndex)
+                                .append("(价格").append(formatCultivation(maxPrice*10000L)).append(")");
 
+                        // 添加推荐信息
+                        if (hasNon100Rate && recommendIndex > 0) {
+                            stringBuilder.append("\n推荐接取:悬赏令").append(recommendIndex)
+                                    .append("(完成率最高");
+                            BountyInfo recommendInfo = bountyInfos.get(recommendIndex-1);
+                            if (recommendInfo.price >= 800) {
+                                stringBuilder.append("，包含高价物品");
+                            } else {
+                                stringBuilder.append("，修为较高");
+                            }
+                            stringBuilder.append(")");
+                        }
+                    }
 
                     if (stringBuilder.length() > 5) {
                         stringBuilder.insert(0, "悬赏令价格查询：");
@@ -425,8 +471,9 @@ public class PriceTask {
                 }
             }
         }
-
     }
+
+
 
     private String formatCultivation(long reward) {
         return reward >= 100000000L ? String.format("%.2f亿", (double)reward / 1.0E8) : reward / 10000L + "万";
