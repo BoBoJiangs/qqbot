@@ -117,7 +117,7 @@ public class AutoBuyHerbs {
             boolean hasNextPage = false;
             TextMessage textMessage = null;
             if (textMessages.size() > 1) {
-                textMessage = (TextMessage)textMessages.get(1);
+                textMessage = (TextMessage)textMessages.get(textMessages.size()-1);
             } else {
                 textMessage = (TextMessage)textMessages.get(0);
             }

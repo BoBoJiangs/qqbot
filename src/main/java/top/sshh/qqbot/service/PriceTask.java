@@ -431,13 +431,7 @@ public class PriceTask {
                             }
                         });
 
-                        // 找到第一个非100%完成率的悬赏令
-                        for (BountyInfo info : bountyInfos) {
-                            if (info.completionRate < 100) {
-                                recommendIndex = info.index;
-                                break;
-                            }
-                        }
+                        recommendIndex = bountyInfos.get(0).index;
                     }
 
                     // 如果有特殊功法，优先发送提醒
@@ -453,15 +447,15 @@ public class PriceTask {
                                 .append("(价格").append(formatCultivation(maxPrice*10000L)).append(")");
 
                         // 添加推荐信息
-                        if (hasNon100Rate && recommendIndex > 0) {
-                            stringBuilder.append("\n推荐接取:悬赏令").append(recommendIndex)
+                        if (hasNon100Rate) {
+                            stringBuilder.append("\n\n推荐接取:悬赏令").append(recommendIndex)
                                     .append("(完成率最高");
-                            BountyInfo recommendInfo = bountyInfos.get(recommendIndex-1);
-                            if (recommendInfo.price >= 800) {
-                                stringBuilder.append("，包含高价物品");
-                            } else {
-                                stringBuilder.append("，修为较高");
-                            }
+                            BountyInfo recommendInfo = bountyInfos.get(0);
+//                            if (recommendInfo.price >= 800) {
+//                                stringBuilder.append("，包含高价物品");
+//                            } else {
+//                                stringBuilder.append("，修为较高");
+//                            }
                             stringBuilder.append(")");
                         }
                     }

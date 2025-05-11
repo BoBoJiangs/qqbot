@@ -20,7 +20,7 @@ bot:
     # 是否开启自动宗门任务
     enableSectMission: true
     #  悬赏令价格查询
-    enableXslPriceQuery: false
+    enableXslPriceQuery: true
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
     cultivationMode: 3
     enableAutoField: false
