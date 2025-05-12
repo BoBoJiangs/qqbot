@@ -193,7 +193,7 @@ public class FamilyTask {
         BotConfig botConfig = bot.getBotConfig();
         boolean isAtSelf = isAtSelf(message,bot);
         if (isAtSelf) {
-            if (message.startsWith("道友目前还没有宗门任务")) {
+            if (message.contains("道友目前还没有宗门任务")) {
                 botConfig.setFamilyTaskStatus(1);
             }
 

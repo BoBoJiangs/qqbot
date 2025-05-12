@@ -1,4 +1,4 @@
-botId: 0
+xbGroupId: 971327442
 bot:
   #  类型：ws 正向连接，ws-reverse 反向连接，
   #  以下是两个连接的使用模板，注意url里的端口每个bot需要不一样。
@@ -20,10 +20,11 @@ bot:
     # 是否开启自动宗门任务
     enableSectMission: true
     #  悬赏令价格查询
-    enableXslPriceQuery: true
+    enableXslPriceQuery: false
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
     cultivationMode: 3
     enableAutoField: false
+    sectMode: 2
     #群管提醒
     enableGroupManager: false
 

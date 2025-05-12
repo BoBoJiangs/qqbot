@@ -331,13 +331,13 @@ public class TestService {
                     Map productMap;
                     if (!message.startsWith("查询自动购买")) {
                         if (message.startsWith("取消自动购买")) {
-                            productMap = (Map)AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
+                            productMap = (Map) AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
                             AUTO_BUY_PRODUCT.put(bot.getBotId(), productMap);
                             message = message.substring(message.indexOf("取消自动购买") + 6).trim();
                             productMap.remove(message);
                             group.sendMessage((new MessageChain()).reply(messageId).text(message + "取消成功"));
                         } else if (message.startsWith("批量取消自动购买")) {
-                            productMap = (Map)AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
+                            productMap = (Map) AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
                             AUTO_BUY_PRODUCT.put(bot.getBotId(), productMap);
                             productMap.clear();
                             group.sendMessage((new MessageChain()).reply(messageId).text(message + "取消成功"));
@@ -347,7 +347,7 @@ public class TestService {
                                 String[] var30 = lines;
                                 int var32 = lines.length;
 
-                                for(int var14 = 0; var14 < var32; ++var14) {
+                                for (int var14 = 0; var14 < var32; ++var14) {
                                     String line = var30[var14];
                                     String[] parts = line.split(" ");
                                     if (parts.length >= 2) {
@@ -355,7 +355,7 @@ public class TestService {
                                         productPrice.setName(parts[0].substring(4).trim());
                                         productPrice.setPrice(Integer.parseInt(parts[1].trim()));
                                         productPrice.setTime(LocalDateTime.now());
-                                        productMap = (Map)AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
+                                        productMap = (Map) AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
                                         productMap.put(productPrice.getName(), productPrice);
                                         AUTO_BUY_PRODUCT.put(bot.getBotId(), productMap);
                                     }
@@ -366,13 +366,13 @@ public class TestService {
                             }
                         }
                     } else {
-                        productMap = (Map)AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
+                        productMap = (Map) AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
                         AUTO_BUY_PRODUCT.put(bot.getBotId(), productMap);
                         StringBuilder s = new StringBuilder();
                         Iterator var10 = productMap.values().iterator();
 
-                        while(var10.hasNext()) {
-                            ProductPrice value = (ProductPrice)var10.next();
+                        while (var10.hasNext()) {
+                            ProductPrice value = (ProductPrice) var10.next();
                             s.append("名称：").append(value.getName()).append(" 价格:").append(value.getPrice()).append("万").append("\n");
                         }
 
@@ -386,16 +386,16 @@ public class TestService {
             if (message.endsWith("一键上架") || message.endsWith("一键炼金")) {
                 List<ReplyMessage> replyMessageList = messageChain.getMessageByType(ReplyMessage.class);
                 if (replyMessageList != null && !replyMessageList.isEmpty()) {
-                    ReplyMessage replyMessage = (ReplyMessage)replyMessageList.get(0);
+                    ReplyMessage replyMessage = (ReplyMessage) replyMessageList.get(0);
                     MessageChain replyMessageChain = replyMessage.getChain();
                     if (replyMessageChain != null) {
                         List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
                         if (textMessageList != null && !textMessageList.isEmpty()) {
-                            TextMessage textMessage = (TextMessage)textMessageList.get(textMessageList.size() - 1);
+                            TextMessage textMessage = (TextMessage) textMessageList.get(textMessageList.size() - 1);
                             String herbsInfo = textMessage.getText();
                             String[] lines = herbsInfo.split("\n");
 
-                            for(int i = 0; i < lines.length - 1; ++i) {
+                            for (int i = 0; i < lines.length - 1; ++i) {
                                 String line = lines[i];
                                 if (line.contains("道具")) {
                                     break;
@@ -403,7 +403,7 @@ public class TestService {
 
                                 if (line.startsWith("名字：") || line.startsWith("上品") || line.startsWith("下品") || line.endsWith("功法") || line.endsWith("神通")) {
                                     String name = "";
-                                    if ((line.contains("极品神通")||line.contains("辅修")) && message.endsWith("一键炼金")) {
+                                    if ((line.contains("极品神通") || line.contains("辅修")) && message.endsWith("一键炼金")) {
                                         continue;
                                     }
                                     if (line.startsWith("名字：")) {
@@ -449,16 +449,16 @@ public class TestService {
                                         } else {
                                             ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
                                             if (first != null) {
-                                                if ((double)first.getPrice() < (double)ProductLowPrice.getLowPrice(name) * 1.1) {
+                                                if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(name) * 1.1) {
                                                     group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice() + "万，炼金：" + ProductLowPrice.getLowPrice(name) + "万，不上架。"));
                                                 } else if (message.endsWith("一键上架")) {
-                                                    for(int j = 0; j < quantity; ++j) {
+                                                    for (int j = 0; j < quantity; ++j) {
                                                         if (botConfig.isStop()) {
                                                             botConfig.setStop(false);
                                                             return;
                                                         }
 
-                                                        if (first.getPrice() > 1000 && (double)(first.getPrice() - 10) * 0.85 < 900.0) {
+                                                        if (first.getPrice() > 1000 && (double) (first.getPrice() - 10) * 0.85 < 900.0) {
                                                             group.sendMessage((new MessageChain()).at("3889001741").text("确认坊市上架 " + first.getName() + " " + 10000000));
                                                         } else {
                                                             group.sendMessage((new MessageChain()).at("3889001741").text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000));
@@ -628,7 +628,7 @@ public class TestService {
             senderIds = {3889001741L}
     )
     public void 一键炼金上架(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        boolean isAtSelf =isAtSelf(message,bot);
+        boolean isAtSelf = isAtSelf(message, bot);
         BotConfig botConfig;
         if (isAtSelf && message.contains("的丹药背包")) {
             botConfig = bot.getBotConfig();
@@ -660,15 +660,15 @@ public class TestService {
             senderIds = {3889001741L}
     )
     public void 自动刷天赋(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        boolean isAtSelf = isAtSelf(message,bot);
+        boolean isAtSelf = isAtSelf(message, bot);
         if (isStartAutoTalent && isAtSelf && message.contains("保留24h，超时则无法选择")) {
             List<TextMessage> messageList = messageChain.getMessageByType(TextMessage.class);
-            String text = messageList.get(messageList.size()-1).getText();
+            String text = messageList.get(messageList.size() - 1).getText();
 //            log.info(text);
-            if (checkStats(text)){
+            if (checkStats(text)) {
                 isStartAutoTalent = false;
 //                group.sendMessage((new MessageChain()).at("3889001741").text("确认天赋选择右边"));
-            }else{
+            } else {
                 group.sendMessage((new MessageChain()).at("3889001741").text("确认天赋保留左边"));
             }
         }
@@ -676,7 +676,6 @@ public class TestService {
         if (isStartAutoTalent && isAtSelf && message.contains("成功保留")) {
             group.sendMessage((new MessageChain()).at("3889001741").text("道具使用涅槃造化丹"));
         }
-
 
 
     }
@@ -689,7 +688,7 @@ public class TestService {
 
         String[] lines = input.split("\n");
 
-        for(String line : lines) {
+        for (String line : lines) {
             Matcher matcher = pattern.matcher(line.trim());
             if (matcher.find()) {
                 String statName = matcher.group(1);
@@ -752,9 +751,9 @@ public class TestService {
                 } else {
                     Iterator var1 = BotFactory.getBots().values().iterator();
 
-                    while(var1.hasNext()) {
+                    while (var1.hasNext()) {
                         try {
-                            Bot bot1 = (Bot)var1.next();
+                            Bot bot1 = (Bot) var1.next();
                             if ((bot1.getBotConfig().getGroupId() == bot.getBotConfig().getGroupId() || bot1.getBotConfig().getTaskId() == bot.getBotConfig().getTaskId()) && bot1.getBotId() != bot.getBotId()) {
                                 groupId = botConfig.getGroupId();
                                 if (botConfig.getTaskId() != 0L) {
@@ -808,8 +807,8 @@ public class TestService {
             Iterator iterator = messageChain.iterator();
 
             Message timeMessage;
-            while(iterator.hasNext()) {
-                timeMessage = (Message)iterator.next();
+            while (iterator.hasNext()) {
+                timeMessage = (Message) iterator.next();
                 if (!(timeMessage instanceof AtMessage)) {
                     break;
                 }
@@ -817,12 +816,12 @@ public class TestService {
                 iterator.remove();
             }
 
-            message = ((TextMessage)messageChain.get(0)).getText().trim();
-            timeMessage = (Message)messageChain.get(messageChain.size() - 1);
+            message = ((TextMessage) messageChain.get(0)).getText().trim();
+            timeMessage = (Message) messageChain.get(messageChain.size() - 1);
             int time;
             int count;
             if (timeMessage instanceof TextMessage && message.contains("循环")) {
-                String textKeyword = ((TextMessage)timeMessage).getText().trim();
+                String textKeyword = ((TextMessage) timeMessage).getText().trim();
                 String[] split = textKeyword.split("\n");
                 if (split.length >= 2) {
                     int countTemp = 0;
@@ -832,7 +831,7 @@ public class TestService {
                         countTemp = Integer.parseInt(split[split.length - 2]);
                         numberKeyword = Integer.parseInt(split[split.length - 1]);
                         message = textKeyword.substring(0, textKeyword.length() - ("\n" + countTemp + "\n" + numberKeyword).length()).trim();
-                        ((TextMessage)timeMessage).setText(message);
+                        ((TextMessage) timeMessage).setText(message);
                     } catch (Exception var17) {
                     }
 
@@ -847,7 +846,7 @@ public class TestService {
                 time = 0;
             }
 
-            message = ((TextMessage)messageChain.get(0)).getText().trim();
+            message = ((TextMessage) messageChain.get(0)).getText().trim();
             if (message.startsWith("循环执行命令")) {
                 messageChain.set(0, new TextMessage(message.substring(message.indexOf("循环执行命令") + 6)));
                 this.forSendMessage(bot, group, messageChain, count, time);
@@ -888,16 +887,16 @@ public class TestService {
         if (isControlQQ && message.contains("弟子听令执行") && !message.contains("@0")) {
             Iterator iterator = messageChain.iterator();
 
-            while(iterator.hasNext()) {
-                Message timeMessage = (Message)iterator.next();
+            while (iterator.hasNext()) {
+                Message timeMessage = (Message) iterator.next();
                 if (!(timeMessage instanceof AtMessage)) {
                     break;
                 }
 
                 iterator.remove();
             }
-            if(messageChain.get(0) instanceof TextMessage){
-                message = ((TextMessage)messageChain.get(0)).getText().trim();
+            if (messageChain.get(0) instanceof TextMessage) {
+                message = ((TextMessage) messageChain.get(0)).getText().trim();
                 if (message.startsWith("弟子听令执行命令")) {
                     message = message.substring(message.indexOf("弟子听令执行命令") + 8);
                     messageChain.set(0, new TextMessage(message));
@@ -922,8 +921,8 @@ public class TestService {
             Iterator<Message> iterator = messageChain.iterator();
 
             Message timeMessage;
-            while(iterator.hasNext()) {
-                timeMessage = (Message)iterator.next();
+            while (iterator.hasNext()) {
+                timeMessage = (Message) iterator.next();
                 if (!(timeMessage instanceof AtMessage)) {
                     break;
                 }
@@ -931,12 +930,12 @@ public class TestService {
                 iterator.remove();
             }
 
-            message = ((TextMessage)messageChain.get(0)).getText().trim();
-            timeMessage = (Message)messageChain.get(messageChain.size() - 1);
+            message = ((TextMessage) messageChain.get(0)).getText().trim();
+            timeMessage = (Message) messageChain.get(messageChain.size() - 1);
             int time;
             int count;
             if (timeMessage instanceof TextMessage && message.contains("循环执行")) {
-                String s = ((TextMessage)timeMessage).getText().trim();
+                String s = ((TextMessage) timeMessage).getText().trim();
                 if (message.contains("坊市查看")) {
                     bot.getBotConfig().setCommand(s);
                 }
@@ -950,7 +949,7 @@ public class TestService {
                         countTemp = Integer.parseInt(split[split.length - 2]);
                         timeTemp = Integer.parseInt(split[split.length - 1]);
                         message = s.substring(0, s.length() - ("\n" + countTemp + "\n" + timeTemp).length()).trim();
-                        ((TextMessage)timeMessage).setText(message);
+                        ((TextMessage) timeMessage).setText(message);
                     } catch (Exception var16) {
                     }
 
@@ -965,7 +964,7 @@ public class TestService {
                 time = 0;
             }
 
-            message = ((TextMessage)messageChain.get(0)).getText().trim();
+            message = ((TextMessage) messageChain.get(0)).getText().trim();
             if (bot.getBotId() == member.getUserId()) {
                 if (message.startsWith("循环执行命令")) {
                     messageChain.set(0, new TextMessage(message.substring(message.indexOf("循环执行命令") + 6)));
@@ -1006,8 +1005,8 @@ public class TestService {
         if ((bot.getBotConfig().isEnableAutoRepair() || group.getGroupId() == 682220759L) && message.contains("双修")) {
             Iterator iterator = messageChain.iterator();
 
-            while(iterator.hasNext()) {
-                Message timeMessage = (Message)iterator.next();
+            while (iterator.hasNext()) {
+                Message timeMessage = (Message) iterator.next();
                 if (!(timeMessage instanceof AtMessage)) {
                     break;
                 }
@@ -1016,7 +1015,7 @@ public class TestService {
             }
 
             if (messageChain.get(0) instanceof TextMessage) {
-                message = ((TextMessage)messageChain.get(0)).getText().trim();
+                message = ((TextMessage) messageChain.get(0)).getText().trim();
                 if (message.startsWith("请双修")) {
                     Pattern textPattern = Pattern.compile("[\\u4e00-\\u9fff]{2,}");
                     Matcher textMatcher = textPattern.matcher(message);
@@ -1048,7 +1047,7 @@ public class TestService {
     }
 
     private void forSendMessage(Bot bot, Group group, MessageChain messageChain, int count, int time) {
-        for(int i = 0; i < count; ++i) {
+        for (int i = 0; i < count; ++i) {
             BotConfig botConfig = bot.getBotConfig();
             if (botConfig.isStop()) {
                 botConfig.setStop(false);
@@ -1057,7 +1056,7 @@ public class TestService {
 
             try {
                 group.sendMessage(messageChain);
-                Thread.sleep((long)time * 1000L);
+                Thread.sleep((long) time * 1000L);
             } catch (Exception var9) {
             }
         }
@@ -1069,9 +1068,9 @@ public class TestService {
             public void run() {
                 Iterator var1 = BotFactory.getBots().values().iterator();
 
-                while(var1.hasNext()) {
+                while (var1.hasNext()) {
                     try {
-                        Bot bot1 = (Bot)var1.next();
+                        Bot bot1 = (Bot) var1.next();
                         Group bot1Group = bot1.getGroup(group.getGroupId());
                         TestService.this.forSendMessage(bot1, bot1Group, messageChain, count, time);
                     } catch (Exception var4) {
@@ -1114,7 +1113,7 @@ public class TestService {
                     parts = message.split("预计|分钟");
                 }
 
-                botConfig.setMjTime((long)(Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
+                botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double) System.currentTimeMillis()));
                 botConfig.setStartScheduled(false);
             }
 
@@ -1125,7 +1124,7 @@ public class TestService {
                     parts = message.split("花费时间：|分钟");
                 }
 
-                botConfig.setMjTime((long)(Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
+                botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double) System.currentTimeMillis()));
                 botConfig.setStartScheduled(false);
             }
         }
@@ -1138,7 +1137,7 @@ public class TestService {
     public void 悬赏令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        boolean isAtSelf = isAtSelf(message,bot);
+        boolean isAtSelf = isAtSelf(message, bot);
         if (isGroup && isAtSelf && botConfig.getRewardMode() != 1) {
             if (message.contains("在做悬赏令呢") && message.contains("分身乏术")) {
                 botConfig.setStartScheduled(false);
@@ -1167,7 +1166,7 @@ public class TestService {
                 if (matcher.find()) {
                     try {
                         double minutes = Double.parseDouble(matcher.group(1));
-                        long timeMillis = (long)(Math.ceil(minutes) * 60.0 * 1000.0);
+                        long timeMillis = (long) (Math.ceil(minutes) * 60.0 * 1000.0);
                         botConfig.setXslTime(System.currentTimeMillis() + timeMillis);
 //                        log.info("悬赏结算时长："+timeMillis);
                     } catch (NumberFormatException e) {
@@ -1195,23 +1194,27 @@ public class TestService {
     )
     public void 悬赏令接取(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isAtSelf = isAtSelf(message,bot);
+        boolean isAtSelf = isAtSelf(message, bot);
+
         if ((botConfig.getRewardMode() == 3 || botConfig.getRewardMode() == 4 || botConfig.getRewardMode() == 5)
                 && isAtSelf
                 && (message.contains("道友的个人悬赏令") || message.contains("天机悬赏令"))) {
 
-            // 遍历文本消息链
+            // 定义需要特殊提醒的功法列表（按优先级排序）
+            List<String> prioritySkills = Arrays.asList(
+                    "五指拳心剑", "袖里乾坤", "真龙九变", "灭剑血胧",
+                    "万剑归宗", "千慄鬼噬", "华光猎影"
+            );
+            Set<String> specialSkills = new HashSet<>(prioritySkills);
+
+            boolean isSpecialSkill = false;
+            int highestPriorityIndex = -1;
+            int currentReceIndex = 0;
+            String highestPrioritySkill = null;
+
             for (TextMessage textMessage : messageChain.getMessageByType(TextMessage.class)) {
                 String currentMessage = textMessage.getText();
 
-                // 检查出货通知条件
-                if (currentMessage.contains("仙阶极品")
-                        && !currentMessage.contains("两仪心经")
-                        && botConfig.getMasterQQ() == 819463350L) {
-                    group.sendMessage((new MessageChain()).at("" + botConfig.getMasterQQ()).text("悬赏令出货了！！！"));
-                }
-
-                // 处理悬赏令消息
                 if (currentMessage.contains("道友的个人悬赏令") || currentMessage.contains("天机悬赏令")) {
                     Pattern pattern = Pattern.compile("(?:可能额外获得|额外机缘)[：:](.*?)(?=[!」])");
                     Matcher matcher = pattern.matcher(currentMessage);
@@ -1221,17 +1224,28 @@ public class TestService {
                     int maxPrice = 0;
                     int receIndex = 0;
 
-                    // 匹配所有额外机缘
                     while (matcher.find()) {
+                        count++;
                         String name = matcher.group(1).replaceAll("\\s", "");
                         String[] parts = name.split("[:「]");
                         name = parts.length > 1 ? parts[1].replaceAll("[」]", "").trim() : parts[0].trim();
 
-//                        System.out.println("物品" + name);
-
                         if (StringUtils.isNotBlank(name)) {
-                            count++;
                             ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
+
+                            // 检查是否是特殊功法
+                            if (specialSkills.contains(name)) {
+                                int currentPriority = prioritySkills.indexOf(name);
+
+                                // 如果是第一个特殊功法，或者优先级更高（数字更小）
+                                if (highestPriorityIndex == -1 || currentPriority < highestPriorityIndex) {
+                                    highestPriorityIndex = currentPriority;
+                                    currentReceIndex = count;
+                                    highestPrioritySkill = name;
+                                }
+                                isSpecialSkill = true;
+                            }
+
                             if (first != null) {
                                 index++;
                                 if (first.getPrice() > maxPrice) {
@@ -1242,8 +1256,18 @@ public class TestService {
                         }
                     }
 
-                    // 满足3个有效物品才处理
-                    if (index == 3) {
+                    // 处理特殊功法情况
+                    if (isSpecialSkill && highestPrioritySkill != null) {
+                        bot.sendPrivateMessage(botConfig.getMasterQQ(),
+                                (new MessageChain()).text("恭喜道友" + bot.getBotName() + "的悬赏令在【" + group.getGroupName() + "】群里获得：" + highestPrioritySkill));
+
+                        long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
+                        bot.getGroup(groupId).sendMessage(
+                                (new MessageChain()).text("悬赏令接取" + currentReceIndex));
+                        return; // 直接返回，不再处理其他逻辑
+                    }
+                    // 普通情况处理
+                    else if (index == 3) {
                         long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
 
                         if (botConfig.getRewardMode() == 4 && maxPrice < 800) {
@@ -1262,8 +1286,8 @@ public class TestService {
         }
     }
 
-    private boolean isAtSelf(String message,Bot bot){
-        return message.contains("@" + bot.getBotId()) || message.contains("@" +bot.getBotName()) ;
+    private boolean isAtSelf(String message, Bot bot) {
+        return message.contains("@" + bot.getBotId()) || message.contains("@" + bot.getBotName());
     }
 
     public static List<Long> extractRewards(String input) {
@@ -1271,7 +1295,7 @@ public class TestService {
         Pattern pattern = Pattern.compile("基础(?:报酬|奖励)(\\d+)修为");
         Matcher matcher = pattern.matcher(input);
 
-        while(matcher.find()) {
+        while (matcher.find()) {
             rewards.add(Long.parseLong(matcher.group(1)));
         }
 
@@ -1284,11 +1308,11 @@ public class TestService {
             return 0;
         } else {
             int longIndex = 0;
-            long longDuration = (Long)rewardss.get(0);
+            long longDuration = (Long) rewardss.get(0);
 
-            for(int i = 1; i < rewardss.size(); ++i) {
-                if ((Long)rewardss.get(i) > longDuration) {
-                    longDuration = (Long)rewardss.get(i);
+            for (int i = 1; i < rewardss.size(); ++i) {
+                if ((Long) rewardss.get(i) > longDuration) {
+                    longDuration = (Long) rewardss.get(i);
                     longIndex = i;
                 }
             }
@@ -1303,7 +1327,7 @@ public class TestService {
         Pattern pattern = Pattern.compile("预计[^\\d]*(\\d+\\.?\\d*)\\s*分钟|预计耗时：(\\d+\\.?\\d*)\\s*分钟");
         Matcher matcher = pattern.matcher(input);
 
-        while(matcher.find()) {
+        while (matcher.find()) {
             String numberStr = matcher.group(1);
             double number = Double.parseDouble(numberStr);
             durations.add(number);
@@ -1318,11 +1342,11 @@ public class TestService {
             return 0;
         } else {
             int shortestIndex = 0;
-            double shortestDuration = (Double)durations.get(0);
+            double shortestDuration = (Double) durations.get(0);
 
-            for(int i = 1; i < durations.size(); ++i) {
-                if ((Double)durations.get(i) < shortestDuration) {
-                    shortestDuration = (Double)durations.get(i);
+            for (int i = 1; i < durations.size(); ++i) {
+                if ((Double) durations.get(i) < shortestDuration) {
+                    shortestDuration = (Double) durations.get(i);
                     shortestIndex = i;
                 }
             }
@@ -1342,7 +1366,7 @@ public class TestService {
         }
 
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        boolean isAtSelf = isAtSelf(message,bot);
+        boolean isAtSelf = isAtSelf(message, bot);
         if (botConfig.getRewardMode() != 1 && isGroup && isAtSelf) {
             if (message.contains("悬赏令结算") && message.contains("增加修为")) {
                 bot.getBotConfig().setXslTime(-1L);

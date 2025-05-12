@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import top.sshh.qqbot.data.MessageNumber;
 import top.sshh.qqbot.data.ProductPrice;
 
 import java.io.*;
@@ -26,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -38,6 +40,7 @@ import static top.sshh.qqbot.service.DanCalculator.targetDir;
 @Component
 public class AutoBuyHerbs {
     private static final Logger logger = LoggerFactory.getLogger(AutoBuyHerbs.class);
+    private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private static final long SENDER_ID = 3889001741L;
     private static final String BUY_COMMAND = "坊市购买";
     private static final String MARKET_COMMAND = "查看坊市药材";
@@ -52,6 +55,8 @@ public class AutoBuyHerbs {
     private int noQueriedCount = 0;
     private List<Integer> makeDrugIndexList = new ArrayList<>();
     private int drugIndex = 0;
+    @Autowired
+    public GroupManager groupManager;
 
     public AutoBuyHerbs() {
     }
@@ -489,7 +494,18 @@ public class AutoBuyHerbs {
 
                     if (botConfig.getTaskStatusHerbs() < 8) {
                         try {
-                            bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
+                            int messageId = bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
+
+                            if (messageId == 0){
+                                logger.info("发送查询消息失败，暂停查看坊市药材，messageId=={}", messageId);
+                                botConfig.setStartAutoBuyHerbs(false);
+                            }
+                            MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId());
+                            //超过10分钟没有更新消息时间，暂停循环任务
+                            if(messageNumber.getTime() < System.currentTimeMillis() - 600000){
+                                logger.info("发送查询消息失败，暂停查看坊市药材");
+                                botConfig.setStartAutoBuyHerbs(false);
+                            }
                             botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
                             noQueriedCount = 0;
                         } catch (Exception var6) {

@@ -10,6 +10,33 @@ public class QQBotConfig implements Serializable {
     private long lastSendTime = 0L;
     private long lastExecuteTime = 0;
     private long xslTime = 0;
+    private long mjTime = 0;
+    private String command;
+    private boolean isStop;
+
+    public boolean isStop() {
+        return isStop;
+    }
+
+    public void setStop(boolean stop) {
+        isStop = stop;
+    }
+
+    public String getCommand() {
+        return command;
+    }
+
+    public void setCommand(String command) {
+        this.command = command;
+    }
+
+    public long getMjTime() {
+        return mjTime;
+    }
+
+    public void setMjTime(long mjTime) {
+        this.mjTime = mjTime;
+    }
 
     public long getXslTime() {
         return xslTime;

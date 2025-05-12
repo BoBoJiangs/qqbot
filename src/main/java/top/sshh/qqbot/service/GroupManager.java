@@ -76,6 +76,7 @@ public class GroupManager {
     public DanCalculator danCalculator;
 
     public GroupManager() {
+
     }
 
 
@@ -106,9 +107,11 @@ public class GroupManager {
     }
 
 
+
     @PostConstruct
     public void init() {
         this.loadTasksFromFile();
+
         logger.info("已从本地加载{}个灵田任务 {}个发言统计",  this.ltmap.size(),this.MESSAGE_NUMBER_MAP.size());
     }
 
