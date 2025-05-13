@@ -13,6 +13,15 @@ public class QQBotConfig implements Serializable {
     private long mjTime = 0;
     private String command;
     private boolean isStop;
+    private boolean isPrivateChat = true;
+
+    public boolean isPrivateChat() {
+        return isPrivateChat;
+    }
+
+    public void setPrivateChat(boolean privateChat) {
+        isPrivateChat = privateChat;
+    }
 
     public boolean isStop() {
         return isStop;
