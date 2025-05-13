@@ -713,7 +713,7 @@ public class XiaoBeiService {
                     }
 
                     messageChain.set(0, new TextMessage(textKeyword));
-                    messageChain.add(0, new AtMessage("3889001741"));
+                    messageChain.add(0, new AtMessage(botQQ));
                     this.forSendMessage(bot, group, messageChain, numberKeyword, 3);
                 }
 
