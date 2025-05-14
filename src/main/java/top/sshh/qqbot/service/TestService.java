@@ -1086,7 +1086,8 @@ public class TestService {
     )
     public void 秘境(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        if (botConfig.isEnableAutoSecret() && message.contains("" + bot.getBotId())) {
+        boolean isAtSelf = isAtSelf(message, bot);
+        if (botConfig.isEnableAutoSecret() && isAtSelf) {
             LocalDateTime now = LocalDateTime.now();
             if (message.contains("正在秘境中") && message.contains("分身乏术")) {
                 long groupId = botConfig.getGroupId();
@@ -1095,18 +1096,14 @@ public class TestService {
                 }
 
                 bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("秘境结算"));
-            }
-
-            if (message.contains("道友现在什么都没干")) {
+            } else if (message.contains("道友现在什么都没干")) {
                 botConfig.setXslTime(-1L);
                 botConfig.setMjTime(-1L);
 //                if (now.getHour() != 12 || now.getMinute() != 40 && now.getMinute() != 41 && now.getMinute() != 42) {
 //                    proccessCultivation(group);
 //                }
-            }
-
-            String[] parts;
-            if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
+            } else if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
+                String[] parts;
                 if (message.contains("(原")) {
                     parts = message.split("预计|\\(原");
                 } else {
@@ -1115,9 +1112,8 @@ public class TestService {
 
                 botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double) System.currentTimeMillis()));
                 botConfig.setStartScheduled(false);
-            }
-
-            if (message.contains("进入秘境") && message.contains("探索需要花费")) {
+            } else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
+                String[] parts;
                 if (message.contains("(原")) {
                     parts = message.split("花费时间：|\\(原");
                 } else {
@@ -1126,7 +1122,22 @@ public class TestService {
 
                 botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double) System.currentTimeMillis()));
                 botConfig.setStartScheduled(false);
+            } else if (message.contains("秘境昭告") && message.contains("勘历天时")) {
+                String[] parts;
+                parts = message.split("勘历天时：|分钟");
+                botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double) System.currentTimeMillis()));
+                log.info("秘境时间：{}", parts[1]);
+
+                botConfig.setStartScheduled(false);
+            } else if (message.contains("秘境降临") && message.contains("时轮压缩")) {
+                String[] parts;
+                parts = message.split("时轮压缩：|分钟");
+                botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double) System.currentTimeMillis()));
+                log.info("秘境时间：{}", parts[1]);
+                botConfig.setStartScheduled(false);
             }
+
+
         }
 
     }
@@ -1377,7 +1388,20 @@ public class TestService {
                 }
             }
 
-            if (message.contains("烟雾缭绕") || message.contains("在秘境最深处") || message.contains("道友在秘境") || message.contains("道友进入秘境后") || message.contains("秘境内竟然") || message.contains("道友大战一番成功") || message.contains("道友大战一番不敌")) {
+            if (message.contains("烟雾缭绕") ||
+                    message.contains("在秘境最深处") ||
+                    message.contains("道友在秘境") ||
+                    message.contains("道友进入秘境后") ||
+                    message.contains("秘境内竟然") ||
+                    message.contains("道友大战一番成功") ||
+                    message.contains("道友大战一番不敌")||
+                    message.contains("昏迷中似有")||
+                    message.contains("竟然获得了灵石")||
+                    message.contains("天道赐下")||
+                    message.contains("道友连破")||
+                    message.contains("秘境将闭")||
+                    message.contains("云中仙鹤")||
+                    (message.contains("秘境中") && message.contains("含恨退出"))){
                 bot.getBotConfig().setMjTime(-1L);
                 proccessCultivation(group);
             }

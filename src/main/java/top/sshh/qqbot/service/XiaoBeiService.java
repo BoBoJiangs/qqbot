@@ -83,6 +83,27 @@ public class XiaoBeiService {
             botConfig.setFamilyTaskStatus(0);
         }
 
+        if ("启用小北私聊".equals(message)) {
+            botConfig.setPrivateChat(true);
+        }
+        if ("关闭小北私聊".equals(message)) {
+            botConfig.setPrivateChat(false);
+        }
+
+
+        if (message.startsWith("小北修炼模式")) {
+            int type;
+            String typeString = message.substring(message.indexOf("小北修炼模式") + 6).trim();
+            if (StringUtils.isNotBlank(typeString)) {
+                type = Integer.parseInt(typeString);
+                if (type == 2) {
+                    sendBotMessage(bot, "灵石修炼50000000", true);
+                }
+
+                botConfig.setCultivateMode(type);
+            }
+        }
+
         if (message.startsWith("/")) {
             String number = message.substring(message.indexOf("/") + 1).trim();
             group.sendMessage((new MessageChain()).at("3889029313").text("查询世界BOSS " + number));
@@ -111,7 +132,7 @@ public class XiaoBeiService {
                     Integer value = innerEntry.getValue();
                     Bot bot1 = BotFactory.getBots().get(outerKey);
                     Group group1 = bot1.getGroup(xbGroupId);
-                    if (bot1 != null && group1 != null) {
+                    if (group1 != null) {
                         group1.sendMessage((new MessageChain())
                                 .at("3889029313").text("坊市上架 " + innerKey + " " + 1 + " " + value));
                         Thread.sleep(3000L);
@@ -212,6 +233,30 @@ public class XiaoBeiService {
                 group.sendMessage(messageChain);
             }
         }
+
+    }
+
+    @FriendMessageHandler(
+            senderIds = {3889029313L}
+    )
+    public void 灵石修炼(Bot bot, Friend member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId());
+        if(botConfig.getCultivateMode() == 2){
+            if(message.contains("突破神火圆境满成功")){
+                botConfig.setCultivateMode(1);
+            }else if(message.contains("形意不成，回去练练再来吧")){
+                sendBotMessage(bot, "灵石修炼50000000", true);
+            }else if(message.contains("突破失败") || message.contains("为道友护道成功")){
+                sendBotMessage(bot, "直接突破", true);
+            }else if(message.contains("恭喜道友") && message.contains("突破")&& message.contains("成功")){
+                sendBotMessage(bot, "直接突破", true);
+            }else if(message.contains("修炼结束") && message.contains("修炼到达上限")){
+                sendBotMessage(bot, "直接突破", true);
+            }else if(message.contains("修炼结束") && message.contains("修炼到达上限")){
+                sendBotMessage(bot, "直接突破", true);
+            }
+        }
+
 
     }
 

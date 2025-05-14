@@ -14,6 +14,16 @@ public class QQBotConfig implements Serializable {
     private String command;
     private boolean isStop;
     private boolean isPrivateChat = true;
+    //1闭关 2灵石修炼
+    private int cultivateMode = 1;
+
+    public int getCultivateMode() {
+        return cultivateMode;
+    }
+
+    public void setCultivateMode(int cultivateMode) {
+        this.cultivateMode = cultivateMode;
+    }
 
     public boolean isPrivateChat() {
         return isPrivateChat;
