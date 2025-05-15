@@ -35,7 +35,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.aspectj.bridge.Version.getText;
-import static top.sshh.qqbot.service.DanCalculator.MAKE_DAN_SET;
+import static top.sshh.qqbot.constant.Constant.MAKE_DAN_SET;
 
 @Component
 public class TestService {

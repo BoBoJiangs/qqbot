@@ -322,8 +322,11 @@ public class XiaoBeiService {
     )
     public void 宗门任务接取刷新() throws InterruptedException {
         if (xbGroupId > 0) {
-            initBots();
+//            initBots();
             BotFactory.getBots().values().forEach((bot) -> {
+                if (botConfigMap.get(bot.getBotId()) == null) {
+                    botConfigMap.put(bot.getBotId(), new QQBotConfig());
+                }
                 QQBotConfig botConfig = botConfigMap.get(bot.getBotId());
                 Group group = bot.getGroup(xbGroupId);
                 switch (botConfig.getFamilyTaskStatus()) {
@@ -728,7 +731,7 @@ public class XiaoBeiService {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 开启无偿双修(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (message.contains("双修")) {
+        if (message.contains("请你双修")) {
             Iterator iterator = messageChain.iterator();
 
             while (iterator.hasNext()) {
@@ -742,13 +745,14 @@ public class XiaoBeiService {
 
             if (messageChain.get(0) instanceof TextMessage) {
                 message = ((TextMessage) messageChain.get(0)).getText().trim();
-                if (message.startsWith("请双修")) {
-                    Pattern textPattern = Pattern.compile("[\\u4e00-\\u9fff]{2,}");
+                if (message.startsWith("请你双修")) {
+                    Pattern textPattern = Pattern.compile("请你(.*?)(\\d+|$)");
                     Matcher textMatcher = textPattern.matcher(message);
                     String textKeyword = "";
                     if (textMatcher.find()) {
-                        textKeyword = textMatcher.group().substring(1);
+                        textKeyword = textMatcher.group(1); // 提取 "双修一心"
                     }
+
 
                     Pattern numberPattern = Pattern.compile("\\d+");
                     Matcher numberMatcher = numberPattern.matcher(message);

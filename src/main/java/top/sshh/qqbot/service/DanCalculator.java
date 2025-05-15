@@ -28,6 +28,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static top.sshh.qqbot.constant.Constant.MAKE_DAN_SET;
+import static top.sshh.qqbot.constant.Constant.targetDir;
+
 @Component
 public class DanCalculator {
     private static final Logger logger = LoggerFactory.getLogger(DanCalculator.class);
@@ -37,13 +40,10 @@ public class DanCalculator {
     public static Map<String, Integer> danMarketValues = new LinkedHashMap();
     public static Map<String, Integer> danAlchemyValues = new LinkedHashMap();
     public Config config = new Config();
-//    private static String MAKE_DAN = "极品创世丹&混沌丹&创世丹&极品混沌丹&极品创世丹&九天蕴仙丹&金仙造化丹&大道归一丹&菩提证道丹&太清玉液丹";
-    public static final Set<String> MAKE_DAN_SET = new HashSet(Arrays.asList("金仙破厄丹", "太乙炼髓丹", "混沌丹", "创世丹", "极品混沌丹", "极品创世丹", "九天蕴仙丹", "金仙造化丹", "大道归一丹", "菩提证道丹", "太清玉液丹", "太一仙丸", "无涯鬼丸", "道源丹", "六阳长生丹", "太乙碧莹丹", "天元神丹", "天尘丹", "魇龙之血"));
-    public static  String targetDir = "./";
+
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
 
     public DanCalculator() {
-//        targetDir = JarPathHelper.getJarDir();
         customPool.submit(new Runnable() {
             public void run() {
                 DanCalculator.this.loadOrCreateConfig();
@@ -53,14 +53,6 @@ public class DanCalculator {
             }
         });
     }
-
-//    public static void main(String[] args) throws Exception {
-//        DanCalculator danCalculator = new DanCalculator();
-//        config = new Config();
-//        danCalculator.loadData();
-//        danCalculator.calculateAllDans();
-////        parseRecipes();
-//    }
 
     public void addAutoBuyHerbs() {
         if (config != null && config.getAlchemyQQ() != null) {
@@ -510,107 +502,6 @@ public class DanCalculator {
             return main.mainAttr1Type.startsWith("性平") && lead.leadAttrType.startsWith("性平");
         }
     }
-
-//    List<RecipeResult> findHighestDan(Herb main, Herb lead, Herb assist) {
-//        List<RecipeResult> recipeResultList = new ArrayList();
-//        Iterator var4 = sortedDans.iterator();
-//
-//        while (true) {
-//            Dan dan;
-//            int mainCount;
-//            int assistCount;
-//            boolean valid;
-//            int leadCount;
-//            int spend;
-//            int alchemyValue;
-//            int marketValue;
-//            while (true) {
-//                do {
-//                    while (true) {
-//                        if (!var4.hasNext()) {
-//                            return recipeResultList;
-//                        }
-//
-//                        dan = (Dan) var4.next();
-//                        mainCount = 0;
-//                        assistCount = 0;
-//                        valid = true;
-//                        Iterator var10 = dan.requirements.entrySet().iterator();
-//
-//                        while (var10.hasNext()) {
-//                            Map.Entry<String, Integer> req = (Map.Entry) var10.next();
-//                            String type = (String) req.getKey();
-//                            int needed = (Integer) req.getValue();
-//                            int per;
-//                            if (main.mainAttr2Type.equals(type)) {
-//                                per = main.mainAttr2Value;
-//                                if (per == 0) {
-//                                    valid = false;
-//                                    break;
-//                                }
-//
-//                                mainCount = Math.max(mainCount, (int) Math.ceil((double) needed / (double) per));
-//                            } else {
-//                                if (!assist.assistAttrType.equals(type)) {
-//                                    valid = false;
-//                                    break;
-//                                }
-//
-//                                per = assist.assistAttrValue;
-//                                if (per == 0) {
-//                                    valid = false;
-//                                    break;
-//                                }
-//
-//                                assistCount = Math.max(assistCount, (int) Math.ceil((double) needed / (double) per));
-//                            }
-//                        }
-//
-//                        if (main.mainAttr1Type.equals("性平")) {
-//                            leadCount = 1;
-//                            break;
-//                        }
-//
-//                        spend = main.mainAttr1Value * mainCount;
-//                        if (spend >= lead.leadAttrValue) {
-//                            leadCount = spend / lead.leadAttrValue;
-//                            if (spend != leadCount * lead.leadAttrValue) {
-//                                continue;
-//                            }
-//                            break;
-//                        }
-//                    }
-//
-//                    spend = mainCount * main.price + leadCount * lead.price + assistCount * assist.price;
-//                    alchemyValue = dan.alchemyValue * config.getDanNumber();
-//                    if (dan.marketValue <= 500) {
-//                        marketValue = (int) ((double) dan.marketValue * 0.95 * (double) config.getDanNumber());
-//                    } else if (dan.marketValue <= 1000) {
-//                        marketValue = (int) ((double) dan.marketValue * 0.9 * (double) config.getDanNumber());
-//                    } else if (dan.marketValue <= 1500) {
-//                        marketValue = (int) ((double) dan.marketValue * 0.85 * (double) config.getDanNumber());
-//                    } else if (dan.marketValue <= 2000) {
-//                        marketValue = (int) ((double) dan.marketValue * 0.8 * (double) config.getDanNumber());
-//                    } else {
-//                        marketValue = (int) ((double) dan.marketValue * 0.7 * (double) config.getDanNumber());
-//                    }
-//                } while (spend > alchemyValue - 0 && spend > marketValue - 0);
-//
-//                if (config.isAlchemy()) {
-//                    if (spend > alchemyValue - config.getAlchemyNumber()) {
-//                        continue;
-//                    }
-//                    break;
-//                } else if (("&" + config.getMakeName() + "&").contains("&" + config.getMakeName() + "&") && spend <= marketValue - config.getMakeNumber()) {
-//                    break;
-//                }
-//            }
-//
-//            if (valid && mainCount + leadCount + assistCount < 100) {
-//                recipeResultList.add(new RecipeResult(dan, mainCount, leadCount, assistCount, spend, alchemyValue, marketValue));
-//            }
-//        }
-//    }
 
     List<RecipeResult> findHighestDan(Herb main, Herb lead, Herb assist) {
         List<RecipeResult> recipeResultList = new ArrayList<>();

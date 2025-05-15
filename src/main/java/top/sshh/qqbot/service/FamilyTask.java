@@ -115,7 +115,6 @@ public class FamilyTask {
                 if (botConfig.isStop() && botConfig.getFamilyTaskStatus() != 0) {
                     botConfig.setStop(false);
                     botConfig.setFamilyTaskStatus(0);
-                    System.out.println("宗门任务接取刷新");
                 }
 
                 long groupId = botConfig.getGroupId();

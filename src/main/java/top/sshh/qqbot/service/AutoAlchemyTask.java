@@ -27,7 +27,7 @@ import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static top.sshh.qqbot.service.DanCalculator.targetDir;
+import static top.sshh.qqbot.constant.Constant.targetDir;
 
 @Component
 public class AutoAlchemyTask {

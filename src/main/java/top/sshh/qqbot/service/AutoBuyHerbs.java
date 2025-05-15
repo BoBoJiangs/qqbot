@@ -35,7 +35,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-import static top.sshh.qqbot.service.DanCalculator.targetDir;
+import static top.sshh.qqbot.constant.Constant.targetDir;
 
 @Component
 public class AutoBuyHerbs {
