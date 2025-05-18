@@ -1,21 +1,60 @@
 package top.sshh.qqbot.data;
 
+import com.alibaba.fastjson2.annotation.JSONField;
+
 import java.io.Serializable;
 
 public class QQBotConfig implements Serializable {
 
     private int FamilyTaskStatus = 0;
     private String controlQQ;
+    @JSONField(serialize = false)
     private boolean isStartScheduled = false;
+    @JSONField(serialize = false)
     private long lastSendTime = 0L;
+    @JSONField(serialize = false)
     private long lastExecuteTime = 0;
+    @JSONField(serialize = false)
     private long xslTime = 0;
+    @JSONField(serialize = false)
     private long mjTime = 0;
+    @JSONField(serialize = false)
     private String command;
+    @JSONField(serialize = false)
     private boolean isStop;
     private boolean isPrivateChat = true;
     //1闭关 2灵石修炼
     private int cultivateMode = 1;
+
+    private boolean enableFamilyTask = true;
+
+    private boolean enableMj = true;
+
+    private boolean enableXsl = true;
+
+    public boolean isEnableFamilyTask() {
+        return enableFamilyTask;
+    }
+
+    public void setEnableFamilyTask(boolean enableFamilyTask) {
+        this.enableFamilyTask = enableFamilyTask;
+    }
+
+    public boolean isEnableMj() {
+        return enableMj;
+    }
+
+    public void setEnableMj(boolean enableMj) {
+        this.enableMj = enableMj;
+    }
+
+    public boolean isEnableXsl() {
+        return enableXsl;
+    }
+
+    public void setEnableXsl(boolean enableXsl) {
+        this.enableXsl = enableXsl;
+    }
 
     public int getCultivateMode() {
         return cultivateMode;

@@ -271,7 +271,7 @@ public class FamilyTask {
                 long remindTime = (long) ((double) System.currentTimeMillis() + hours * 60.0 * 60.0 * 1000.0);
                 remindMap.put(bot.getBotId(), remindTime);
 //                bot.getBotConfig().setLastExecuteTime(remindTime);
-                group.sendMessage((new MessageChain()).text("下次收取时间为：" + sdf.format(new Date(remindTime))));
+//                group.sendMessage((new MessageChain()).text("下次收取时间为：" + sdf.format(new Date(remindTime))));
             } else if (message.contains("还没有洞天福地")) {
                 System.out.println(LocalDateTime.now() + " " + group.getGroupName() + " 收到灵田领取结果,还没有洞天福地");
 //                bot.getBotConfig().setLastExecuteTime(9223372036854175807L);

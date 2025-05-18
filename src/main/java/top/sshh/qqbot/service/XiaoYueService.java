@@ -42,7 +42,7 @@
 //    public static final String MODE_NAME = "邪修抢夺灵石#私自架设小型窝点#被追打催债#秘境内竟然#请道友下山购买#为宗门购买一些#速去仙境抢夺仙境之石#义字当头";
 //    private static final String FILE_PATH = "./botConfig.json";
 //    Map<Long, QQBotConfig> botConfigMap = new ConcurrentHashMap();
-//    @Value("${yueGroupId}")
+//    @Value("${yueGroupId:0}")
 //    private Long yueGroupId;
 //    private static final String botQQ = "3889282919";
 //

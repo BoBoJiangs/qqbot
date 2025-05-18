@@ -1,9 +1,10 @@
-xbGroupId: 971327442
+#小北任务群不需要可不配置
+xbGroupId: 993970673
 bot:
   #  类型：ws 正向连接，ws-reverse 反向连接，
   #  以下是两个连接的使用模板，注意url里的端口每个bot需要不一样。
   - type: ws-reverse
-    url: ws://localhost:8081
+    url: ws://localhost:8080
     accessToken: 1024*1024*1024
     #    修炼群号
     groupId: 971327442
@@ -16,25 +17,150 @@ bot:
     # 是否开启猜成语
     enableGuessTheIdiom: false
     # 是否开启查行情
-    enableCheckMarket: true
-    # 是否开启自动宗门任务
-    enableSectMission: true
-    #  悬赏令价格查询
+    enableCheckMarket: false
+    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
     enableXslPriceQuery: false
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
     cultivationMode: 3
-    enableAutoField: false
+    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认） 4时长最短 5修为最高
+    rewardMode: 4
+    #宗门任务1：邪修和查抄（默认） 2：所有任务
     sectMode: 2
+    #自动灵田结算（默认 true）
+    enableAutoField: true
+    #自动秘境结算 （默认 true）
+    enableAutoSecret: true
+    #无偿双修
+    enableAutoRepair: true
     #群管提醒
     enableGroupManager: false
+    #设置编号
+    botNumber: 1
+    #设置爱称
+    aiCheng: 一心&斌
 
-  #    这个连接方式可能更稳定
+  - type: ws-reverse
+    url: ws://localhost:8081
+    accessToken: 1024*1024*1024
+    #    修炼群号（宛）
+    groupId: 993970673
+    #   任务群号
+    taskId: 1023764416
+    # 控制小号的QQ
+    controlQQ: 819463350&1018454301
+    #    出验证码艾特的QQ
+    masterQQ: 819463350
+    # 是否开启查价格
+    enableCheckPrice: true
+    # 是否开启猜成语
+    enableGuessTheIdiom: false
+    # 是否开启查行情
+    enableCheckMarket: false
+    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
+    enableXslPriceQuery: false
+    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
+    cultivationMode: 2
+    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认）
+    rewardMode: 4
+    #宗门任务1：邪修和查抄（默认） 2：所有任务
+    sectMode: 2
+    #自动灵田结算（默认 true）
+    enableAutoField: true
+    #自动秘境结算 （默认 true）
+    enableAutoSecret: true
+    #无偿双修
+    enableAutoRepair: true
+    #设置编号
+    botNumber: 2
+    #设置爱称
+    aiCheng: 宛&之
+    enableXiaoBei: true
+
   - type: ws-reverse
     url: ws://localhost:8082
     accessToken: 1024*1024*1024
+    #    修炼群号（常）
+    groupId: 993970673
+    #   任务群号
+    taskId: 1023764416
+    # 控制小号的QQ
+    controlQQ: 819463350&1018454301
+    #    出验证码艾特的QQ
+    masterQQ: 819463350
+    # 是否开启查价格
+    enableCheckPrice: true
+    # 是否开启猜成语
+    enableGuessTheIdiom: false
+    # 是否开启查行情
+    enableCheckMarket: false
+    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
+    enableXslPriceQuery: false
+    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
+    cultivationMode: 2
+    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认）
+    rewardMode: 4
+    #宗门任务1：邪修和查抄（默认） 2：所有任务
+    sectMode: 2
+    #自动灵田结算（默认 true）
+    enableAutoField: true
+    #自动秘境结算 （默认 true）
+    enableAutoSecret: true
+    #无偿双修
+    enableAutoRepair: true
+    #设置编号
+    botNumber: 2
+    #设置爱称
+    aiCheng: 常&东
+    enableXiaoBei: true
+
+  - type: ws-reverse
+    url: ws://localhost:8083
+    accessToken: 1024*1024*1024
     #    修炼群号
-    groupId: 971327442
-    #    大号qq
+    groupId: 993970673
+    #   任务群号
+    taskId: 1023764416
+    # 控制小号的QQ
+    controlQQ: 819463350&1018454301
+    #    出验证码艾特的QQ
+    masterQQ: 819463350
+    # 是否开启查价格
+    enableCheckPrice: true
+    # 是否开启猜成语
+    enableGuessTheIdiom: false
+    # 是否开启查行情
+    enableCheckMarket: false
+    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
+    enableXslPriceQuery: false
+    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
+    cultivationMode: 2
+    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认）
+    rewardMode: 4
+    #宗门任务1：邪修和查抄（默认） 2：所有任务
+    sectMode: 2
+    #自动灵田结算（默认 true）
+    enableAutoField: true
+    #自动秘境结算 （默认 true）
+    enableAutoSecret: true
+    #无偿双修
+    enableAutoRepair: true
+    #设置编号
+    botNumber: 2
+    #设置爱称
+    aiCheng: 游&容
+    enableXiaoBei: true
+
+  # 这个连接方式可能更稳定（靖）
+  - type: ws-reverse
+    url: ws://localhost:8084
+    accessToken: 1024*1024*1024
+    #    修炼群号
+    groupId: 993970673
+    #   任务群号
+    taskId: 1023764416
+    # 控制小号的QQ
+    controlQQ: 819463350&1018454301
+    #    出验证码艾特的QQ
     masterQQ: 819463350
     # 是否开启查价格
     enableCheckPrice: true
@@ -46,12 +172,19 @@ bot:
     enableXslPriceQuery: false
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
     cultivationMode: 2
-    # 悬赏令模式
+    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认）
     rewardMode: 4
-    #宗门任务1：邪修和查抄 2：所有任务
+    # 宗门任务1：邪修和查抄 2：所有任务
     sectMode: 2
     #无偿双修
     enableAutoRepair: true
+    #设置编号
+
+    botNumber: 2
+    #设置爱称
+    aiCheng: 靖&成
+    enableXiaoBei: true
+
 
 spring:
   datasource:

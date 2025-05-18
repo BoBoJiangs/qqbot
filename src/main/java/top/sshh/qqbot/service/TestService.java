@@ -29,13 +29,16 @@ import top.sshh.qqbot.data.ProductPrice;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.aspectj.bridge.Version.getText;
 import static top.sshh.qqbot.constant.Constant.MAKE_DAN_SET;
+import static top.sshh.qqbot.constant.Constant.padRight;
 
 @Component
 public class TestService {
@@ -84,7 +87,7 @@ public class TestService {
 
             if ("停止执行".equals(message)) {
                 botConfig.setStop(true);
-                group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
+//                group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
                 bot.getBotConfig().setCommand("");
             }
 
@@ -452,18 +455,37 @@ public class TestService {
                                                 if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(name) * 1.1) {
                                                     group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice() + "万，炼金：" + ProductLowPrice.getLowPrice(name) + "万，不上架。"));
                                                 } else if (message.endsWith("一键上架")) {
-                                                    for (int j = 0; j < quantity; ++j) {
+//                                                    for (int j = 0; j < quantity; ++j) {
+//                                                        if (botConfig.isStop()) {
+//                                                            botConfig.setStop(false);
+//                                                            return;
+//                                                        }
+//
+//                                                        if (first.getPrice() > 1000 && (double) (first.getPrice() - 10) * 0.85 < 900.0) {
+//                                                            group.sendMessage((new MessageChain()).at("3889001741").text("确认坊市上架 " + first.getName() + " " + 10000000));
+//                                                        } else {
+//                                                            group.sendMessage((new MessageChain()).at("3889001741").text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000));
+//                                                        }
+//
+//                                                        Thread.sleep(4000L);
+//                                                    }
+                                                    int remaining = quantity;
+                                                    while (remaining > 0) {
                                                         if (botConfig.isStop()) {
                                                             botConfig.setStop(false);
                                                             return;
                                                         }
 
+                                                        int batchSize = Math.min(10, remaining); // 本次上架数量，最多10个
                                                         if (first.getPrice() > 1000 && (double) (first.getPrice() - 10) * 0.85 < 900.0) {
-                                                            group.sendMessage((new MessageChain()).at("3889001741").text("确认坊市上架 " + first.getName() + " " + 10000000));
+                                                            group.sendMessage((new MessageChain()).at("3889001741")
+                                                                    .text("确认坊市上架 " + first.getName() + " " + 10000000 + " " + batchSize));
                                                         } else {
-                                                            group.sendMessage((new MessageChain()).at("3889001741").text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000));
+                                                            group.sendMessage((new MessageChain()).at("3889001741")
+                                                                    .text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000 + " " + batchSize));
                                                         }
 
+                                                        remaining -= batchSize;
                                                         Thread.sleep(4000L);
                                                     }
                                                 }
@@ -512,6 +534,9 @@ public class TestService {
             sb.append("确认一键装备炼金\n");
             sb.append("确认一键药材上架\n");
             sb.append("－－－－－掌门命令－－－－－\n");
+            sb.append("编号/爱称听令1(不@)\n");
+            sb.append("编号/爱称听令2(@小小)\n");
+            sb.append("编号/爱称听令3(@小北)\n");
             sb.append("弟子听令执行××\n");
             sb.append("弟子听令执行命令××\n");
             sb.append("弟子听令循环执行××\n");
@@ -585,9 +610,7 @@ public class TestService {
         }
     }
 
-    private static String padRight(String str, int length) {
-        return str.length() >= length ? str : String.format("%-" + length + "s", str);
-    }
+
 
     @GroupMessageHandler
     public void autoSend修炼(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
@@ -795,6 +818,218 @@ public class TestService {
             isAt = true,
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
+    public void 设置爱称(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        if (!messageChain.stream().anyMatch((msgx) -> {
+            return msgx instanceof ReplyMessage;
+        })) {
+            if (this.checkControlQQ(bot, member)) {
+                Iterator<Message> iterator = messageChain.iterator();
+
+                while(iterator.hasNext()) {
+                    Message msg = (Message)iterator.next();
+                    if (!(msg instanceof AtMessage)) {
+                        break;
+                    }
+
+                    iterator.remove();
+                }
+
+                String rawMessage = ((TextMessage)messageChain.get(0)).getText();
+                String processedMessage = rawMessage.trim().replaceAll("\\n", "");
+                String aichengStr;
+                if (processedMessage.startsWith("你的编号是")) {
+                    aichengStr = processedMessage.substring("你的编号是".length()).trim();
+                    if (!StringUtils.isNumeric(aichengStr)) {
+                        group.sendMessage((new MessageChain()).text("编号必须是整数哦！"));
+                        return;
+                    }
+
+                    int Nid = Integer.parseInt(aichengStr);
+                    bot.getBotConfig().setBotNumber(Nid);
+                    group.sendMessage((new MessageChain()).text("好耶！我的编号是" + String.valueOf(Nid)));
+                }
+
+                if (processedMessage.startsWith("我命你为我的")) {
+                    aichengStr = processedMessage.substring("我命你为我的".length()).trim();
+                    String newaicheng = bot.getBotConfig().getAiCheng() + "&" + aichengStr;
+                    bot.getBotConfig().setAiCheng(newaicheng);
+                    group.sendMessage((new MessageChain()).text("好耶！现在起我就是你的" + aichengStr));
+                }
+
+            }
+        }
+    }
+
+
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 听令执行(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        if (!messageChain.stream().anyMatch((msg) -> {
+            return msg instanceof ReplyMessage;
+        })) {
+            String botNumber = String.valueOf(bot.getBotConfig().getBotNumber());
+            String aiCheng = bot.getBotConfig().getAiCheng();
+            List<String> prefixes = new ArrayList();
+            if (StringUtils.isNotBlank(botNumber)) {
+                prefixes.add(botNumber);
+            }
+
+            if (StringUtils.isNotBlank(aiCheng)) {
+                String[] aiChengList = aiCheng.split("&");
+                String[] var11 = aiChengList;
+                int var12 = aiChengList.length;
+
+                for(int var13 = 0; var13 < var12; ++var13) {
+                    String name = var11[var13];
+                    if (StringUtils.isNotBlank(name)) {
+                        prefixes.add(name.trim());
+                    }
+                }
+            }
+
+            boolean isControlQQ = this.checkControlQQ(bot, member);
+            String commandPrefix = null;
+            Iterator var17 = prefixes.iterator();
+
+            while(var17.hasNext()) {
+                String prefix = (String)var17.next();
+                if (message.startsWith(prefix)) {
+                    commandPrefix = prefix;
+                    break;
+                }
+            }
+
+            if (isControlQQ && commandPrefix != null) {
+                String command = ((TextMessage) messageChain.get(0)).getText().trim();
+                command = command.substring(commandPrefix.length()).trim();
+                messageChain.set(0, new TextMessage(command));
+
+                this.processCommand(bot, group, messageChain, command);
+            }
+
+        }
+    }
+
+    private boolean checkControlQQ(Bot bot, Member member) {
+        if (StringUtils.isNotBlank(bot.getBotConfig().getControlQQ())) {
+            return ("&" + bot.getBotConfig().getControlQQ() + "&").contains("&" + member.getUserId() + "&");
+        } else {
+            return bot.getBotConfig().getMasterQQ() == member.getUserId();
+        }
+    }
+
+    private void processCommand(Bot bot, Group group, MessageChain messageChain, String command) {
+        int time = 0;
+        int count = 0;
+        if (command.startsWith("听令1循环执行")) {
+            messageChain.set(0, new TextMessage(command.substring(7)));
+            this.forSendMessage(bot, group, messageChain, count, time);
+        } else if (command.startsWith("听令2循环执行")) {
+            messageChain.set(0, new TextMessage(command.substring(7)));
+            messageChain.add(0, new AtMessage("3889001741"));
+            this.forSendMessage(bot, group, messageChain, count, time);
+        }else if (command.startsWith("听令3循环执行")) {
+            messageChain.set(0, new TextMessage(command.substring(6)));
+            messageChain.add(0, new AtMessage(XiaoBeiService.botQQ));
+            this.forSendMessage(bot, group, messageChain, count, time);
+        } else if (command.startsWith("听令1")) {
+
+            messageChain.set(0, new TextMessage(command.substring(3)));
+            group.sendMessage(messageChain);
+        } else if (command.startsWith("听令2")) {
+            messageChain.set(0, new TextMessage(command.substring(3)));
+            messageChain.add(0, new AtMessage("3889001741"));
+            group.sendMessage(messageChain);
+        }else if (command.startsWith("听令3")) {
+            messageChain.set(0, new TextMessage(command.substring(3)));
+            messageChain.add(0, new AtMessage(XiaoBeiService.botQQ));
+            group.sendMessage(messageChain);
+        }
+
+    }
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 弟子执行命令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        boolean hasReplyMessage = messageChain.stream().anyMatch((msgx) -> {
+            return msgx instanceof ReplyMessage;
+        });
+        if (!hasReplyMessage) {
+            boolean isMatcher = false;
+            boolean isControlQQ = StringUtils.isNotBlank(bot.getBotConfig().getControlQQ()) ? ("&" + bot.getBotConfig().getControlQQ() + "&").contains("&" + member.getUserId() + "&") : bot.getBotConfig().getMasterQQ() == member.getUserId();
+            if (isControlQQ && message.contains("弟子听令") && message.contains("执行")) {
+                Pattern pattern = Pattern.compile("弟子听令(\\d*)执行");
+                Matcher matcher = pattern.matcher(message);
+                int delaySeconds = 0;
+                if (matcher.find()) {
+                    String delayStr = matcher.group(1);
+                    delaySeconds = StringUtils.isNumeric(delayStr) ? Integer.parseInt(delayStr) : 0;
+                }
+
+                int botNumber = bot.getBotConfig().getBotNumber();
+                int actualDelay = (botNumber - 1) * delaySeconds;
+                Iterator<Message> iterator = messageChain.iterator();
+
+                while(iterator.hasNext()) {
+                    Message msg = (Message)iterator.next();
+                    if (!(msg instanceof AtMessage)) {
+                        break;
+                    }
+
+                    iterator.remove();
+                }
+
+                String processedMsg = ((TextMessage)messageChain.get(0)).getText().trim();
+                if (delaySeconds != 0) {
+                    String prefixWithDelay = "弟子听令" + delaySeconds + "执行";
+                    System.out.println(delaySeconds);
+                    String prefixWithDelayCommand = "弟子听令" + delaySeconds + "执行命令";
+                    if (processedMsg.startsWith(prefixWithDelayCommand)) {
+                        processedMsg = processedMsg.substring(prefixWithDelayCommand.length()).trim();
+                        messageChain.set(0, new TextMessage(processedMsg));
+                    } else if (processedMsg.startsWith(prefixWithDelay)) {
+                        processedMsg = processedMsg.substring(prefixWithDelay.length()).trim();
+                        messageChain.set(0, new TextMessage(processedMsg));
+                        messageChain.add(0, new AtMessage("3889001741"));
+                    }
+                    isMatcher = true;
+                } else if (processedMsg.startsWith("弟子听令执行命令")) {
+                    processedMsg = processedMsg.substring("弟子听令执行命令".length()).trim();
+                    messageChain.set(0, new TextMessage(processedMsg));
+                    isMatcher = true;
+                } else if (processedMsg.startsWith("弟子听令执行")) {
+                    processedMsg = processedMsg.substring("弟子听令执行".length()).trim();
+                    messageChain.set(0, new TextMessage(processedMsg));
+                    messageChain.add(0, new AtMessage("3889001741"));
+                    isMatcher = true;
+                }
+                if(isMatcher){
+                    CompletableFuture.runAsync(() -> {
+                        try {
+                            if (actualDelay > 0) {
+                                TimeUnit.SECONDS.sleep((long)actualDelay);
+                            }
+
+                            group.sendMessage(messageChain);
+                        } catch (InterruptedException var4) {
+                            Thread.currentThread().interrupt();
+                        }
+
+                    });
+                }
+
+            }
+
+        }
+    }
+
+    @GroupMessageHandler(
+            isAt = true,
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
     public void 执行命令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         boolean isControlQQ = false;
         if (StringUtils.isNotBlank(bot.getBotConfig().getControlQQ())) {
@@ -803,7 +1038,7 @@ public class TestService {
             isControlQQ = bot.getBotConfig().getMasterQQ() == member.getUserId();
         }
 
-        if (isControlQQ && message.contains("执行")) {
+        if (isControlQQ && message.contains("执行") && message.startsWith("@")) {
             Iterator iterator = messageChain.iterator();
 
             Message timeMessage;
@@ -873,51 +1108,51 @@ public class TestService {
 
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
-    public void 弟子执行命令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        boolean isControlQQ = false;
-        if (StringUtils.isNotBlank(bot.getBotConfig().getControlQQ())) {
-            isControlQQ = ("&" + bot.getBotConfig().getControlQQ() + "&").contains("&" + member.getUserId() + "&");
-        } else {
-            isControlQQ = bot.getBotConfig().getMasterQQ() == member.getUserId();
-        }
-
-        if (isControlQQ && message.contains("弟子听令执行") && !message.contains("@0")) {
-            Iterator iterator = messageChain.iterator();
-
-            while (iterator.hasNext()) {
-                Message timeMessage = (Message) iterator.next();
-                if (!(timeMessage instanceof AtMessage)) {
-                    break;
-                }
-
-                iterator.remove();
-            }
-            if (messageChain.get(0) instanceof TextMessage) {
-                message = ((TextMessage) messageChain.get(0)).getText().trim();
-                if (message.startsWith("弟子听令执行命令")) {
-                    message = message.substring(message.indexOf("弟子听令执行命令") + 8);
-                    messageChain.set(0, new TextMessage(message));
-                    group.sendMessage(messageChain);
-                } else if (message.startsWith("弟子听令执行")) {
-                    message = message.substring(message.indexOf("弟子听令执行") + 6);
-                    messageChain.set(0, new TextMessage(message));
-                    messageChain.add(0, new AtMessage("3889001741"));
-                    group.sendMessage(messageChain);
-                }
-            }
-
-        }
-
-    }
+//    @GroupMessageHandler(
+//            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+//    )
+//    public void 弟子执行命令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+//        boolean isControlQQ = false;
+//        if (StringUtils.isNotBlank(bot.getBotConfig().getControlQQ())) {
+//            isControlQQ = ("&" + bot.getBotConfig().getControlQQ() + "&").contains("&" + member.getUserId() + "&");
+//        } else {
+//            isControlQQ = bot.getBotConfig().getMasterQQ() == member.getUserId();
+//        }
+//
+//        if (isControlQQ && message.contains("弟子听令执行") && !message.contains("@0")) {
+//            Iterator iterator = messageChain.iterator();
+//
+//            while (iterator.hasNext()) {
+//                Message timeMessage = (Message) iterator.next();
+//                if (!(timeMessage instanceof AtMessage)) {
+//                    break;
+//                }
+//
+//                iterator.remove();
+//            }
+//            if (messageChain.get(0) instanceof TextMessage) {
+//                message = ((TextMessage) messageChain.get(0)).getText().trim();
+//                if (message.startsWith("弟子听令执行命令")) {
+//                    message = message.substring(message.indexOf("弟子听令执行命令") + 8);
+//                    messageChain.set(0, new TextMessage(message));
+//                    group.sendMessage(messageChain);
+//                } else if (message.startsWith("弟子听令执行")) {
+//                    message = message.substring(message.indexOf("弟子听令执行") + 6);
+//                    messageChain.set(0, new TextMessage(message));
+//                    messageChain.add(0, new AtMessage("3889001741"));
+//                    group.sendMessage(messageChain);
+//                }
+//            }
+//
+//        }
+//
+//    }
 
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
     )
     public void 仅执行自己命令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (message.contains("循环执行") && !message.contains("@") && !message.contains("功能设置")) {
+        if (message.contains("循环执行") && !message.startsWith("@") && !message.contains("功能设置")) {
             Iterator<Message> iterator = messageChain.iterator();
 
             Message timeMessage;
