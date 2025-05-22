@@ -74,6 +74,7 @@ public class GroupManager {
     public static List<Long> remindGroupIdList = Arrays.asList(1023764416L,971327442L,679831529L,824484501L,690933736L,978207420L);
     @Autowired
     public DanCalculator danCalculator;
+    private Map<Long, Map<String, PendingLingTianRecord>> pendingLingTianRecords = new ConcurrentHashMap();
 
     public GroupManager() {
 
@@ -113,6 +114,21 @@ public class GroupManager {
         this.loadTasksFromFile();
 
         logger.info("已从本地加载{}个灵田任务 {}个发言统计",  this.ltmap.size(),this.MESSAGE_NUMBER_MAP.size());
+    }
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 用户名获取qq(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
+        if (msg.contains("@3889001741") && (msg.contains("灵田收取") || msg.contains("灵田结算") || msg.contains("探索秘境") || msg.contains("道具使用次元之钥"))) {
+            String userName = member.getCard().trim();
+            Long userId = member.getUserId();
+            Long groupId = group.getGroupId();
+            ((Map)this.pendingLingTianRecords.computeIfAbsent(groupId, (k) -> {
+                return new ConcurrentHashMap();
+            })).put(userName, new PendingLingTianRecord(userName, userId, groupId));
+        }
+
     }
 
     @Scheduled(
@@ -400,27 +416,52 @@ public class GroupManager {
     @GroupMessageHandler(
             senderIds = {3889001741L}
     )
-    public void 灵田领取提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        if (bot.getBotConfig().isEnableGroupManager() && message.contains("灵田还不能收取") && !remindGroupIdList.contains(group.getGroupId())) {
-//            boolean isGroupQQ = false;
-//            if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
-//                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + member.getGroupId() + "&");
-//            } else {
-//                isGroupQQ = group.getGroupId() == 802082768L;
-//            }
-//
-//            if (!isGroupQQ) {
-//                return;
-//            }
-
-            this.handleLingTianMessage(message, group,bot);
+    public void 灵田领取提醒(Bot bot, Group group, Member member, MessageChain messageChain, String msg, Integer messageId) throws InterruptedException {
+        if (bot.getBotConfig().isEnableGroupManager()) {
+            if (msg.contains("灵田还不能收取") && msg.contains("下次收取时间为")) {
+                this.handleLingTianMessage(msg, group, bot);
+            }else if (msg.contains("道友的灵田灵气未满，尚需孕育") && msg.contains("下次收成时间")) {
+                this.handleFormat3(msg, group, bot);
+            }
         }
 
     }
 
+
+
+    private void handleFormat3(String msg, Group group, Bot bot) {
+        Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId());
+        if (groupRecords != null && !groupRecords.isEmpty()) {
+            Optional<Map.Entry<String, PendingLingTianRecord>> matchedEntry = groupRecords.entrySet().stream().filter((entryx) -> {
+                return msg.contains((CharSequence)entryx.getKey());
+            }).findFirst();
+            if (matchedEntry.isPresent()) {
+                Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry)matchedEntry.get();
+                PendingLingTianRecord record = (PendingLingTianRecord)entry.getValue();
+
+                try {
+                    Pattern pattern = Pattern.compile("下次收成时间：(\\d+\\.\\d+)小时");
+                    Matcher matcher = pattern.matcher(msg);
+                    if (matcher.find()) {
+                        String hours = matcher.group(1);
+                        this.updateLingTianTimer(record.userId.toString(), hours, group, bot.getBotId());
+                        logger.info("收到灵田提醒 - 用户[{}:{}]", record.userName, record.userId);
+                    }
+                } finally {
+                    groupRecords.remove(record.userName);
+                    if (groupRecords.isEmpty()) {
+                        this.pendingLingTianRecords.remove(group.getGroupId());
+                    }
+
+                }
+            }
+        }
+
+    }
+
+
     private void handleLingTianMessage(String message, Group group,Bot bot) {
-        String regex = "@(\\d{5,12}).*?(\\d+\\.\\d+)小时";
-        Pattern pattern = Pattern.compile(regex);
+        Pattern pattern = Pattern.compile("@(\\d+).*?(\\d+\\.\\d+)小时", 32);
         Matcher matcher = pattern.matcher(message);
         String qqNumber = "";
         String time = "";
@@ -428,18 +469,21 @@ public class GroupManager {
             qqNumber = matcher.group(1);
             time = matcher.group(2);
         }
+        updateLingTianTimer(qqNumber, time, group, bot.getBotId());
 
+    }
+
+    private void updateLingTianTimer(String qqNumber, String time, Group group, Long botId) {
         if (StringUtils.isNotBlank(qqNumber) && StringUtils.isNotBlank(time)) {
             RemindTime remindTime = new RemindTime();
             remindTime.setText("灵田");
             remindTime.setQq(Long.parseLong(qqNumber));
             remindTime.setExpireTime((long)(Double.parseDouble(time) * 60.0 * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
             remindTime.setGroupId(group.getGroupId());
-            remindTime.setRemindQq(bot.getBotId());
+            remindTime.setRemindQq(botId);
             this.ltmap.put(qqNumber, remindTime);
             group.sendMessage((new MessageChain()).at(qqNumber).text("灵田收取时间为：" + sdf.format(new Date(remindTime.getExpireTime()))));
         }
-
     }
 
     @Scheduled(
@@ -486,4 +530,18 @@ public class GroupManager {
 
 
     }
+    private static class PendingLingTianRecord {
+        String userName;
+        Long userId;
+        Long groupId;
+        long timestamp;
+
+        PendingLingTianRecord(String userName, Long userId, Long groupId) {
+            this.userName = userName;
+            this.userId = userId;
+            this.groupId = groupId;
+            this.timestamp = System.currentTimeMillis();
+        }
+    }
 }
+

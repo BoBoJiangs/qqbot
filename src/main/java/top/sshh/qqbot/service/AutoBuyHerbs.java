@@ -496,16 +496,16 @@ public class AutoBuyHerbs {
                         try {
                             int messageId = bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
 
-                            if (messageId == 0){
-                                logger.info("发送查询消息失败，暂停查看坊市药材，messageId=={}", messageId);
-                                botConfig.setStartAutoBuyHerbs(false);
-                            }
+//                            if (messageId == 0){
+//                                logger.info("发送查询消息失败，暂停查看坊市药材，messageId=={}", messageId);
+//                                botConfig.setStartAutoBuyHerbs(false);
+//                            }
                             MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId());
                             //超过10分钟没有更新消息时间，暂停循环任务
-                            if(messageNumber.getTime() < System.currentTimeMillis() - 600000){
-                                logger.info("发送查询消息失败，暂停查看坊市药材");
-                                botConfig.setStartAutoBuyHerbs(false);
-                            }
+//                            if(messageNumber.getTime() < System.currentTimeMillis() - 600000){
+//                                logger.info("发送查询消息失败，暂停查看坊市药材");
+//                                botConfig.setStartAutoBuyHerbs(false);
+//                            }
                             botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
                             noQueriedCount = 0;
                         } catch (Exception var6) {
