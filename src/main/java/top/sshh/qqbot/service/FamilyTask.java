@@ -260,16 +260,20 @@ public class FamilyTask {
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
         boolean isAtSelf = isAtSelf(message,bot);
         if (isGroup && isAtSelf) {
-            if (message.contains("灵田还不能收取")) {
+            if (message.contains("灵田还不能收取") || message.contains("道友的灵田灵气未满，尚需孕育")) {
                 String[] parts = message.split("：|小时");
                 if (parts.length < 2) {
                     group.sendMessage((new MessageChain()).text("输入格式不正确，请确保格式为 '下次收取时间为：XX.XX小时"));
                     return;
                 }
 
-                double hours = Double.parseDouble(parts[1].trim());
-                long remindTime = (long) ((double) System.currentTimeMillis() + hours * 60.0 * 60.0 * 1000.0);
-                remindMap.put(bot.getBotId(), remindTime);
+                try {
+                    double hours = Double.parseDouble(parts[1].trim());
+                    long remindTime = (long) ((double) System.currentTimeMillis() + hours * 60.0 * 60.0 * 1000.0);
+                    remindMap.put(bot.getBotId(), remindTime);
+                } catch (Exception e) {
+                    logger.error("灵田收取时间失败", e);
+                }
 //                bot.getBotConfig().setLastExecuteTime(remindTime);
 //                group.sendMessage((new MessageChain()).text("下次收取时间为：" + sdf.format(new Date(remindTime))));
             } else if (message.contains("还没有洞天福地")) {

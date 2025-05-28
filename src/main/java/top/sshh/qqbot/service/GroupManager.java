@@ -296,21 +296,47 @@ public class GroupManager {
     )
     public void 秘境结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())) {
-//            boolean isGroupQQ = false;
-//            if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
-//                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + group.getGroupId() + "&");
-//            } else {
-//                isGroupQQ = group.getGroupId() == 802082768L;
-//            }
 //
-//            if (!isGroupQQ) {
-//                return;
-//            }
 
             if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
                 this.extractInfo(message, "秘境", group,bot);
             }else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
                 this.extractInfo(message, "秘境", group,bot);
+            }else if (message.contains("秘境") && message.contains("道友已") && message.contains("分钟")) {
+                this.handleNewsExploration(message, group, bot);
+            } else if (message.contains("秘境") && message.contains("时轮压缩") && message.contains("分钟")) {
+                this.handleNewsExploration(message, group, bot);
+            }
+        }
+
+    }
+
+    private void handleNewsExploration(String msg, Group group, Bot bot) {
+        Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId());
+        if (groupRecords != null && !groupRecords.isEmpty()) {
+            Optional<Map.Entry<String, PendingLingTianRecord>> matchedEntry = groupRecords.entrySet().stream().filter((entryx) -> {
+                return msg.contains((CharSequence)entryx.getKey());
+            }).findFirst();
+            if (matchedEntry.isPresent()) {
+                Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry)matchedEntry.get();
+                PendingLingTianRecord record = (PendingLingTianRecord)entry.getValue();
+
+                try {
+                    Pattern pattern = Pattern.compile("⏳\\s*[^:]*：\\s*(\\d+\\.?\\d*)\\s*(分钟|小时)");
+                    Matcher matcher = pattern.matcher(msg);
+                    if (matcher.find()) {
+                        String minutes = matcher.group(1);
+                        addMjXslMap(record.userId.toString(),"秘境",group,minutes,bot);
+//                        this.updateAutoReplyMap(record.userId.toString(), (long)(minutes * 60000.0), group.getGroupId(), bot.getBotId());
+                        logger.info("秘境提醒 - 用户[{}:{}]", record.userName, record.userId);
+                    }
+                } finally {
+                    groupRecords.remove(record.userName);
+                    if (groupRecords.isEmpty()) {
+                        this.pendingLingTianRecords.remove(group.getGroupId());
+                    }
+
+                }
             }
         }
 
@@ -322,16 +348,7 @@ public class GroupManager {
     public void 悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())
                 && message.contains("进行中的悬赏令") && message.contains("可结束")) {
-//            boolean isGroupQQ = false;
-//            if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
-//                isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + member.getGroupId() + "&");
-//            } else {
-//                isGroupQQ = group.getGroupId() == 802082768L;
-//            }
-//
-//            if (!isGroupQQ) {
-//                return;
-//            }
+
 
             this.extractInfo(message, "悬赏", group,bot);
         }
@@ -360,7 +377,7 @@ public class GroupManager {
             if(timePattern!=null){
                 Matcher timeMatcher = timePattern.matcher(message);
                 String time = timeMatcher.find() ? timeMatcher.group(1) : "未找到预计时间";
-                addXslMap(qq,"悬赏",group,time,bot);
+                addMjXslMap(qq,"悬赏",group,time,bot);
             }
 
 //            this.extractInfo(message, "悬赏", group);
@@ -388,20 +405,11 @@ public class GroupManager {
         } else {
             logger.warn("未找到时间");
         }
-
-//        if (StringUtils.isNotBlank(qq) && StringUtils.isNotBlank(time)) {
-//            RemindTime remindTime = new RemindTime();
-//            remindTime.setQq(Long.parseLong(qq));
-//            remindTime.setExpireTime((long)(Double.parseDouble(time) * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
-//            remindTime.setText(type);
-//            remindTime.setGroupId(group.getGroupId());
-//            this.mjXslmap.put(qq, remindTime);
-//        }
-        addXslMap(qq,type,group,time,bot);
+        addMjXslMap(qq,type,group,time,bot);
 
     }
 
-    private void addXslMap(String qq,String type, Group group,String time,Bot bot){
+    private void addMjXslMap(String qq,String type, Group group,String time,Bot bot){
         if (StringUtils.isNotBlank(qq) && StringUtils.isNotBlank(time)) {
             RemindTime remindTime = new RemindTime();
             remindTime.setQq(Long.parseLong(qq));

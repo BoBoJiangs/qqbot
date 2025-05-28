@@ -786,6 +786,7 @@ public class XiaoBeiService {
                         botConfig.setMjTime(-1L);
 
                         try {
+                            botConfig.setMjTime(-1L);
                             sendBotMessage(bot, "秘境结算", true);
                             Thread.sleep(5000L);
                             sendBotMessage(bot, "探索秘境", true);
@@ -800,6 +801,7 @@ public class XiaoBeiService {
             BotFactory.getBots().values().forEach((bot) -> {
                 QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
                 if (botConfig != null && botConfig.getXslTime() > 0L && botConfig.getXslTime() < System.currentTimeMillis()) {
+                    botConfig.setXslTime(-1L);
                     sendBotMessage(bot, "悬赏令结算", true);
                 }
 

@@ -356,6 +356,7 @@ public class DanCalculator {
     }
 
     public void loadHerbPricesData() throws Exception {
+        herbPrices.clear();
         this.loadTxtFile(targetDir+"properties/药材价格.txt", (parts) -> {
             int value = Integer.parseInt(parts[0]);
             herbPrices.put(parts[1], value + 0);

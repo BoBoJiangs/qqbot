@@ -1509,7 +1509,7 @@ public class TestService {
 
                         long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
                         bot.getGroup(groupId).sendMessage(
-                                (new MessageChain()).text("悬赏令接取" + currentReceIndex));
+                                (new MessageChain()).at("3889001741").text("悬赏令接取" + currentReceIndex));
                         return; // 直接返回，不再处理其他逻辑
                     }
                     // 普通情况处理
