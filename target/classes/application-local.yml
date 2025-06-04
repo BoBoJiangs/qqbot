@@ -1,45 +1,11 @@
 xbGroupId: 993970673
 bot:
-  #  类型：ws 正向连接，ws-reverse 反向连接，
-  #  以下是两个连接的使用模板，注意url里的端口每个bot需要不一样。
-  - type: ws
-    url: ws://localhost:8080
-    accessToken: 1024*1024*1024
-    #    修炼群号
-    groupId: 993970673
-    #    大号qq
-    controlQQ: 819463350&1018454301
-    #    大号qq
-    masterQQ: 819463350
-    # 是否开启查价格
-    enableCheckPrice: true
-    # 是否开启猜成语
-    enableGuessTheIdiom: false
-    # 是否开启查行情
-    enableCheckMarket: false
-    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
-    enableXslPriceQuery: false
-    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-    cultivationMode: 3
-    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认） 4时长最短 5修为最高
-    rewardMode: 4
-    #宗门任务1：邪修和查抄（默认） 2：所有任务
-    sectMode: 2
-    #自动灵田结算（默认 true）
-    enableAutoField: true
-    #自动秘境结算 （默认 true）
-    enableAutoSecret: true
-    #无偿双修
-    enableAutoRepair: true
-    #群管提醒
-    enableGroupManager: false
-
   #    这个连接方式可能更稳定
   - type: ws
     url: ws://localhost:3001
     accessToken: 1024*1024*1024
     #    修炼群号
-    groupId: 993970673
+    groupId: 971327442
     #    大号qq
     controlQQ: 819463350&1018454301
     #    大号qq
@@ -55,7 +21,7 @@ bot:
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
     cultivationMode: 3
     #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认） 4时长最短 5修为最高
-    rewardMode: 4
+    rewardMode: 5
     #宗门任务1：邪修和查抄（默认） 2：所有任务
     sectMode: 2
     #自动灵田结算（默认 true）
@@ -66,6 +32,8 @@ bot:
     enableAutoRepair: true
     #群管提醒
     enableGroupManager: false
+    #悬赏令价格限制（超过这个价格会优先接取）
+    xslPriceLimit: 1000
 
 spring:
   datasource:

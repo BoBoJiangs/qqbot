@@ -428,7 +428,9 @@ public class GroupManager {
         if (bot.getBotConfig().isEnableGroupManager()) {
             if (msg.contains("灵田还不能收取") && msg.contains("下次收取时间为")) {
                 this.handleLingTianMessage(msg, group, bot);
-            }else if (msg.contains("道友的灵田灵气未满，尚需孕育") && msg.contains("下次收成时间")) {
+            }else if (msg.contains("收获药材") && !msg.contains("道友的洞天福地") && (msg.contains("道友成功") || msg.contains("道友本次采集"))) {
+                this.handleFormat2(msg, group, bot, messageId);
+            } else if (msg.contains("道友的灵田灵气未满，尚需孕育") && msg.contains("下次收成时间")) {
                 this.handleFormat3(msg, group, bot);
             }
         }
@@ -467,6 +469,46 @@ public class GroupManager {
 
     }
 
+    private void handleFormat2(String msg, Group group, Bot bot, Integer msgId) {
+        Pattern pattern = Pattern.compile("@(\\d+)");
+        Matcher matcher = pattern.matcher(msg);
+
+        customPool.submit(() -> {
+            String qq = "";
+            if (matcher.find()) {
+                qq = matcher.group(1);
+                if (qq.length() > 8 && qq.length() < 13) {
+                    this.updateLingTianTimer(qq, "47.0", group, bot.getBotId());
+                }
+            } else{
+                Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId());
+                if (groupRecords == null || groupRecords.isEmpty()) {
+                    return;
+                }
+
+                Optional<Map.Entry<String, PendingLingTianRecord>> matchedEntry = groupRecords.entrySet().stream().filter((entryxx) -> {
+                    return msg.contains((CharSequence)entryxx.getKey());
+                }).findFirst();
+                if (matchedEntry.isPresent()) {
+                    Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry)matchedEntry.get();
+                    PendingLingTianRecord record = (PendingLingTianRecord)entry.getValue();
+
+                    try {
+                        this.updateLingTianTimer(record.userId.toString(), "47.0", group, bot.getBotId());
+                    } finally {
+                        groupRecords.remove(record.userName);
+                        if (groupRecords.isEmpty()) {
+                            this.pendingLingTianRecords.remove(group.getGroupId());
+                        }
+
+                    }
+                }
+            }
+
+        });
+    }
+
+
 
     private void handleLingTianMessage(String message, Group group,Bot bot) {
         Pattern pattern = Pattern.compile("@(\\d+).*?(\\d+\\.\\d+)小时", 32);
@@ -490,7 +532,7 @@ public class GroupManager {
             remindTime.setGroupId(group.getGroupId());
             remindTime.setRemindQq(botId);
             this.ltmap.put(qqNumber, remindTime);
-            group.sendMessage((new MessageChain()).at(qqNumber).text("灵田收取时间为：" + sdf.format(new Date(remindTime.getExpireTime()))));
+            group.sendMessage((new MessageChain()).at(qqNumber).text("道友下次灵田收取时间：" + sdf.format(new Date(remindTime.getExpireTime()))));
         }
     }
 

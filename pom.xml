@@ -30,7 +30,11 @@
             <scope>system</scope>
             <systemPath>${project.basedir}/lib/bot-core-1.0.0.jar</systemPath>
         </dependency>
-
+<!--        <dependency>-->
+<!--            <groupId>com.github.oshi</groupId>-->
+<!--            <artifactId>oshi-core</artifactId>-->
+<!--            <version>6.4.0</version>-->
+<!--        </dependency>-->
         <dependency>
             <groupId>com.alibaba.fastjson2</groupId>
             <artifactId>fastjson2</artifactId>

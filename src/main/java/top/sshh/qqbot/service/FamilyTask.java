@@ -282,7 +282,7 @@ public class FamilyTask {
                 remindMap.put(bot.getBotId(), 9223372036854175807L);
             } else if (message.contains("本次修炼到达上限")) {
                 group.sendMessage((new MessageChain()).at("3889001741").text("直接突破"));
-            } else if (message.contains("道友成功收获药材")) {
+            } else if (message.contains("道友成功收获药材")||(message.contains("道友本次采集成果") && message.contains("收获药材"))) {
                 remindMap.put(bot.getBotId(), 9223372036854175807L);
                 group.sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
             }
