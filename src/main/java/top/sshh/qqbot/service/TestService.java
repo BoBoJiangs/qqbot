@@ -46,8 +46,10 @@ public class TestService {
     @Autowired
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
-    public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_PRODUCT = new ConcurrentHashMap();
+//    public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_PRODUCT = new ConcurrentHashMap();
     private boolean isStartAutoTalent = false;
+    @Autowired
+    private GroupManager groupManager;
 
     public TestService() {
     }
@@ -372,14 +374,14 @@ public class TestService {
                     Map productMap;
                     if (!message.startsWith("查询自动购买")) {
                         if (message.startsWith("取消自动购买")) {
-                            productMap = (Map) AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
-                            AUTO_BUY_PRODUCT.put(bot.getBotId(), productMap);
+                            productMap = this.groupManager.autoBuyProductMap.getOrDefault(bot.getBotId()+"", new ConcurrentHashMap());
+                            groupManager.autoBuyProductMap.put(bot.getBotId()+"", productMap);
                             message = message.substring(message.indexOf("取消自动购买") + 6).trim();
                             productMap.remove(message);
                             group.sendMessage((new MessageChain()).reply(messageId).text(message + "取消成功"));
                         } else if (message.startsWith("批量取消自动购买")) {
-                            productMap = (Map) AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
-                            AUTO_BUY_PRODUCT.put(bot.getBotId(), productMap);
+                            productMap = groupManager.autoBuyProductMap.getOrDefault(bot.getBotId()+"", new ConcurrentHashMap());
+                            groupManager.autoBuyProductMap.put(bot.getBotId()+"", productMap);
                             productMap.clear();
                             group.sendMessage((new MessageChain()).reply(messageId).text(message + "取消成功"));
                         } else if (message.startsWith("自动购买") && message.contains(" ")) {
@@ -396,9 +398,9 @@ public class TestService {
                                         productPrice.setName(parts[0].substring(4).trim());
                                         productPrice.setPrice(Integer.parseInt(parts[1].trim()));
                                         productPrice.setTime(LocalDateTime.now());
-                                        productMap = (Map) AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
+                                        productMap = (Map) groupManager.autoBuyProductMap.getOrDefault(bot.getBotId()+"", new ConcurrentHashMap());
                                         productMap.put(productPrice.getName(), productPrice);
-                                        AUTO_BUY_PRODUCT.put(bot.getBotId(), productMap);
+                                        groupManager.autoBuyProductMap.put(bot.getBotId()+"", productMap);
                                     }
                                 }
 
@@ -407,8 +409,8 @@ public class TestService {
                             }
                         }
                     } else {
-                        productMap = (Map) AUTO_BUY_PRODUCT.getOrDefault(bot.getBotId(), new ConcurrentHashMap());
-                        AUTO_BUY_PRODUCT.put(bot.getBotId(), productMap);
+                        productMap = (Map) this.groupManager.autoBuyProductMap.getOrDefault(bot.getBotId()+"", new ConcurrentHashMap());
+                        this.groupManager.autoBuyProductMap.put(bot.getBotId()+"", productMap);
                         StringBuilder s = new StringBuilder();
                         Iterator var10 = productMap.values().iterator();
 
@@ -479,7 +481,7 @@ public class TestService {
                                     if (StringUtils.isNotBlank(name)) {
                                         boolean b = !("渡厄丹,寒铁铸心炉,陨铁炉,雕花紫铜炉").contains(name);
                                         boolean isMakeDan = !MAKE_DAN_SET.contains(name);
-                                        if (message.endsWith("一键炼金") && b && isMakeDan) {
+                                        if (message.endsWith("一键炼金") && b && isMakeDan && !this.groupManager.isAlchemyExcluded(bot.getBotId(), name)) {
                                             if (botConfig.isStop()) {
                                                 botConfig.setStop(false);
                                                 return;
@@ -492,21 +494,8 @@ public class TestService {
                                             if (first != null) {
                                                 if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(name) * 1.1) {
                                                     group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice() + "万，炼金：" + ProductLowPrice.getLowPrice(name) + "万，不上架。"));
-                                                } else if (message.endsWith("一键上架")) {
-//                                                    for (int j = 0; j < quantity; ++j) {
-//                                                        if (botConfig.isStop()) {
-//                                                            botConfig.setStop(false);
-//                                                            return;
-//                                                        }
+                                                } else if (message.endsWith("一键上架") && !this.groupManager.isSellExcluded(bot.getBotId(), name)) {
 //
-//                                                        if (first.getPrice() > 1000 && (double) (first.getPrice() - 10) * 0.85 < 900.0) {
-//                                                            group.sendMessage((new MessageChain()).at("3889001741").text("确认坊市上架 " + first.getName() + " " + 10000000));
-//                                                        } else {
-//                                                            group.sendMessage((new MessageChain()).at("3889001741").text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000));
-//                                                        }
-//
-//                                                        Thread.sleep(4000L);
-//                                                    }
                                                     int remaining = quantity;
                                                     while (remaining > 0) {
                                                         if (botConfig.isStop()) {
@@ -524,7 +513,7 @@ public class TestService {
                                                         }
 
                                                         remaining -= batchSize;
-                                                        Thread.sleep(4000L);
+                                                        Thread.sleep(3000L);
                                                     }
                                                 }
                                             }
@@ -583,6 +572,7 @@ public class TestService {
             sb.append("弟子听令执行命令××\n");
             sb.append("弟子听令循环执行××\n");
             sb.append("弟子听令循环执行命令××\n");
+            sb.append("查看/添加/移除炼金排除物品××&××\n");
             sb.append("－－－－－其它设置－－－－－\n");
             sb.append("设置主号 QQ号&QQ号\n");
             sb.append("设置提醒群号 QQ群号&QQ群号\n");
@@ -967,17 +957,30 @@ public class TestService {
     }
 
     private void processCommand(Bot bot, Group group, MessageChain messageChain, String command) {
-        int time = 0;
+        int time = 2;
         int count = 0;
+        String action = "";
+        if(command.contains("循环执行") && command.contains("听令")){
+            Pattern pattern = Pattern.compile(".*执行(.*?)\\s+循环(\\d+)");
+            Matcher matcher = pattern.matcher(command);
+
+            if (matcher.find()) {
+                action = matcher.group(1);  // 提取"宗门闭关"
+                count = Integer.parseInt(matcher.group(2));  // 提取数字
+            } else {
+                group.sendMessage((new MessageChain()).text("循环指令格式不正确 举例：听令1循环执行宗门闭关 循环3"));
+                return;
+            }
+        }
         if (command.startsWith("听令1循环执行")) {
-            messageChain.set(0, new TextMessage(command.substring(7)));
+            messageChain.set(0, new TextMessage(action));
             this.forSendMessage(bot, group, messageChain, count, time);
         } else if (command.startsWith("听令2循环执行")) {
-            messageChain.set(0, new TextMessage(command.substring(7)));
+            messageChain.set(0, new TextMessage(action));
             messageChain.add(0, new AtMessage("3889001741"));
             this.forSendMessage(bot, group, messageChain, count, time);
         }else if (command.startsWith("听令3循环执行")) {
-            messageChain.set(0, new TextMessage(command.substring(6)));
+            messageChain.set(0, new TextMessage(action));
             messageChain.add(0, new AtMessage("3889029313"));
             this.forSendMessage(bot, group, messageChain, count, time);
         } else if (command.startsWith("听令1")) {

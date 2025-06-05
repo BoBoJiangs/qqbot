@@ -34,6 +34,7 @@ bot:
     enableGroupManager: false
     #悬赏令价格限制（超过这个价格会优先接取）
     xslPriceLimit: 1000
+    botNumber: 3
 
 spring:
   datasource:

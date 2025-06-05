@@ -44,6 +44,8 @@ public class PriceTask {
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
     public static  String targetDir = "./";
+    @Autowired
+    private GroupManager groupManager;
     public PriceTask() {
 
     }
@@ -716,7 +718,7 @@ public class PriceTask {
                         productPrice.setPrice((int)price);
                         productPrice.setCode(code);
                         productPrice.setTime(now);
-                        Map<String, ProductPrice> productMap = (Map)TestService.AUTO_BUY_PRODUCT.computeIfAbsent(bot.getBotId(), (k) -> {
+                        Map<String, ProductPrice> productMap = (Map)this.groupManager.autoBuyProductMap.computeIfAbsent(bot.getBotId()+"", (k) -> {
                             return new ConcurrentHashMap();
                         });
                         ProductPrice existingProduct = (ProductPrice)productMap.get(itemName);

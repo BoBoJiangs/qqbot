@@ -5,6 +5,9 @@
 
 package top.sshh.qqbot.service;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONObject;
+import com.alibaba.fastjson2.TypeReference;
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
@@ -28,6 +31,7 @@ import top.sshh.qqbot.data.RemindTime;
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
@@ -43,6 +47,7 @@ public class GroupManager {
     private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Map<String, RemindTime> mjXslmap = new ConcurrentHashMap();
     Map<String, RemindTime> ltmap = new ConcurrentHashMap();
+
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
     private static final List<String> MJ_TEXT_LIST = Arrays.asList(" 【秘境结算提醒】秘境试炼已结束！此番奇遇定让您感悟大道，快查看收获，或许有突破境界的机缘！",
             "【秘境结算提醒】叮！秘境探索结算中，本次收获：四库全书 1 本，戏书 1 本，以及队友的嫌弃三连～",
@@ -67,14 +72,18 @@ public class GroupManager {
             "【灵田结算提醒】灵田中的灵植焕发生机！此刻收取，定能收获满满灵气，助您修为一日千里！",
             "【灵田结算提醒】灵植成熟可收！您的灵田培育出的珍稀作物，能为您带来意想不到的修仙助力！",
             "【灵田结算提醒】灵田收获时间到！这片充满灵气的土地，为您孕育出了珍贵的灵植，速来采摘！");
-    private static final String FILE_PATH = "./cache/task_data.ser";
+    private static final String FILE_PATH = "./cache/task_data.json";
 //    @Value("${botId}")
 //    private Long botId;
-    public Map<Long, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
+
     public static List<Long> remindGroupIdList = Arrays.asList(1023764416L,971327442L,679831529L,824484501L,690933736L,978207420L);
     @Autowired
     public DanCalculator danCalculator;
-    private Map<Long, Map<String, PendingLingTianRecord>> pendingLingTianRecords = new ConcurrentHashMap();
+    private Map<String, Map<String, PendingLingTianRecord>> pendingLingTianRecords = new ConcurrentHashMap();
+    private Map<String, Set<String>> excludeAlchemyMap = new ConcurrentHashMap();
+    private Map<String, Set<String>> excludeSellMap = new ConcurrentHashMap();
+    public Map<String, Map<String, ProductPrice>> autoBuyProductMap = new ConcurrentHashMap();
+    public Map<String, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
 
     public GroupManager() {
 
@@ -88,11 +97,72 @@ public class GroupManager {
         BotConfig botConfig = bot.getBotConfig();
         message = message.trim();
         if (message.equals("清空发言统计")) {
-            MESSAGE_NUMBER_MAP.put(bot.getBotId(), new MessageNumber(0,  System.currentTimeMillis()));
+            MESSAGE_NUMBER_MAP.put(bot.getBotId()+"", new MessageNumber(0,  System.currentTimeMillis()));
             group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
         }else if (message.equals("同步发言统计")) {
             saveTasksToFile();
             group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
+        }else if (message.equals("同步数据")) {
+            saveTasksToFile();
+            group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
+        }
+
+        Long botId;
+        Long groupId;
+        String groupString;
+        if (message.startsWith("添加上架排除物品")) {
+            botId = bot.getBotId();
+            groupString = message.substring(8).trim();
+            this.modifyExcludeSell(botId, groupString, true);
+            group.sendMessage((new MessageChain()).reply(messageId).text("添加成功"));
+            return;
+        }
+
+        if (message.startsWith("移除上架排除物品")) {
+            botId = bot.getBotId();
+            groupString = message.substring(8).trim();
+            if(StringUtils.isNotBlank(groupString)){
+                this.modifyExcludeSell(botId, groupString, false);
+            }else{
+                excludeSellMap.clear();
+            }
+
+            group.sendMessage((new MessageChain()).reply(messageId).text("移除成功"));
+            return;
+        }
+
+        String typeString;
+        if ("查看上架排除物品".equals(message)) {
+            typeString = this.getExcludeSellList(bot.getBotId());
+            group.sendMessage((new MessageChain()).reply(messageId).text("当前上架排除物品：\n" + typeString));
+            return;
+        }
+
+        if (message.startsWith("添加炼金排除物品")) {
+            botId = bot.getBotId();
+            groupString = message.substring(8).trim();
+            this.modifyExcludeAlchemy(botId, groupString, true);
+            group.sendMessage((new MessageChain()).reply(messageId).text("添加成功"));
+            return;
+        }
+
+        if (message.startsWith("移除炼金排除物品")) {
+
+            botId = bot.getBotId();
+            groupString = message.substring(8).trim();
+            if(StringUtils.isNotBlank(groupString)){
+                this.modifyExcludeAlchemy(botId, groupString, false);
+            }else{
+                excludeAlchemyMap.clear();
+            }
+
+            group.sendMessage((new MessageChain()).reply(messageId).text("移除成功"));
+            return;
+        }
+
+        if ("查看炼金排除物品".equals(message)) {
+            typeString = this.getExcludeAlchemyList(bot.getBotId());
+            group.sendMessage((new MessageChain()).reply(messageId).text("当前炼金排除物品：\n" + typeString));
         }
 
     }
@@ -102,7 +172,7 @@ public class GroupManager {
     public void executeMessageTask() {
         logger.info("定时清空发言统计");
         BotFactory.getBots().values().forEach((bot) -> {
-            MESSAGE_NUMBER_MAP.put(bot.getBotId(), new MessageNumber(0,  System.currentTimeMillis()));
+            MESSAGE_NUMBER_MAP.put(bot.getBotId()+"", new MessageNumber(0,  System.currentTimeMillis()));
 
         });
     }
@@ -124,7 +194,7 @@ public class GroupManager {
             String userName = member.getCard().trim();
             Long userId = member.getUserId();
             Long groupId = group.getGroupId();
-            ((Map)this.pendingLingTianRecords.computeIfAbsent(groupId, (k) -> {
+            ((Map)this.pendingLingTianRecords.computeIfAbsent(groupId+"", (k) -> {
                 return new ConcurrentHashMap();
             })).put(userName, new PendingLingTianRecord(userName, userId, groupId));
         }
@@ -146,46 +216,164 @@ public class GroupManager {
     }
 
     public synchronized void saveTasksToFile() {
+//        try {
+//            ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(FILE_PATH)));
+//            Map<String, Object> data = new HashMap();
+//            data.put("灵田", this.ltmap);
+//            data.put("发言统计", MESSAGE_NUMBER_MAP);
+//            data.put("自动购买", this.autoBuyProductMap);
+//            data.put("炼金排除", this.excludeAlchemyMap);
+//            data.put("上架排除", this.excludeSellMap);
+//            oos.writeObject(data);
+////            oos.writeChars(JSON.toJSONString(data));
+//            oos.close();
+//        } catch (Throwable var5) {
+//            logger.error("任务数据保存失败：", var5);
+//        }
+
         try {
-            ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(FILE_PATH)));
-            Map<String, Object> data = new HashMap();
+            Map<String, Object> data = new HashMap<>();
             data.put("灵田", this.ltmap);
             data.put("发言统计", MESSAGE_NUMBER_MAP);
-            oos.writeObject(data);
-            oos.close();
-        } catch (Throwable var5) {
-            logger.error("任务数据保存失败：", var5);
+            data.put("自动购买", this.autoBuyProductMap);
+            data.put("炼金排除", this.excludeAlchemyMap);
+            data.put("上架排除", this.excludeSellMap);
+
+            // 直接写入JSON字节（UTF-8编码）
+            Files.write(Paths.get(FILE_PATH),
+                    JSON.toJSONString(data).getBytes(StandardCharsets.UTF_8));
+
+        } catch (Throwable e) {
+            logger.error("任务数据保存失败：", e);
         }
 
         logger.info("正在保存 {} 个灵田任务 {}个发言统计", this.ltmap.size(),MESSAGE_NUMBER_MAP.size());
     }
 
-    private synchronized void loadTasksFromFile() {
-        File dataFile = new File(FILE_PATH);
-        if (dataFile.exists()) {
-            try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(dataFile.toPath()))) {
-                Map<String, Object> data = (Map)ois.readObject();
+    public synchronized void loadTasksFromFile() {
+        try {
+            // 读取JSON文件
+            byte[] jsonBytes = Files.readAllBytes(Paths.get(FILE_PATH));
+            String jsonStr = new String(jsonBytes, StandardCharsets.UTF_8);
 
-                // 安全初始化 map
-                this.ltmap = data.containsKey("灵田") ?
-                        (ConcurrentHashMap<String, RemindTime>)data.get("灵田") :
-                        new ConcurrentHashMap<>();
+            // 解析JSON（使用TypeReference处理复杂泛型）
+            JSONObject data = JSON.parseObject(jsonStr);
 
-                this.MESSAGE_NUMBER_MAP = data.containsKey("发言统计") ?
-                        (ConcurrentHashMap<Long, MessageNumber>)data.get("发言统计") :
-                        new ConcurrentHashMap<>();
+            // 1. 处理灵田数据（Map<String, RemindTime>）
+            this.ltmap = data.getObject("灵田",
+                    new TypeReference<Map<String, RemindTime>>() {});
 
-            } catch (Exception e) {
-                logger.error("任务数据加载失败，初始化空map", e);
-                this.ltmap = new ConcurrentHashMap<>();
-                this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
-            }
-        } else {
-            logger.warn("未找到序列化文件，初始化空map");
-            this.ltmap = new ConcurrentHashMap<>();
-            this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
+            // 2. 处理发言统计（Map<String, MessageNumber>）
+            this.MESSAGE_NUMBER_MAP = data.getObject("发言统计",
+                    new TypeReference<Map<String, MessageNumber>>() {});
+
+            // 3. 处理自动购买（嵌套Map）
+            this.autoBuyProductMap = data.getObject("自动购买",
+                    new TypeReference<Map<String, Map<String, ProductPrice>>>() {});
+
+            // 4. 处理排除列表
+            this.excludeAlchemyMap = data.getObject("炼金排除",
+                    new TypeReference<Map<String, Set<String>>>() {});
+            this.excludeSellMap = data.getObject("上架排除",
+                    new TypeReference<Map<String, Set<String>>>() {});
+
+            logger.info("加载成功：{} 个灵田任务，{} 条发言统计",
+                    ltmap.size(), MESSAGE_NUMBER_MAP.size());
+        } catch (Throwable e) {
+            logger.error("数据加载失败：", e);
+            initDefaultData();
         }
     }
+
+    private void initDefaultData() {
+        this.ltmap = new ConcurrentHashMap<>();
+        this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
+        this.autoBuyProductMap = new ConcurrentHashMap<>();
+        this.excludeAlchemyMap = new ConcurrentHashMap<>();
+        this.excludeSellMap = new ConcurrentHashMap<>();
+    }
+
+    public String getExcludeAlchemyList(Long botId) {
+        Set<String> items = (Set)this.excludeAlchemyMap.getOrDefault(botId+"", ConcurrentHashMap.newKeySet());
+        return items.isEmpty() ? "无炼金排除道具" : StringUtils.join(items, "\n");
+    }
+
+    public void modifyExcludeAlchemy(Long botId, String itemsStr, boolean isAdd) {
+        Set<String> items = (Set)this.excludeAlchemyMap.computeIfAbsent(botId+"", (k) -> {
+            return ConcurrentHashMap.newKeySet();
+        });
+        Arrays.stream(itemsStr.split("[&＆]")).map(String::trim).filter(StringUtils::isNotBlank).forEach((item) -> {
+            if (isAdd) {
+                items.add(item);
+            } else {
+                items.remove(item);
+            }
+
+        });
+        this.saveTasksToFile();
+    }
+
+    public String getExcludeSellList(Long botId) {
+        Set<String> items = (Set)this.excludeSellMap.getOrDefault(botId+"", ConcurrentHashMap.newKeySet());
+        return items.isEmpty() ? "无上架排除道具" : StringUtils.join(items, "\n");
+    }
+
+    public void modifyExcludeSell(Long botId, String itemsStr, boolean isAdd) {
+        Set<String> items = (Set)this.excludeSellMap.computeIfAbsent(botId+"", (k) -> {
+            return ConcurrentHashMap.newKeySet();
+        });
+        Arrays.stream(itemsStr.split("[&＆]")).map(String::trim).filter(StringUtils::isNotBlank).forEach((item) -> {
+            if (isAdd) {
+                items.add(item);
+            } else {
+                items.remove(item);
+            }
+
+        });
+        this.saveTasksToFile();
+    }
+
+    public boolean isAlchemyExcluded(Long botId, String itemName) {
+        return ((Set)this.excludeAlchemyMap.getOrDefault(botId+"", Collections.emptySet())).contains(itemName);
+    }
+
+    public boolean isSellExcluded(Long botId, String itemName) {
+        return ((Set)this.excludeSellMap.getOrDefault(botId+"", Collections.emptySet())).contains(itemName);
+    }
+
+//    private synchronized void loadTasksFromFile() {
+//        File dataFile = new File(FILE_PATH);
+//        if (dataFile.exists()) {
+//            try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(dataFile.toPath()))) {
+//                Map<String, Object> data = (Map)ois.readObject();
+//
+//                // 安全初始化 map
+//                this.ltmap = data.containsKey("灵田") ?
+//                        (ConcurrentHashMap<String, RemindTime>)data.get("灵田") :
+//                        new ConcurrentHashMap<>();
+//
+//                this.MESSAGE_NUMBER_MAP = data.containsKey("发言统计") ?
+//                        (ConcurrentHashMap<Long, MessageNumber>)data.get("发言统计") :
+//                        new ConcurrentHashMap<>();
+//
+//                this.excludeAlchemyMap = data.containsKey("炼金排除") ?
+//                        (ConcurrentHashMap<Long, Set<String>>)data.get("炼金排除") :
+//                        new ConcurrentHashMap<>();
+//
+//                this.excludeSellMap = data.containsKey("上架排除") ?
+//                        (ConcurrentHashMap<Long, Set<String>>)data.get("上架排除") :
+//                        new ConcurrentHashMap<>();
+//            } catch (Exception e) {
+//                logger.error("任务数据加载失败，初始化空map", e);
+//                this.ltmap = new ConcurrentHashMap<>();
+//                this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
+//            }
+//        } else {
+//            logger.warn("未找到序列化文件，初始化空map");
+//            this.ltmap = new ConcurrentHashMap<>();
+//            this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
+//        }
+//    }
 
     @GroupMessageHandler(
             isAt = true,
@@ -244,7 +432,7 @@ public class GroupManager {
             if (MESSAGE_NUMBER_MAP == null) {
                 MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
             }
-            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId());
+            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
             if(messageNumber == null){
                 messageNumber = new MessageNumber();
                 messageNumber.setNumber(1);
@@ -263,11 +451,11 @@ public class GroupManager {
                     (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) ) {
                 bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
             }
-            MESSAGE_NUMBER_MAP.put(bot.getBotId(), messageNumber);
+            MESSAGE_NUMBER_MAP.put(bot.getBotId()+"", messageNumber);
         }
         message = message.trim();
         if (message.equals("发言统计")) {
-            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId());
+            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
             if(messageNumber!=null){
                 StringBuilder sb = new StringBuilder();
                 sb.append("今日发言次数：").append(messageNumber.getNumber()).append("\n");
