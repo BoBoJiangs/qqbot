@@ -379,18 +379,46 @@ public class GroupManager {
             isAt = true,
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
-    public void 我要头衔(final Bot bot, final Group group, final Member member, MessageChain messageChain, String message, Integer messageId) {
+    public void 群管设置(final Bot bot, final Group group, final Member member, MessageChain messageChain, String message, Integer messageId) {
+        boolean isControlQQ = false;
+        if (StringUtils.isNotBlank(bot.getBotConfig().getControlQQ())) {
+            isControlQQ = ("&" + bot.getBotConfig().getControlQQ() + "&").contains("&" + member.getUserId() + "&");
+        } else {
+            isControlQQ = bot.getBotConfig().getMasterQQ() == member.getUserId();
+        }
         if (bot.getBotConfig().isEnableSelfTitle() && message.contains("我要头衔")) {
             final String specialTitle = message.substring(message.indexOf("我要头衔") + 4).trim();
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
                         bot.setGroupSpecialTitle(member.getUserId(), specialTitle, 0, group.getGroupId());
-                    } catch (Exception var2) {
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
 
                 }
             });
+        }
+        if (isControlQQ && (message.contains("上管") || message.contains("下管"))) {
+            try {
+                Pattern pattern = Pattern.compile("(上管|下管)[@]?(\\d{5,12})");
+                Matcher matcher = pattern.matcher(message);
+
+                while (matcher.find()) {
+                    String type = matcher.group(1); // "上管"或"下管"
+                    String qqNumber = matcher.group(2); // QQ号
+                    customPool.submit(new Runnable() {
+                        public void run() {
+                            bot.setGroupAdmin(Long.parseLong(qqNumber),group.getGroupId(),type.equals("上管"));
+                            group.sendMessage((new MessageChain()).reply(messageId).text("操作成功"));
+                        }
+                    });
+
+                }
+            } catch (Exception e){
+                group.sendMessage((new MessageChain()).text("管理员设置失败，请注意格式：@我+上管/下管+QQ号" ));
+                e.printStackTrace();
+            }
         }
 
     }

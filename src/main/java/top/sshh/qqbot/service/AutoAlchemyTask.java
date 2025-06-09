@@ -76,7 +76,8 @@ public class AutoAlchemyTask {
                     try {
                         AutoAlchemyTask.clearFile(targetDir+"背包药材.txt");
                         group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
-                    } catch (Exception var2) {
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
 
                 }

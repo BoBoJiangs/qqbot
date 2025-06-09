@@ -89,7 +89,7 @@ public class TestService {
 
             if ("停止执行".equals(message)) {
                 botConfig.setStop(true);
-//                group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
+                group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
                 bot.getBotConfig().setCommand("");
             }
 
@@ -238,6 +238,13 @@ public class TestService {
                     group.sendMessage((new MessageChain()).reply(messageId).text("道友当前没有开启自动秘境结算哦！请发送 启用自动秘境 在使用该功能吧！"));
                 }
             }
+
+            if (message.startsWith("取消一键使用")) {
+                botConfig.setCommand("");
+                group.sendMessage((new MessageChain()).reply(messageId).text("取消成功"));
+            }
+
+
 
             if ("开启群管提醒".equals(message)) {
                 botConfig.setEnableGroupManager(true);
@@ -488,7 +495,7 @@ public class TestService {
                                             }
 
                                             group.sendMessage((new MessageChain()).at("3889001741").text("炼金 " + name + " " + quantity));
-                                            Thread.sleep(4000L);
+                                            Thread.sleep(3000L);
                                         } else {
                                             ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
                                             if (first != null) {
@@ -683,7 +690,7 @@ public class TestService {
             senderIds = {3889001741L}
     )
     public void 一键炼金上架(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,group);
         BotConfig botConfig;
         if (isAtSelf && message.contains("的丹药背包")) {
             botConfig = bot.getBotConfig();
@@ -715,7 +722,7 @@ public class TestService {
             senderIds = {3889001741L}
     )
     public void 自动刷天赋(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,group);
         if (isStartAutoTalent && isAtSelf && message.contains("保留24h，超时则无法选择")) {
             List<TextMessage> messageList = messageChain.getMessageByType(TextMessage.class);
             String text = messageList.get(messageList.size() - 1).getText();
@@ -897,7 +904,9 @@ public class TestService {
     }
 
 
-
+    List<Bot> botList = new ArrayList<>();
+    String command;
+    boolean isFirst = true;
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
@@ -905,6 +914,10 @@ public class TestService {
         if (!messageChain.stream().anyMatch((msg) -> {
             return msg instanceof ReplyMessage;
         })) {
+            boolean isControlQQ = this.checkControlQQ(bot, member);
+            if (!isControlQQ) {
+                return;
+            }
             String botNumber = String.valueOf(bot.getBotConfig().getBotNumber());
             String aiCheng = bot.getBotConfig().getAiCheng();
             List<String> prefixes = new ArrayList();
@@ -925,7 +938,7 @@ public class TestService {
                 }
             }
 
-            boolean isControlQQ = this.checkControlQQ(bot, member);
+
             String commandPrefix = null;
             Iterator var17 = prefixes.iterator();
 
@@ -936,13 +949,28 @@ public class TestService {
                     break;
                 }
             }
-
-            if (isControlQQ && commandPrefix != null) {
-                String command = ((TextMessage) messageChain.get(0)).getText().trim();
+            if (commandPrefix != null) {
+                 command = ((TextMessage) messageChain.get(0)).getText().trim();
                 command = command.substring(commandPrefix.length()).trim();
                 messageChain.set(0, new TextMessage(command));
+                botList.add(bot);
+                log.info("bot--------", botList.size());
+                CompletableFuture.runAsync(() -> {
+                    try {
+                        if(isFirst){
+                            isFirst = false;
+                            TimeUnit.SECONDS.sleep(3);
 
-                this.processCommand(bot, group, messageChain, command);
+                            log.info("bot====sise{}", botList.size());
+                            this.processCommand(group.getGroupId(), command);
+                        }
+
+                    } catch (InterruptedException var4) {
+                        Thread.currentThread().interrupt();
+                    }
+
+                });
+
             }
 
         }
@@ -956,47 +984,53 @@ public class TestService {
         }
     }
 
-    private void processCommand(Bot bot, Group group, MessageChain messageChain, String command) {
+    private void processCommand(long groupId, String command) {
         int time = 2;
         int count = 0;
         String action = "";
-        if(command.contains("循环执行") && command.contains("听令")){
-            Pattern pattern = Pattern.compile(".*执行(.*?)\\s+循环(\\d+)");
-            Matcher matcher = pattern.matcher(command);
+//        if(command.contains("循环") && command.contains("听令")){
+//            Pattern pattern = Pattern.compile(".*执行(.*?)\\s+循环(\\d+)");
+//            Matcher matcher = pattern.matcher(command);
+//
+//            if (matcher.find()) {
+//                action = matcher.group(1);  // 提取"宗门闭关"
+//                count = Integer.parseInt(matcher.group(2));  // 提取数字
+//            } else {
+//                group.sendMessage((new MessageChain()).text("循环指令格式不正确 举例：听令1循环执行宗门闭关 循环3"));
+//                return;
+//            }
+//        }
+        for(Bot bot : botList){
+            MessageChain messageChain = new MessageChain();
+            if (command.startsWith("听令1循环执行")) {
+                messageChain.add(new TextMessage(action));
+                this.forSendMessage(bot, bot.getGroup(groupId), messageChain, count, time);
+            } else if (command.startsWith("听令2循环执行")) {
 
-            if (matcher.find()) {
-                action = matcher.group(1);  // 提取"宗门闭关"
-                count = Integer.parseInt(matcher.group(2));  // 提取数字
-            } else {
-                group.sendMessage((new MessageChain()).text("循环指令格式不正确 举例：听令1循环执行宗门闭关 循环3"));
-                return;
+                messageChain.add(new AtMessage("3889001741"));
+                messageChain.add(new TextMessage(action));
+                this.forSendMessage(bot,  bot.getGroup(groupId), messageChain, count, time);
+            }else if (command.startsWith("听令3循环执行")) {
+                messageChain.set(0, new TextMessage(action));
+                messageChain.add(0, new AtMessage("3889029313"));
+                this.forSendMessage(bot,  bot.getGroup(groupId), messageChain, count, time);
+            } else if (command.startsWith("听令1")) {
+
+                messageChain.set(0, new TextMessage(command.substring(3)));
+                bot.getGroup(groupId).sendMessage(messageChain);
+            } else if (command.startsWith("听令2")) {
+                messageChain.add(new TextMessage(command.substring(3)));
+                messageChain.add(new AtMessage("3889001741"));
+                this.forSendMessage(bot, bot.getGroup(groupId), messageChain, 1, time);
+//                bot.getGroup(groupId).sendMessage(messageChain);
+            }else if (command.startsWith("听令3")) {
+                messageChain.set(0, new TextMessage(command.substring(3)));
+                messageChain.add(0, new AtMessage("3889029313"));
+                bot.getGroup(groupId).sendMessage(messageChain);
             }
         }
-        if (command.startsWith("听令1循环执行")) {
-            messageChain.set(0, new TextMessage(action));
-            this.forSendMessage(bot, group, messageChain, count, time);
-        } else if (command.startsWith("听令2循环执行")) {
-            messageChain.set(0, new TextMessage(action));
-            messageChain.add(0, new AtMessage("3889001741"));
-            this.forSendMessage(bot, group, messageChain, count, time);
-        }else if (command.startsWith("听令3循环执行")) {
-            messageChain.set(0, new TextMessage(action));
-            messageChain.add(0, new AtMessage("3889029313"));
-            this.forSendMessage(bot, group, messageChain, count, time);
-        } else if (command.startsWith("听令1")) {
-
-            messageChain.set(0, new TextMessage(command.substring(3)));
-            group.sendMessage(messageChain);
-        } else if (command.startsWith("听令2")) {
-            messageChain.set(0, new TextMessage(command.substring(3)));
-            messageChain.add(0, new AtMessage("3889001741"));
-            group.sendMessage(messageChain);
-        }else if (command.startsWith("听令3")) {
-            messageChain.set(0, new TextMessage(command.substring(3)));
-            messageChain.add(0, new AtMessage("3889029313"));
-            group.sendMessage(messageChain);
-        }
-
+        botList.clear();
+        isFirst = true;
     }
 
     @GroupMessageHandler(
@@ -1008,8 +1042,7 @@ public class TestService {
         });
         if (!hasReplyMessage) {
             boolean isMatcher = false;
-            boolean isControlQQ = StringUtils.isNotBlank(bot.getBotConfig().getControlQQ()) ? ("&" + bot.getBotConfig().getControlQQ() + "&").contains("&" + member.getUserId() + "&") : bot.getBotConfig().getMasterQQ() == member.getUserId();
-            if (isControlQQ && message.contains("弟子听令") && message.contains("执行")) {
+            if (checkControlQQ(bot, member)  && message.contains("弟子听令") && message.contains("执行")) {
                 Pattern pattern = Pattern.compile("弟子听令(\\d*)执行");
                 Matcher matcher = pattern.matcher(message);
                 int delaySeconds = 0;
@@ -1080,14 +1113,9 @@ public class TestService {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 执行命令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        boolean isControlQQ = false;
-        if (StringUtils.isNotBlank(bot.getBotConfig().getControlQQ())) {
-            isControlQQ = ("&" + bot.getBotConfig().getControlQQ() + "&").contains("&" + member.getUserId() + "&");
-        } else {
-            isControlQQ = bot.getBotConfig().getMasterQQ() == member.getUserId();
-        }
 
-        if (isControlQQ && message.contains("执行") && message.startsWith("@")) {
+
+        if (checkControlQQ(bot, member) && message.contains("执行") && message.startsWith("@")) {
             Iterator iterator = messageChain.iterator();
 
             Message timeMessage;
@@ -1260,14 +1288,9 @@ public class TestService {
                 }
             }
 
-            boolean isControlQQ = false;
-            if (StringUtils.isNotBlank(bot.getBotConfig().getControlQQ())) {
-                isControlQQ = ("&" + bot.getBotConfig().getControlQQ() + "&").contains("&" + member.getUserId() + "&");
-            } else {
-                isControlQQ = bot.getBotConfig().getMasterQQ() == member.getUserId();
-            }
 
-            if (isControlQQ) {
+
+            if (checkControlQQ(bot, member)) {
                 if (message.startsWith("弟子听令循环执行命令")) {
                     messageChain.set(0, new TextMessage(message.substring(message.indexOf("弟子听令循环执行命令") + 10)));
                     this.executeSendAllMessage(group, messageChain, count, time);
@@ -1370,7 +1393,7 @@ public class TestService {
     )
     public void 秘境(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,group);
         if (botConfig.isEnableAutoSecret() && isAtSelf) {
             LocalDateTime now = LocalDateTime.now();
             if (message.contains("正在秘境中") && message.contains("分身乏术")) {
@@ -1432,7 +1455,7 @@ public class TestService {
     public void 悬赏令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,group);
         if (isGroup && isAtSelf && botConfig.getRewardMode() != 1) {
             if (message.contains("在做悬赏令呢") && message.contains("分身乏术")) {
                 botConfig.setStartScheduled(false);
@@ -1494,8 +1517,7 @@ public class TestService {
     )
     public void 悬赏令接取(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isAtSelf = isAtSelf(message, bot);
-
+        boolean isAtSelf = isAtSelf(message, bot,group);
         if ((botConfig.getRewardMode() == 3 || botConfig.getRewardMode() == 4 || botConfig.getRewardMode() == 5)
                 && isAtSelf
                 && (message.contains("道友的个人悬赏令") || message.contains("天机悬赏令"))) {
@@ -1606,8 +1628,13 @@ public class TestService {
         return successRates;
     }
 
-    private boolean isAtSelf(String message, Bot bot) {
-        return message.contains("@" + bot.getBotId()) || message.contains("@" + bot.getBotName());
+    private boolean isAtSelf(String message, Bot bot,Group group) {
+        String botName = bot.getBotName();
+        String cardName = group.getMember(bot.getBotId()).getCard();
+        if(StringUtils.isNotBlank(cardName)){
+            botName = cardName;
+        }
+        return message.contains("@" + bot.getBotId()) || message.contains("@" + botName);
     }
 
     public static List<Long> extractRewards(String input) {
@@ -1686,7 +1713,7 @@ public class TestService {
         }
 
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,group);
         if (botConfig.getRewardMode() != 1 && isGroup && isAtSelf) {
             if (message.contains("悬赏令结算") && message.contains("增加修为")) {
                 bot.getBotConfig().setXslTime(-1L);

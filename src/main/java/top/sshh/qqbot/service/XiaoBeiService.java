@@ -159,7 +159,6 @@ public class XiaoBeiService {
 
         if ("停止执行".equals(message)) {
             botConfig.setStop(true);
-            group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
             botConfig.setCommand("");
         }
 

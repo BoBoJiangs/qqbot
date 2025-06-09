@@ -18,6 +18,8 @@ import com.zhuangxv.bot.message.support.ReplyMessage;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.BountyInfo;
@@ -40,6 +42,7 @@ import static top.sshh.qqbot.service.GroupManager.remindGroupIdList;
 
 @Component
 public class PriceTask {
+    private static final Logger logger = LoggerFactory.getLogger(PriceTask.class);
     @Autowired
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
@@ -482,127 +485,277 @@ public class PriceTask {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 查上架价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (bot.getBotConfig().isEnableCheckPrice() && (message.contains("价格") || message.contains("上架") || message.contains("查询") || message.contains("坊市") || message.contains("炼金"))) {
-            StringBuilder stringBuilder = new StringBuilder();
-            long count = 0L;
-            List<ReplyMessage> replyMessageList = messageChain.getMessageByType(ReplyMessage.class);
-            String s;
-            if (replyMessageList != null && !replyMessageList.isEmpty()) {
-                ReplyMessage replyMessage = (ReplyMessage)replyMessageList.get(0);
-                MessageChain replyMessageChain = replyMessage.getChain();
-                if (replyMessageChain != null) {
-                    List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
-                    if (textMessageList != null && !textMessageList.isEmpty()) {
-                        TextMessage textMessage = (TextMessage)textMessageList.get(textMessageList.size() - 1);
-                        s = textMessage.getText();
-                        String[] lines = s.split("\n");
-
-                        String line;
-                        for(int i = 0; i < lines.length - 1; ++i) {
-                            line = lines[i];
-                            if (line.startsWith("名字：") || line.startsWith("上品") || line.startsWith("下品") || line.startsWith("极品") || line.startsWith("无上仙器") || line.endsWith("功法") || line.endsWith("神通")) {
-                                String name = "";
-                                if (line.startsWith("名字：")) {
-                                    name = line.substring(3).trim();
-                                } else if (!line.endsWith("功法") && !line.endsWith("神通")) {
-                                    if (line.startsWith("上品") || line.startsWith("下品") || line.startsWith("极品") || line.startsWith("无上仙器")) {
-                                        name = line.substring(4).trim();
-                                    }
-                                } else if (line.contains("辅修")) {
-                                    name = line.substring(0, line.length() - 8).trim();
-                                } else {
-                                    name = line.substring(0, line.length() - 6).trim();
-                                }
-
-                                if (name.startsWith("法器")) {
-                                    name = name.substring(2);
-                                }
-
-                                lines[i + 1] = lines[i + 1].replace("已装备", "");
-                                int quantity = 1;
-                                if (lines[i + 1].contains("拥有数量")) {
-                                    Pattern pattern = Pattern.compile("\\d+");
-                                    Matcher matcher = pattern.matcher(lines[i + 1]);
-                                    if (matcher.find()) {
-                                        String numberStr = matcher.group();
-                                        quantity = Integer.parseInt(numberStr);
-                                    }
-                                }
-
-                                name = name.replaceAll("\\s", "");
-                                if (StringUtils.isNotBlank(name)) {
-                                    if (message.contains("炼金")) {
-                                        int price = ProductLowPrice.getLowPrice(name);
-                                        if (price > 0) {
-                                            count += (long)price * (long)quantity;
-                                            stringBuilder.append("炼金 ").append(name).append(" ").append(quantity).append(" 总价:").append((long)price * (long)quantity).append("万");
-                                            stringBuilder.append("\n");
-                                        }
-                                    } else {
-                                        ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.replaceAll("\\s", ""));
-                                        if (first != null) {
-                                            count += ((long)first.getPrice() - 10L) * (long)quantity;
-                                            if (quantity < 5) {
-                                                for(int j = 0; j < quantity; ++j) {
-                                                    stringBuilder.append("确认坊市上架 ").append(first.getName()).append(" ").append((long)first.getPrice() * 10000L);
-                                                    stringBuilder.append("\n");
-                                                }
-                                            } else {
-                                                stringBuilder.append("确认坊市上架 ").append(first.getName()).append(" ").append((long)first.getPrice() * 10000L);
-                                                stringBuilder.append("\n");
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        line = "\n使用前请先@小小查看坊市药材\n自动生成坊市价格\n";
-                        if (!message.contains("炼金")) {
-                            stringBuilder.append(line);
-                        } else {
-                            stringBuilder.append("\n");
-                        }
-
-                        if (count > 10000L) {
-                            stringBuilder.append("总价值：" + String.format("%.2f", (double)count / 10000.0) + " 亿");
-                        } else {
-                            stringBuilder.append("总价值：" + count + " 万");
-                        }
-
-                        if (count == 0L) {
-                            return;
-                        }
-
-                        group.sendMessage((new MessageChain()).reply(messageId).text(stringBuilder.toString()));
-                        return;
-                    }
-                }
-            }
-
-            message = message.replace("@" + bot.getBotId(), "").replace("查上架价格", "");
-            String[] split = message.split("\n");
-            String[] var27 = split;
-            int var28 = split.length;
-
-            for(int var15 = 0; var15 < var28; ++var15) {
-                s = var27[var15].replaceAll("\\s", "");
-                if (StringUtils.isNotBlank(s)) {
-                    ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(s.trim());
-                    if (first != null) {
-                        count += (long)(first.getPrice() - 10);
-                        stringBuilder.append("\n确认坊市上架 ").append(first.getName()).append(" ").append((long)(first.getPrice() - 10) * 10000L);
-                    }
-                }
-            }
-
-            if (count == 0L) {
-                return;
-            }
-
-            group.sendMessage((new MessageChain()).reply(messageId).text(stringBuilder.toString()));
+        if (!bot.getBotConfig().isEnableCheckPrice() || !containsAnyKeywords(message)) {
+            return;
         }
 
+        try {
+            PriceCalculationResult result = new PriceCalculationResult();
+
+            // 处理回复消息的情况
+            if (hasReplyMessage(messageChain)) {
+                processReplyMessage(messageChain, message, result);
+            } else {
+                // 处理直接查询的情况
+                processDirectQuery(message, result,bot);
+            }
+
+            // 如果计算结果有效，发送消息
+            if (result.count > 0L) {
+                sendResultMessage(group, messageId, message, result);
+            }
+        } catch (Exception e) {
+            logger.error("处理上架价格查询时出错", e);
+        }
+    }
+
+    // 辅助方法类
+    private class PriceCalculationResult {
+        long count = 0L;
+        long totalFee = 0L;
+        StringBuilder stringBuilder = new StringBuilder();
+    }
+
+    // 关键词检查
+    private boolean containsAnyKeywords(String message) {
+        String[] keywords = {"价格", "上架", "查询", "坊市", "炼金"};
+        return Arrays.stream(keywords).anyMatch(message::contains);
+    }
+
+    // 检查是否有回复消息
+    private boolean hasReplyMessage(MessageChain messageChain) {
+        List<ReplyMessage> replyMessageList = messageChain.getMessageByType(ReplyMessage.class);
+        return replyMessageList != null && !replyMessageList.isEmpty();
+    }
+
+    // 处理回复消息
+    private void processReplyMessage(MessageChain messageChain, String message, PriceCalculationResult result) {
+        ReplyMessage replyMessage = messageChain.getMessageByType(ReplyMessage.class).get(0);
+        MessageChain replyMessageChain = replyMessage.getChain();
+
+        if (replyMessageChain != null) {
+            List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
+            if (textMessageList != null && !textMessageList.isEmpty()) {
+                processTextMessage(textMessageList.get(textMessageList.size() - 1).getText(), message, result);
+            }
+        }
+    }
+
+    // 处理文本消息内容
+    private void processTextMessage(String text, String originalMessage, PriceCalculationResult result) {
+        String[] lines = text.split("\n");
+
+        for (int i = 0; i < lines.length - 1; i++) {
+            String line = lines[i];
+            if (isItemLine(line)) {
+                String name = extractItemName(line);
+                if (StringUtils.isNotBlank(name)) {
+                    int quantity = extractQuantity(lines[i + 1]);
+                    processItem(name, quantity, originalMessage, result);
+                }
+            }
+        }
+
+        addSummaryInfo(originalMessage, result);
+    }
+
+    // 判断是否是物品行
+    private boolean isItemLine(String line) {
+        return line.startsWith("名字：") || line.startsWith("上品") || line.startsWith("下品")
+                || line.startsWith("极品") || line.startsWith("无上仙器")
+                || line.endsWith("功法") || line.endsWith("神通");
+    }
+
+    // 提取物品名称
+    private String extractItemName(String line) {
+        String name = "";
+        if (line.startsWith("名字：")) {
+            name = line.substring(3).trim();
+        } else if (line.startsWith("上品") || line.startsWith("下品")
+                || line.startsWith("极品") || line.startsWith("无上仙器")) {
+            name = line.substring(4).trim();
+        } else if (line.endsWith("功法") || line.endsWith("神通")) {
+            name = line.contains("辅修") ?
+                    line.substring(0, line.length() - 8).trim() :
+                    line.substring(0, line.length() - 6).trim();
+        }
+
+        if (name.startsWith("法器")) {
+            name = name.substring(2);
+        }
+
+        return name.replaceAll("\\s", "");
+    }
+
+    // 提取数量
+    private int extractQuantity(String line) {
+        line = line.replace("已装备", "");
+        if (line.contains("拥有数量")) {
+            Matcher matcher = Pattern.compile("\\d+").matcher(line);
+            return matcher.find() ? Integer.parseInt(matcher.group()) : 1;
+        }
+        return 1;
+    }
+
+    // 处理单个物品
+    private void processItem(String name, int quantity, String originalMessage, PriceCalculationResult result) {
+        if (originalMessage.contains("炼金")) {
+            processRefiningItem(name, quantity, result);
+        } else {
+            processMarketItem(name, quantity, result);
+        }
+    }
+
+    // 处理炼金物品
+    private void processRefiningItem(String name, int quantity, PriceCalculationResult result) {
+        int price = ProductLowPrice.getLowPrice(name);
+        if (price > 0) {
+            long totalPrice = (long) price * quantity;
+            result.count += totalPrice;
+            result.stringBuilder.append("炼金 ")
+                    .append(name).append(" ")
+                    .append(quantity).append(" 总价:")
+                    .append(totalPrice).append("万\n");
+        }
+    }
+
+    // 处理市场物品
+    private void processMarketItem(String name, int quantity, PriceCalculationResult result) {
+        ProductPrice product = productPriceResponse.getFirstByNameOrderByTimeDesc(name);
+        if (product != null) {
+            int adjustedPrice = calculateAdjustedPrice(product.getPrice());
+            double feeRate = calculateFeeRate(adjustedPrice);
+            long itemFee = (long) (adjustedPrice * feeRate * quantity);
+
+            result.totalFee += itemFee;
+            adjustedPrice = applyPriceAdjustments(adjustedPrice);
+            result.count += (long) adjustedPrice * quantity;
+
+            generateMarketListingCommands(result.stringBuilder, product.getName(), adjustedPrice, quantity);
+        }
+    }
+
+    // 计算调整后价格
+    private int calculateAdjustedPrice(int originalPrice) {
+        return originalPrice - 10; // 基础调整
+    }
+
+    // 计算手续费率
+    private double calculateFeeRate(int price) {
+        if (price <= 500) return 0.05;
+        if (price <= 1000) return 0.1;
+        if (price <= 1500) return 0.15;
+        if (price <= 2000) return 0.2;
+        return 0.3;
+    }
+
+    // 应用价格调整规则
+    private int applyPriceAdjustments(int price) {
+        if (price < 60) return 60;
+
+        double discountedPrice = price;
+        if (price > 500 && price <= 1000) {
+            discountedPrice = price * 0.9;
+            if (discountedPrice <= 475.0) return 500;
+        } else if (price > 1000 && price <= 1500) {
+            discountedPrice = price * 0.85;
+            if (discountedPrice <= 900.0) return 1000;
+        } else if (price > 1500 && price <= 2000) {
+            discountedPrice = price * 0.8;
+            if (discountedPrice <= 1600.0) return 2000;
+        }
+
+        return price;
+    }
+
+    // 生成市场上市命令
+    private void generateMarketListingCommands(StringBuilder sb, String name, int price, int quantity) {
+        if (quantity > 10 && quantity < 50) {
+            int batches = quantity / 10;
+            int remainder = quantity % 10;
+
+            for (int j = 0; j < batches; j++) {
+                sb.append("确认坊市上架 ")
+                        .append(name).append(" ")
+                        .append((long) price * 10000L).append(" ")
+                        .append(10).append("\n");
+            }
+
+            if (remainder > 0) {
+                sb.append("确认坊市上架 ")
+                        .append(name).append(" ")
+                        .append((long) price * 10000L).append(" ")
+                        .append(remainder).append("\n");
+            }
+        } else {
+            sb.append("确认坊市上架 ")
+                    .append(name).append(" ")
+                    .append((long) price * 10000L).append(" ")
+                    .append(quantity).append("\n");
+        }
+    }
+
+    // 添加摘要信息
+    private void addSummaryInfo(String originalMessage, PriceCalculationResult result) {
+        if (!originalMessage.contains("炼金")) {
+            result.stringBuilder.append("\n使用前请先@小小查看坊市药材\n自动生成坊市价格-10w\n已为您适配最优上架价格\n");
+        } else {
+            result.stringBuilder.append("\n");
+        }
+    }
+
+    // 处理直接查询
+    private void processDirectQuery(String message, PriceCalculationResult result,Bot bot) {
+        String cleanMessage = message.replace("@" + bot.getBotId(), "").replace("查上架价格", "");
+        Arrays.stream(cleanMessage.split("\n"))
+                .map(line -> line.replaceAll("\\s", ""))
+                .filter(StringUtils::isNotBlank)
+                .forEach(line -> processSingleQueryItem(line.trim(), result));
+
+        if (result.count > 0L) {
+            addSummaryInfo(message, result);
+        }
+    }
+
+    // 处理单个查询物品
+    private void processSingleQueryItem(String itemName, PriceCalculationResult result) {
+        ProductPrice product = productPriceResponse.getFirstByNameOrderByTimeDesc(itemName);
+        if (product != null) {
+            int adjustedPrice = calculateAdjustedPrice(product.getPrice());
+            double feeRate = calculateFeeRate(adjustedPrice);
+
+            result.totalFee += (long) (adjustedPrice * feeRate);
+            adjustedPrice = applyPriceAdjustments(adjustedPrice);
+            result.count += adjustedPrice;
+
+            result.stringBuilder.append("\n确认坊市上架 ")
+                    .append(product.getName()).append(" ")
+                    .append((long) adjustedPrice * 10000L);
+        }
+    }
+
+    // 发送结果消息
+    private void sendResultMessage(Group group, Integer messageId, String originalMessage, PriceCalculationResult result) {
+        String totalValueStr = formatAmount(result.count, "总价值");
+
+        if (originalMessage.contains("炼金")) {
+            result.stringBuilder.append("\n").append(totalValueStr);
+        } else {
+            String feeStr = formatAmount(result.totalFee, "手续费");
+            String netAmountStr = formatAmount(result.count - result.totalFee, "实际到手");
+            result.stringBuilder.append("\n").append(totalValueStr)
+                    .append("\n").append(feeStr)
+                    .append("\n").append(netAmountStr);
+        }
+
+        group.sendMessage(new MessageChain().reply(messageId).text(result.stringBuilder.toString()));
+    }
+
+    // 格式化金额显示
+    private String formatAmount(long amount, String prefix) {
+        return amount > 10000L ?
+                String.format("%s：%.2f 亿", prefix, amount / 10000.0) :
+                String.format("%s：%d 万", prefix, amount);
     }
 
     @GroupMessageHandler(

@@ -117,63 +117,6 @@
 //
 //
 //
-//
-////    @Scheduled(
-////            cron = "*/5 * * * * *"
-////    )
-////    public void 宗门任务接取刷新() throws InterruptedException {
-////        BotFactory.getBots().values().forEach((bot) -> {
-////            QQBotConfig botConfig = bot.getBotConfig();
-////            long groupId = botConfig.getGroupId();
-////            if (botConfig.getTaskId() != 0L) {
-////                groupId = botConfig.getTaskId();
-////            }
-////
-////            Group group = bot.getGroup(groupId);
-////            switch (botConfig.getBeiFamilyTaskStatus()) {
-////                case 0:
-////                    return;
-////                case 1:
-////                    group.sendMessage((new MessageChain()).at("3889282919").text("宗门任务接取"));
-////                    botConfig.setBeiFamilyTaskStatus(2);
-////                    return;
-////                case 2:
-////                    group.sendMessage((new MessageChain()).at("3889282919").text("宗门任务完成"));
-////                    botConfig.setBeiFamilyTaskStatus(1);
-////                    return;
-////                default:
-////            }
-////        });
-////    }
-//
-////    @GroupMessageHandler(
-////            senderIds = {3889282919L}
-////    )
-////    public void 宗门任务状态管理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-////        QQBotConfig botConfig = bot.getBotConfig();
-////        boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-////        boolean isAtSelf = message.contains("" + bot.getBotId()) || message.contains(bot.getBotName());
-////        if (isGroup && isAtSelf) {
-////            if (message.contains("今日无法再获取宗门任务")) {
-////                proccessCultivation(group, botConfig);
-////            }
-////
-////            if (message.contains("请检查该道具是否在背包内")) {
-////                botConfig.setBeiFamilyTaskStatus(0);
-////            }
-////
-////            if (message.contains("灵石带少了") && message.contains("出门做任务") && message.contains("不扣你任务次数")) {
-////                botConfig.setBeiFamilyTaskStatus(0);
-////            }
-////
-////            if (message.contains("状态欠佳") && message.contains("出门做任务") && message.contains("不扣你任务次数")) {
-////                group.sendMessage((new MessageChain()).at("3889282919").text("使用道源丹"));
-////                botConfig.setBeiFamilyTaskStatus(1);
-////            }
-////        }
-////
-////    }
-//
 //    @Scheduled(
 //            fixedDelay = 63000L,
 //            initialDelay = 20000L
