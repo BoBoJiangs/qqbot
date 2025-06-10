@@ -434,108 +434,127 @@ public class TestService {
             }
 
             if (message.endsWith("一键上架") || message.endsWith("一键炼金")) {
-                List<ReplyMessage> replyMessageList = messageChain.getMessageByType(ReplyMessage.class);
-                if (replyMessageList != null && !replyMessageList.isEmpty()) {
-                    ReplyMessage replyMessage = (ReplyMessage) replyMessageList.get(0);
-                    MessageChain replyMessageChain = replyMessage.getChain();
-                    if (replyMessageChain != null) {
-                        List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
-                        if (textMessageList != null && !textMessageList.isEmpty()) {
-                            TextMessage textMessage = (TextMessage) textMessageList.get(textMessageList.size() - 1);
-                            String herbsInfo = textMessage.getText();
-                            String[] lines = herbsInfo.split("\n");
+                String message1 = message;
+                customPool.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        alchemyAndListed(messageChain,bot,message1,group);
+                    }
+                });
+            }
+        }
 
-                            for (int i = 0; i < lines.length - 1; ++i) {
-                                String line = lines[i];
-                                if (line.contains("道具")) {
-                                    break;
+    }
+
+    public void alchemyAndListed(MessageChain messageChain,Bot bot,String message,Group group){
+        BotConfig botConfig = bot.getBotConfig();
+        List<ReplyMessage> replyMessageList = messageChain.getMessageByType(ReplyMessage.class);
+        if (replyMessageList != null && !replyMessageList.isEmpty()) {
+            ReplyMessage replyMessage = (ReplyMessage) replyMessageList.get(0);
+            MessageChain replyMessageChain = replyMessage.getChain();
+            if (replyMessageChain != null) {
+                List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
+                if (textMessageList != null && !textMessageList.isEmpty()) {
+                    TextMessage textMessage = (TextMessage) textMessageList.get(textMessageList.size() - 1);
+                    String herbsInfo = textMessage.getText();
+                    String[] lines = herbsInfo.split("\n");
+
+                    for (int i = 0; i < lines.length - 1; ++i) {
+                        String line = lines[i];
+                        if (line.contains("道具")) {
+                            break;
+                        }
+
+                        if (line.startsWith("名字：") || line.startsWith("上品") || line.startsWith("下品") || line.endsWith("功法") || line.endsWith("神通")) {
+                            String name = "";
+                            if ((line.contains("极品神通") || line.contains("辅修")) && message.endsWith("一键炼金")) {
+                                continue;
+                            }
+                            if (line.startsWith("名字：")) {
+                                name = line.substring(3).trim();
+                            } else if (!line.endsWith("功法") && !line.endsWith("神通")) {
+                                if (line.startsWith("上品") || line.startsWith("下品") || line.startsWith("极品") || line.startsWith("无上仙器")) {
+                                    name = line.substring(4).trim();
                                 }
+                            } else if (line.contains("辅修")) {
 
-                                if (line.startsWith("名字：") || line.startsWith("上品") || line.startsWith("下品") || line.endsWith("功法") || line.endsWith("神通")) {
-                                    String name = "";
-                                    if ((line.contains("极品神通") || line.contains("辅修")) && message.endsWith("一键炼金")) {
-                                        continue;
-                                    }
-                                    if (line.startsWith("名字：")) {
-                                        name = line.substring(3).trim();
-                                    } else if (!line.endsWith("功法") && !line.endsWith("神通")) {
-                                        if (line.startsWith("上品") || line.startsWith("下品") || line.startsWith("极品") || line.startsWith("无上仙器")) {
-                                            name = line.substring(4).trim();
-                                        }
-                                    } else if (line.contains("辅修")) {
+                                name = line.substring(0, line.length() - 8).trim();
+                            } else if (!line.startsWith("极品神通")) {
+                                name = line.substring(0, line.length() - 6).trim();
+                            }
 
-                                        name = line.substring(0, line.length() - 8).trim();
-                                    } else if (!line.startsWith("极品神通")) {
-                                        name = line.substring(0, line.length() - 6).trim();
-                                    }
+                            if (name.startsWith("法器")) {
+                                name = name.substring(2);
+                            }
 
-                                    if (name.startsWith("法器")) {
-                                        name = name.substring(2);
-                                    }
+                            lines[i + 1] = lines[i + 1].replace("已装备", "");
+                            int quantity = 1;
+                            if (lines[i + 1].contains("拥有数量")) {
+                                Pattern pattern = Pattern.compile("\\d+");
+                                Matcher matcher = pattern.matcher(lines[i + 1]);
+                                if (matcher.find()) {
+                                    String numberStr = matcher.group();
+                                    quantity = Integer.parseInt(numberStr);
+                                }
+                            }
 
-                                    lines[i + 1] = lines[i + 1].replace("已装备", "");
-                                    int quantity = 1;
-                                    if (lines[i + 1].contains("拥有数量")) {
-                                        Pattern pattern = Pattern.compile("\\d+");
-                                        Matcher matcher = pattern.matcher(lines[i + 1]);
-                                        if (matcher.find()) {
-                                            String numberStr = matcher.group();
-                                            quantity = Integer.parseInt(numberStr);
-                                        }
+                            name = name.replaceAll("\\s", "");
+                            if (StringUtils.isNotBlank(name)) {
+                                boolean b = !("渡厄丹,寒铁铸心炉,陨铁炉,雕花紫铜炉").contains(name);
+                                boolean isMakeDan = !MAKE_DAN_SET.contains(name);
+                                if (message.endsWith("一键炼金") && b && isMakeDan && !this.groupManager.isAlchemyExcluded(bot.getBotId(), name)) {
+                                    if (botConfig.isStop()) {
+                                        botConfig.setStop(false);
+                                        return;
                                     }
 
-                                    name = name.replaceAll("\\s", "");
-                                    if (StringUtils.isNotBlank(name)) {
-                                        boolean b = !("渡厄丹,寒铁铸心炉,陨铁炉,雕花紫铜炉").contains(name);
-                                        boolean isMakeDan = !MAKE_DAN_SET.contains(name);
-                                        if (message.endsWith("一键炼金") && b && isMakeDan && !this.groupManager.isAlchemyExcluded(bot.getBotId(), name)) {
-                                            if (botConfig.isStop()) {
-                                                botConfig.setStop(false);
-                                                return;
-                                            }
-
-                                            group.sendMessage((new MessageChain()).at("3889001741").text("炼金 " + name + " " + quantity));
-                                            Thread.sleep(3000L);
-                                        } else {
-                                            ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
-                                            if (first != null) {
-                                                if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(name) * 1.1) {
-                                                    group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice() + "万，炼金：" + ProductLowPrice.getLowPrice(name) + "万，不上架。"));
-                                                } else if (message.endsWith("一键上架") && !this.groupManager.isSellExcluded(bot.getBotId(), name)) {
+                                    group.sendMessage((new MessageChain()).at("3889001741").text("炼金 " + name + " " + quantity));
+                                    try {
+                                        Thread.sleep(4000L);
+                                    } catch (InterruptedException e) {
+                                        e.printStackTrace();
+                                    }
+                                } else {
+                                    ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
+                                    if (first != null) {
+                                        if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(name) * 1.1) {
+                                            group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice() + "万，炼金：" + ProductLowPrice.getLowPrice(name) + "万，不上架。"));
+                                        } else if (message.endsWith("一键上架") && !this.groupManager.isSellExcluded(bot.getBotId(), name)) {
 //
-                                                    int remaining = quantity;
-                                                    while (remaining > 0) {
-                                                        if (botConfig.isStop()) {
-                                                            botConfig.setStop(false);
-                                                            return;
-                                                        }
+                                            int remaining = quantity;
+                                            while (remaining > 0) {
+                                                if (botConfig.isStop()) {
+                                                    botConfig.setStop(false);
+                                                    return;
+                                                }
 
-                                                        int batchSize = Math.min(10, remaining); // 本次上架数量，最多10个
-                                                        if (first.getPrice() > 1000 && (double) (first.getPrice() - 10) * 0.85 < 900.0) {
-                                                            group.sendMessage((new MessageChain()).at("3889001741")
-                                                                    .text("确认坊市上架 " + first.getName() + " " + 10000000 + " " + batchSize));
-                                                        } else {
-                                                            group.sendMessage((new MessageChain()).at("3889001741")
-                                                                    .text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000 + " " + batchSize));
-                                                        }
+                                                int batchSize = Math.min(10, remaining); // 本次上架数量，最多10个
+                                                if (first.getPrice() > 1000 && (double) (first.getPrice() - 10) * 0.85 < 900.0) {
+                                                    group.sendMessage((new MessageChain()).at("3889001741")
+                                                            .text("确认坊市上架 " + first.getName() + " " + 10000000 + " " + batchSize));
+                                                } else {
+                                                    group.sendMessage((new MessageChain()).at("3889001741")
+                                                            .text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000 + " " + batchSize));
+                                                }
 
-                                                        remaining -= batchSize;
-                                                        Thread.sleep(3000L);
-                                                    }
+                                                remaining -= batchSize;
+                                                try {
+                                                    Thread.sleep(4000L);
+                                                } catch (InterruptedException e) {
+                                                    e.printStackTrace();
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-
-                            botConfig.setCommand("");
                         }
                     }
+
+                    botConfig.setCommand("");
                 }
             }
         }
-
     }
 
     private String showReplyMessage(String message, BotConfig botConfig, Bot bot) {
@@ -950,18 +969,15 @@ public class TestService {
                 }
             }
             if (commandPrefix != null) {
-                 command = ((TextMessage) messageChain.get(0)).getText().trim();
+                command = ((TextMessage) messageChain.get(0)).getText().trim();
                 command = command.substring(commandPrefix.length()).trim();
                 messageChain.set(0, new TextMessage(command));
                 botList.add(bot);
-                log.info("bot--------", botList.size());
                 CompletableFuture.runAsync(() -> {
                     try {
                         if(isFirst){
                             isFirst = false;
-                            TimeUnit.SECONDS.sleep(3);
-
-                            log.info("bot====sise{}", botList.size());
+                            TimeUnit.SECONDS.sleep(2);
                             this.processCommand(group.getGroupId(), command);
                         }
 
@@ -986,47 +1002,40 @@ public class TestService {
 
     private void processCommand(long groupId, String command) {
         int time = 2;
-        int count = 0;
+        int count = 1;
         String action = "";
-//        if(command.contains("循环") && command.contains("听令")){
-//            Pattern pattern = Pattern.compile(".*执行(.*?)\\s+循环(\\d+)");
-//            Matcher matcher = pattern.matcher(command);
-//
-//            if (matcher.find()) {
-//                action = matcher.group(1);  // 提取"宗门闭关"
-//                count = Integer.parseInt(matcher.group(2));  // 提取数字
-//            } else {
-//                group.sendMessage((new MessageChain()).text("循环指令格式不正确 举例：听令1循环执行宗门闭关 循环3"));
-//                return;
-//            }
-//        }
+        Pattern commandPattern = Pattern.compile("听令\\d+(.*?)(?=(循环|间隔|$))");
+        Matcher commandMatcher = commandPattern.matcher(command);
+        if (commandMatcher.find()) {
+            action = commandMatcher.group(1).trim();
+        }
+
+        // 提取循环次数（如 "循环2" → 2）
+        Pattern loopPattern = Pattern.compile("循环(\\d+)");
+        Matcher loopMatcher = loopPattern.matcher(command);
+        if (loopMatcher.find()) {
+            count = Integer.parseInt(loopMatcher.group(1));
+        }
+
+        // 提取间隔时间（如 "间隔3" → 3）
+        Pattern intervalPattern = Pattern.compile("间隔(\\d+)");
+        Matcher intervalMatcher = intervalPattern.matcher(command);
+        if (intervalMatcher.find()) {
+            time = Integer.parseInt(intervalMatcher.group(1));
+        }
         for(Bot bot : botList){
             MessageChain messageChain = new MessageChain();
-            if (command.startsWith("听令1循环执行")) {
+            if (command.startsWith("听令1")) {
+                messageChain.set(0, new TextMessage(action));
+                this.forSendMessage(bot,  bot.getGroup(groupId), messageChain, count, time);
+            } else if (command.startsWith("听令2")) {
+                messageChain.add(new AtMessage("3889001741"));
                 messageChain.add(new TextMessage(action));
                 this.forSendMessage(bot, bot.getGroup(groupId), messageChain, count, time);
-            } else if (command.startsWith("听令2循环执行")) {
-
-                messageChain.add(new AtMessage("3889001741"));
+            }else if (command.startsWith("听令3")) {
+                messageChain.add(new AtMessage("3889029313"));
                 messageChain.add(new TextMessage(action));
                 this.forSendMessage(bot,  bot.getGroup(groupId), messageChain, count, time);
-            }else if (command.startsWith("听令3循环执行")) {
-                messageChain.set(0, new TextMessage(action));
-                messageChain.add(0, new AtMessage("3889029313"));
-                this.forSendMessage(bot,  bot.getGroup(groupId), messageChain, count, time);
-            } else if (command.startsWith("听令1")) {
-
-                messageChain.set(0, new TextMessage(command.substring(3)));
-                bot.getGroup(groupId).sendMessage(messageChain);
-            } else if (command.startsWith("听令2")) {
-                messageChain.add(new TextMessage(command.substring(3)));
-                messageChain.add(new AtMessage("3889001741"));
-                this.forSendMessage(bot, bot.getGroup(groupId), messageChain, 1, time);
-//                bot.getGroup(groupId).sendMessage(messageChain);
-            }else if (command.startsWith("听令3")) {
-                messageChain.set(0, new TextMessage(command.substring(3)));
-                messageChain.add(0, new AtMessage("3889029313"));
-                bot.getGroup(groupId).sendMessage(messageChain);
             }
         }
         botList.clear();
@@ -1158,28 +1167,29 @@ public class TestService {
                 time = 0;
             }
 
-            message = ((TextMessage) messageChain.get(0)).getText().trim();
+            message = ((TextMessage) messageChain.get(messageChain.size()-1)).getText().trim();
+            MessageChain messageChain1 = new MessageChain();
             if (message.startsWith("循环执行命令")) {
-                messageChain.set(0, new TextMessage(message.substring(message.indexOf("循环执行命令") + 6)));
-                this.forSendMessage(bot, group, messageChain, count, time);
+                messageChain1.add(new TextMessage(message.substring(message.indexOf("循环执行命令") + 6)));
+                this.forSendMessage(bot, group, messageChain1, count, time);
             } else if (message.startsWith("循环执行")) {
-                messageChain.set(0, new TextMessage(message.substring(message.indexOf("循环执行") + 4)));
-                messageChain.add(0, new AtMessage("3889001741"));
-                this.forSendMessage(bot, group, messageChain, count, time);
+                messageChain1.add(new AtMessage("3889001741"));
+                messageChain1.add(new TextMessage(message.substring(message.indexOf("循环执行") + 4)));
+                this.forSendMessage(bot, group, messageChain1, count, time);
             } else if (message.startsWith("弟子听令循环执行命令")) {
-                messageChain.set(0, new TextMessage(message.substring(message.indexOf("弟子听令循环执行命令") + 10)));
-                this.executeSendAllMessage(group, messageChain, count, time);
+                messageChain1.add(new TextMessage(message.substring(message.indexOf("弟子听令循环执行命令") + 10)));
+                this.executeSendAllMessage(group, messageChain1, count, time);
             } else if (message.startsWith("弟子听令循环执行")) {
-                messageChain.set(0, new TextMessage(message.substring(message.indexOf("弟子听令循环执行") + 8)));
-                messageChain.add(0, new AtMessage("3889001741"));
-                this.executeSendAllMessage(group, messageChain, count, time);
+                messageChain1.add(new AtMessage("3889001741"));
+                messageChain1.add(new TextMessage(message.substring(message.indexOf("弟子听令循环执行") + 8)));
+                this.executeSendAllMessage(group, messageChain1, count, time);
             } else if (message.startsWith("执行命令")) {
-                messageChain.set(0, new TextMessage(message.substring(message.indexOf("执行命令") + 4)));
-                group.sendMessage(messageChain);
+                messageChain1.add(new TextMessage(message.substring(message.indexOf("执行命令") + 4)));
+                group.sendMessage(messageChain1);
             } else if (message.startsWith("执行")) {
-                messageChain.set(0, new TextMessage(message.substring(message.indexOf("执行") + 2)));
-                messageChain.add(0, new AtMessage("3889001741"));
-                group.sendMessage(messageChain);
+                messageChain1.add( new AtMessage("3889001741"));
+                messageChain1.add(new TextMessage(message.substring(message.indexOf("执行") + 2)));
+                group.sendMessage(messageChain1);
             }
         }
 
@@ -1379,7 +1389,7 @@ public class TestService {
                     try {
                         Bot bot1 = (Bot) var1.next();
                         Group bot1Group = bot1.getGroup(group.getGroupId());
-                        TestService.this.forSendMessage(bot1, bot1Group, messageChain, count, time);
+                        forSendMessage(bot1, bot1Group, messageChain, count, time);
                     } catch (Exception var4) {
                     }
                 }

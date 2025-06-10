@@ -157,7 +157,7 @@ public class XiaoBeiService {
             group.sendMessage((new MessageChain()).at("3889029313").text("药材"));
         }
 
-        if ("停止执行".equals(message)) {
+        if ("停止执行".equals(message) && botConfig!=null) {
             botConfig.setStop(true);
             botConfig.setCommand("");
         }
