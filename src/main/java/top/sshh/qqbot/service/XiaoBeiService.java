@@ -84,7 +84,9 @@ public class XiaoBeiService {
     public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
         message = message.trim();
-
+        if(StringUtils.isEmpty(message)){
+            return;
+        }
         if (message.equals("小北命令") || message.equals("小北当前设置")){
             group.sendMessage((new MessageChain()).reply(messageId).text(this.showReplyMessage(message, botConfig, bot)));
         }

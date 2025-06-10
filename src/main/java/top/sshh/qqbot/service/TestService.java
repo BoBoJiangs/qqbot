@@ -78,6 +78,9 @@ public class TestService {
     public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         message = message.trim();
+        if(StringUtils.isEmpty(message)){
+            return;
+        }
         if (!message.contains("可用命令")) {
             if ("命令".equals(message)) {
                 group.sendMessage((new MessageChain()).reply(messageId).text(this.showReplyMessage(message, botConfig, bot)));
@@ -1026,7 +1029,7 @@ public class TestService {
         for(Bot bot : botList){
             MessageChain messageChain = new MessageChain();
             if (command.startsWith("听令1")) {
-                messageChain.set(0, new TextMessage(action));
+                messageChain.add(0, new TextMessage(action));
                 this.forSendMessage(bot,  bot.getGroup(groupId), messageChain, count, time);
             } else if (command.startsWith("听令2")) {
                 messageChain.add(new AtMessage("3889001741"));
