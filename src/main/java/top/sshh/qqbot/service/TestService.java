@@ -1171,29 +1171,28 @@ public class TestService {
                 time = 0;
             }
 
-            message = ((TextMessage) messageChain.get(messageChain.size()-1)).getText().trim();
-            MessageChain messageChain1 = new MessageChain();
+//            message = ((TextMessage) messageChain.get(0)).getText().trim();
             if (message.startsWith("循环执行命令")) {
-                messageChain1.add(new TextMessage(message.substring(message.indexOf("循环执行命令") + 6)));
-                this.forSendMessage(bot, group, messageChain1, count, time);
+                messageChain.set(0, new TextMessage(message.substring(message.indexOf("循环执行命令") + 6)));
+                this.forSendMessage(bot, group, messageChain, count, time);
             } else if (message.startsWith("循环执行")) {
-                messageChain1.add(new AtMessage("3889001741"));
-                messageChain1.add(new TextMessage(message.substring(message.indexOf("循环执行") + 4)));
-                this.forSendMessage(bot, group, messageChain1, count, time);
+                messageChain.set(0, new TextMessage(message.substring(message.indexOf("循环执行") + 4)));
+                messageChain.add(0, new AtMessage("3889001741"));
+                this.forSendMessage(bot, group, messageChain, count, time);
             } else if (message.startsWith("弟子听令循环执行命令")) {
-                messageChain1.add(new TextMessage(message.substring(message.indexOf("弟子听令循环执行命令") + 10)));
-                this.executeSendAllMessage(group, messageChain1, count, time);
+                messageChain.set(0, new TextMessage(message.substring(message.indexOf("弟子听令循环执行命令") + 10)));
+                this.executeSendAllMessage(group, messageChain, count, time);
             } else if (message.startsWith("弟子听令循环执行")) {
-                messageChain1.add(new AtMessage("3889001741"));
-                messageChain1.add(new TextMessage(message.substring(message.indexOf("弟子听令循环执行") + 8)));
-                this.executeSendAllMessage(group, messageChain1, count, time);
+                messageChain.set(0, new TextMessage(message.substring(message.indexOf("弟子听令循环执行") + 8)));
+                messageChain.add(0, new AtMessage("3889001741"));
+                this.executeSendAllMessage(group, messageChain, count, time);
             } else if (message.startsWith("执行命令")) {
-                messageChain1.add(new TextMessage(message.substring(message.indexOf("执行命令") + 4)));
-                group.sendMessage(messageChain1);
+                messageChain.set(0, new TextMessage(message.substring(message.indexOf("执行命令") + 4)));
+                group.sendMessage(messageChain);
             } else if (message.startsWith("执行")) {
-                messageChain1.add( new AtMessage("3889001741"));
-                messageChain1.add(new TextMessage(message.substring(message.indexOf("执行") + 2)));
-                group.sendMessage(messageChain1);
+                messageChain.set(0, new TextMessage(message.substring(message.indexOf("执行") + 2)));
+                messageChain.add(0, new AtMessage("3889001741"));
+                group.sendMessage(messageChain);
             }
         }
 
