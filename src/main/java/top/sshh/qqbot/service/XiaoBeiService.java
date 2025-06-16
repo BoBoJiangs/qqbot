@@ -312,9 +312,7 @@ public class XiaoBeiService {
         }
     }
 
-    private boolean isAtSelf(String message, Bot bot) {
-        return message.contains("@" + bot.getBotId()) || message.contains("@" + bot.getBotName());
-    }
+
 
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
@@ -402,6 +400,15 @@ public class XiaoBeiService {
         return group.getGroupId() == xbGroupId;
     }
 
+    private boolean isAtSelf(String message, Bot bot,Group group) {
+        String botName = bot.getBotName();
+        String cardName = group.getMember(bot.getBotId()).getCard();
+        if(StringUtils.isNotBlank(cardName)){
+            botName = cardName;
+        }
+        return message.contains("@" + bot.getBotId()) || message.contains("@" + botName);
+    }
+
     public static Map<String, Integer> extractHerbs(String input) {
         Map<String, Integer> result = new LinkedHashMap();
         Pattern pattern = Pattern.compile("(.+?)\\s+-.+数量:\\s+(\\d+)");
@@ -420,7 +427,7 @@ public class XiaoBeiService {
             senderIds = {3889029313L}
     )
     public void 小北药材上架(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,  group);
         if (isAtSelf && message.contains("的药材背包")) {
             System.out.println(message);
             QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
@@ -438,7 +445,7 @@ public class XiaoBeiService {
         if (xbGroupId > 0) {
 //            initBots();
             BotFactory.getBots().values().forEach((bot) -> {
-                if(bot.getBotConfig().isEnableXiaoBei()){
+                if(bot.getBotConfig()!=null && bot.getBotConfig().isEnableXiaoBei()){
                     if (botConfigMap.get(bot.getBotId()+"") == null) {
                         botConfigMap.put(bot.getBotId()+"", new QQBotConfig());
 //                    saveMapToFile();
@@ -477,7 +484,7 @@ public class XiaoBeiService {
     public void 宗门任务状态管理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
         boolean isGroup = isXbGroup(group, botConfig);
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,  group);
         if (isGroup && isAtSelf) {
             sectMessage(bot, message);
 
@@ -527,7 +534,7 @@ public class XiaoBeiService {
     public void 秘境(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
         boolean isGroup = isXbGroup(group, botConfig);
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,  group);
         if (isGroup && isAtSelf) {
             mjMessage(bot, message);
         }
@@ -576,7 +583,7 @@ public class XiaoBeiService {
     public void 悬赏令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
         boolean isGroup = isXbGroup(group, botConfig);
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,  group);
         if (isGroup && isAtSelf) {
             xslMessage(bot, message);
         }
@@ -818,7 +825,7 @@ public class XiaoBeiService {
 //        QQBotConfig botConfig = bot.getBotConfig();
         QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
         boolean isGroup = isXbGroup(group, botConfig);
-        boolean isAtSelf = isAtSelf(message, bot);
+        boolean isAtSelf = isAtSelf(message, bot,  group);
         if (isGroup && isAtSelf) {
             lingTianReceive(bot, message);
         }

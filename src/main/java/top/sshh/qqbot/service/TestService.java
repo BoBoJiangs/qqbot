@@ -29,10 +29,7 @@ import top.sshh.qqbot.data.ProductPrice;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -50,6 +47,7 @@ public class TestService {
     private boolean isStartAutoTalent = false;
     @Autowired
     private GroupManager groupManager;
+    private static final List<String> KEYWORDS = Arrays.asList("烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后", "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困", "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得", "从腐朽道袍中滑落");
 
     public TestService() {
     }
@@ -513,7 +511,7 @@ public class TestService {
 
                                     group.sendMessage((new MessageChain()).at("3889001741").text("炼金 " + name + " " + quantity));
                                     try {
-                                        Thread.sleep(4000L);
+                                        Thread.sleep(3000L);
                                     } catch (InterruptedException e) {
                                         e.printStackTrace();
                                     }
@@ -926,7 +924,7 @@ public class TestService {
     }
 
 
-    List<Bot> botList = new ArrayList<>();
+    List<Bot> botList = new CopyOnWriteArrayList<>();
     String command;
     boolean isFirst = true;
     @GroupMessageHandler(
@@ -974,18 +972,20 @@ public class TestService {
             if (commandPrefix != null) {
                 command = ((TextMessage) messageChain.get(0)).getText().trim();
                 command = command.substring(commandPrefix.length()).trim();
-                messageChain.set(0, new TextMessage(command));
                 botList.add(bot);
                 CompletableFuture.runAsync(() -> {
                     try {
                         if(isFirst){
                             isFirst = false;
                             TimeUnit.SECONDS.sleep(2);
-                            this.processCommand(group.getGroupId(), command);
+                            isFirst = true;
+                            List<Bot> copyBotList = new CopyOnWriteArrayList<>(botList);
+                            botList.clear();
+                            this.processCommand(group.getGroupId(), command,copyBotList);
                         }
 
-                    } catch (InterruptedException var4) {
-                        Thread.currentThread().interrupt();
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
 
                 });
@@ -1003,15 +1003,15 @@ public class TestService {
         }
     }
 
-    private void processCommand(long groupId, String command) {
+    private void processCommand(long groupId, String command,List<Bot> botList) {
         int time = 2;
         int count = 1;
-        String action = "";
-        Pattern commandPattern = Pattern.compile("听令\\d+(.*?)(?=(循环|间隔|$))");
-        Matcher commandMatcher = commandPattern.matcher(command);
-        if (commandMatcher.find()) {
-            action = commandMatcher.group(1).trim();
-        }
+//        String action = "";
+//        Pattern commandPattern = Pattern.compile("听令([1-9]|10)(.*?)(?=(循环|间隔|$))");
+//        Matcher commandMatcher = commandPattern.matcher(command);
+//        if (commandMatcher.find()) {
+//            action = commandMatcher.group(1).trim();
+//        }
 
         // 提取循环次数（如 "循环2" → 2）
         Pattern loopPattern = Pattern.compile("循环(\\d+)");
@@ -1029,20 +1029,21 @@ public class TestService {
         for(Bot bot : botList){
             MessageChain messageChain = new MessageChain();
             if (command.startsWith("听令1")) {
-                messageChain.add(0, new TextMessage(action));
+                messageChain.add(new TextMessage(command.substring(3)));
                 this.forSendMessage(bot,  bot.getGroup(groupId), messageChain, count, time);
             } else if (command.startsWith("听令2")) {
                 messageChain.add(new AtMessage("3889001741"));
-                messageChain.add(new TextMessage(action));
+                messageChain.add(new TextMessage(command.substring(3)));
                 this.forSendMessage(bot, bot.getGroup(groupId), messageChain, count, time);
             }else if (command.startsWith("听令3")) {
                 messageChain.add(new AtMessage("3889029313"));
-                messageChain.add(new TextMessage(action));
+                messageChain.add(new TextMessage(command.substring(3)));
                 this.forSendMessage(bot,  bot.getGroup(groupId), messageChain, count, time);
             }
         }
-        botList.clear();
-        isFirst = true;
+
+
+
     }
 
     @GroupMessageHandler(
@@ -1747,23 +1748,10 @@ public class TestService {
 
             if (message.contains("道友没有次元之钥")) {
                 botConfig.setCommand("");
-                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text(" 探索秘境"));
+                proccessCultivation(group);
             }
 
-            if (message.contains("烟雾缭绕") ||
-                    message.contains("在秘境最深处") ||
-                    message.contains("道友在秘境") ||
-                    message.contains("道友进入秘境后") ||
-                    message.contains("秘境内竟然") ||
-                    message.contains("道友大战一番成功") ||
-                    message.contains("道友大战一番不敌")||
-                    message.contains("昏迷中似有")||
-                    message.contains("竟然获得了灵石")||
-                    message.contains("天道赐下")||
-                    message.contains("道友连破")||
-                    message.contains("秘境将闭")||
-                    message.contains("云中仙鹤")||
-                    (message.contains("秘境中") && message.contains("含恨退出"))){
+            if (KEYWORDS.stream().anyMatch(message::contains) && !message.contains("时间：")) {
                 bot.getBotConfig().setMjTime(-1L);
                 if ("一键使用次元之钥".equals(botConfig.getCommand())) {
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text(" 道具使用次元之钥"));

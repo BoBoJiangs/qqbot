@@ -77,8 +77,8 @@ public class GroupManager {
 //    private Long botId;
 
     public static List<Long> remindGroupIdList = Arrays.asList(1023764416L,971327442L,679831529L,824484501L,690933736L,978207420L);
-    @Autowired
-    public DanCalculator danCalculator;
+//    @Autowired
+//    public DanCalculator danCalculator;
     private Map<String, Map<String, PendingLingTianRecord>> pendingLingTianRecords = new ConcurrentHashMap();
     private Map<String, Set<String>> excludeAlchemyMap = new ConcurrentHashMap();
     private Map<String, Set<String>> excludeSellMap = new ConcurrentHashMap();
@@ -475,10 +475,10 @@ public class GroupManager {
                 }
 
             }
-            if ((danCalculator!=null && danCalculator.config!=null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
-                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) ) {
-                bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
-            }
+//            if ((danCalculator!=null && danCalculator.config!=null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
+//                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) ) {
+//                bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
+//            }
             MESSAGE_NUMBER_MAP.put(bot.getBotId()+"", messageNumber);
         }
         message = message.trim();
@@ -528,7 +528,7 @@ public class GroupManager {
     }
 
     private void handleNewsExploration(String msg, Group group, Bot bot) {
-        Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId());
+        Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId()+"");
         if (groupRecords != null && !groupRecords.isEmpty()) {
             Optional<Map.Entry<String, PendingLingTianRecord>> matchedEntry = groupRecords.entrySet().stream().filter((entryx) -> {
                 return msg.contains((CharSequence)entryx.getKey());
@@ -549,7 +549,7 @@ public class GroupManager {
                 } finally {
                     groupRecords.remove(record.userName);
                     if (groupRecords.isEmpty()) {
-                        this.pendingLingTianRecords.remove(group.getGroupId());
+                        this.pendingLingTianRecords.remove(group.getGroupId()+"");
                     }
 
                 }
@@ -656,7 +656,7 @@ public class GroupManager {
 
 
     private void handleFormat3(String msg, Group group, Bot bot) {
-        Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId());
+        Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId()+"");
         if (groupRecords != null && !groupRecords.isEmpty()) {
             Optional<Map.Entry<String, PendingLingTianRecord>> matchedEntry = groupRecords.entrySet().stream().filter((entryx) -> {
                 return msg.contains((CharSequence)entryx.getKey());
@@ -676,7 +676,7 @@ public class GroupManager {
                 } finally {
                     groupRecords.remove(record.userName);
                     if (groupRecords.isEmpty()) {
-                        this.pendingLingTianRecords.remove(group.getGroupId());
+                        this.pendingLingTianRecords.remove(group.getGroupId()+"");
                     }
 
                 }
@@ -697,7 +697,7 @@ public class GroupManager {
                     this.updateLingTianTimer(qq, "47.0", group, bot.getBotId());
                 }
             } else{
-                Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId());
+                Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId()+"");
                 if (groupRecords == null || groupRecords.isEmpty()) {
                     return;
                 }
@@ -714,7 +714,7 @@ public class GroupManager {
                     } finally {
                         groupRecords.remove(record.userName);
                         if (groupRecords.isEmpty()) {
-                            this.pendingLingTianRecords.remove(group.getGroupId());
+                            this.pendingLingTianRecords.remove(group.getGroupId()+"");
                         }
 
                     }
