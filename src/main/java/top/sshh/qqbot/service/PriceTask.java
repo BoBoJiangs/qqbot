@@ -151,6 +151,9 @@ public class PriceTask {
     )
     public void 查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, Integer messageId) {
         if (bot.getBotConfig().isEnableXslPriceQuery() && !remindGroupIdList.contains(group.getGroupId())) {
+            if(!groupManager.isRemindGroup(bot,group)){
+                return;
+            }
             List<ReplyMessage> replyMessageList = messageChain.getMessageByType(ReplyMessage.class);
             if (replyMessageList != null && !replyMessageList.isEmpty()) {
                 ReplyMessage replyMessage = (ReplyMessage)replyMessageList.get(0);

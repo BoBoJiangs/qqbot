@@ -512,19 +512,31 @@ public class GroupManager {
     )
     public void 秘境结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())) {
-//
 
-            if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
-                this.extractInfo(message, "秘境", group,bot);
-            }else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
-                this.extractInfo(message, "秘境", group,bot);
-            }else if (message.contains("秘境") && message.contains("道友已") && message.contains("分钟")) {
-                this.handleNewsExploration(message, group, bot);
-            } else if (message.contains("秘境") && message.contains("时轮压缩") && message.contains("分钟")) {
-                this.handleNewsExploration(message, group, bot);
+            if (isRemindGroup(bot,group)) {
+                if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
+                    this.extractInfo(message, "秘境", group,bot);
+                }else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
+                    this.extractInfo(message, "秘境", group,bot);
+                }else if (message.contains("秘境") && message.contains("道友已") && message.contains("分钟")) {
+                    this.handleNewsExploration(message, group, bot);
+                } else if (message.contains("秘境") && message.contains("时轮压缩") && message.contains("分钟")) {
+                    this.handleNewsExploration(message, group, bot);
+                }
             }
+
+
         }
 
+    }
+
+    public boolean isRemindGroup(Bot bot,Group group) {
+        boolean isGroupQQ = true;
+        if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
+            isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + group.getGroupId() + "&");
+        }
+
+        return isGroupQQ;
     }
 
     private void handleNewsExploration(String msg, Group group, Bot bot) {
@@ -565,8 +577,10 @@ public class GroupManager {
         if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())
                 && message.contains("进行中的悬赏令") && message.contains("可结束")) {
 
+            if (isRemindGroup(bot,group)) {
+                this.extractInfo(message, "悬赏", group,bot);
+            }
 
-            this.extractInfo(message, "悬赏", group,bot);
         }
 
     }
@@ -577,24 +591,27 @@ public class GroupManager {
     public void 新版悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())
                 && (message.contains("悬赏令进行中")  || message.contains("悬赏令接取成功")) && message.contains("预计")) {
-            // 提取QQ号
-            Pattern qqPattern = Pattern.compile("@(\\d+)");
-            Matcher qqMatcher = qqPattern.matcher(message);
-            String qq = qqMatcher.find() ? qqMatcher.group(1) : "未找到QQ号";
+            if (isRemindGroup(bot,group)) {
+                // 提取QQ号
+                Pattern qqPattern = Pattern.compile("@(\\d+)");
+                Matcher qqMatcher = qqPattern.matcher(message);
+                String qq = qqMatcher.find() ? qqMatcher.group(1) : "未找到QQ号";
 
-            // 提取预计时间
-            Pattern timePattern = null;
-            if(message.contains("预计时间")){
-                timePattern = Pattern.compile("预计时间：(\\d+\\.?\\d*)分钟");
+                // 提取预计时间
+                Pattern timePattern = null;
+                if(message.contains("预计时间")){
+                    timePattern = Pattern.compile("预计时间：(\\d+\\.?\\d*)分钟");
+                }
+                if(message.contains("预计剩余时间")){
+                    timePattern = Pattern.compile("预计剩余时间：(\\d+\\.?\\d*)分钟");
+                }
+                if(timePattern!=null){
+                    Matcher timeMatcher = timePattern.matcher(message);
+                    String time = timeMatcher.find() ? timeMatcher.group(1) : "未找到预计时间";
+                    addMjXslMap(qq,"悬赏",group,time,bot);
+                }
             }
-            if(message.contains("预计剩余时间")){
-                timePattern = Pattern.compile("预计剩余时间：(\\d+\\.?\\d*)分钟");
-            }
-            if(timePattern!=null){
-                Matcher timeMatcher = timePattern.matcher(message);
-                String time = timeMatcher.find() ? timeMatcher.group(1) : "未找到预计时间";
-                addMjXslMap(qq,"悬赏",group,time,bot);
-            }
+
 
 //            this.extractInfo(message, "悬赏", group);
         }
@@ -642,13 +659,16 @@ public class GroupManager {
     )
     public void 灵田领取提醒(Bot bot, Group group, Member member, MessageChain messageChain, String msg, Integer messageId) throws InterruptedException {
         if (bot.getBotConfig().isEnableGroupManager()) {
-            if (msg.contains("灵田还不能收取") && msg.contains("下次收取时间为")) {
-                this.handleLingTianMessage(msg, group, bot);
-            }else if (msg.contains("收获药材") && !msg.contains("道友的洞天福地") && (msg.contains("道友成功") || msg.contains("道友本次采集"))) {
-                this.handleFormat2(msg, group, bot, messageId);
-            } else if (msg.contains("道友的灵田灵气未满，尚需孕育") && msg.contains("下次收成时间")) {
-                this.handleFormat3(msg, group, bot);
+            if (isRemindGroup(bot,group)) {
+                if (msg.contains("灵田还不能收取") && msg.contains("下次收取时间为")) {
+                    this.handleLingTianMessage(msg, group, bot);
+                }else if (msg.contains("收获药材") && !msg.contains("道友的洞天福地") && (msg.contains("道友成功") || msg.contains("道友本次采集"))) {
+                    this.handleFormat2(msg, group, bot, messageId);
+                } else if (msg.contains("道友的灵田灵气未满，尚需孕育") && msg.contains("下次收成时间")) {
+                    this.handleFormat3(msg, group, bot);
+                }
             }
+
         }
 
     }

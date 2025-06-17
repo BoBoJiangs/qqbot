@@ -1134,15 +1134,17 @@ public class TestService {
             Message timeMessage;
             while (iterator.hasNext()) {
                 timeMessage = (Message) iterator.next();
-                if (!(timeMessage instanceof AtMessage)) {
-                    break;
+                if ((timeMessage instanceof TextMessage) ) {
+                    if(((TextMessage) timeMessage).getText().contains("执行")){
+                        break;
+                    }
                 }
 
                 iterator.remove();
             }
 
             message = ((TextMessage) messageChain.get(0)).getText().trim();
-            timeMessage = (Message) messageChain.get(messageChain.size() - 1);
+            timeMessage = (Message) messageChain.get(messageChain.size()-1);
             int time;
             int count;
             if (timeMessage instanceof TextMessage && message.contains("循环")) {
@@ -1171,7 +1173,7 @@ public class TestService {
                 time = 0;
             }
 
-//            message = ((TextMessage) messageChain.get(0)).getText().trim();
+            message = ((TextMessage) messageChain.get(0)).getText().trim();
             if (message.startsWith("循环执行命令")) {
                 messageChain.set(0, new TextMessage(message.substring(message.indexOf("循环执行命令") + 6)));
                 this.forSendMessage(bot, group, messageChain, count, time);
