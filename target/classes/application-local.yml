@@ -6,7 +6,7 @@ bot:
     url: ws://localhost:3001
     accessToken: 1024*1024*1024
     #    修炼群号
-    groupId: 971327442
+    groupId: 824484501
     #    大号qq
     controlQQ: 819463350&1018454301
     #    大号qq
@@ -37,6 +37,7 @@ bot:
     xslPriceLimit: 1000
     botNumber: 4
     enableSelfTitle: true
+    enableXiaoBei: false
 
 #  - type: ws
 #    url: ws://localhost:8080

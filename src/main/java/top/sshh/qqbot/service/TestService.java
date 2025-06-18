@@ -7,9 +7,7 @@ package top.sshh.qqbot.service;
 
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
-import com.zhuangxv.bot.core.Bot;
-import com.zhuangxv.bot.core.Group;
-import com.zhuangxv.bot.core.Member;
+import com.zhuangxv.bot.core.*;
 import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
@@ -797,7 +795,17 @@ public class TestService {
     @GroupMessageHandler(
             senderIds = {3889001741L}
     )
+    public void 点击验证码(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId, Buttons buttons) {
+        if(buttons!=null && !buttons.getRows().isEmpty() && !buttons.getRows().get(0).getButtons().isEmpty()){
+            Button button  = buttons.getRows().get(0).getButtons().get(0);
+        }
+    }
+
+    @GroupMessageHandler(
+            senderIds = {3889001741L}
+    )
     public void 停止坊市自动查询(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+
 
         if (message.contains("解除限制") && message.contains("" + bot.getBotId())) {
             bot.getBotConfig().setStop(true);
@@ -1244,6 +1252,7 @@ public class TestService {
             ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
     )
     public void 仅执行自己命令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+
         if (message.contains("循环执行") && !message.startsWith("@") && !message.contains("功能设置")) {
             Iterator<Message> iterator = messageChain.iterator();
 

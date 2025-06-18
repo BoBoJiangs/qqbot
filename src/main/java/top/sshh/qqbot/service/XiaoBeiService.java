@@ -231,7 +231,10 @@ public class XiaoBeiService {
             initialDelay = 60000L
     )
     public void autoSaveTasks() {
-        this.saveTasksToFile();
+        if (xbGroupId > 0) {
+            this.saveTasksToFile();
+        }
+
     }
 
     public synchronized void saveTasksToFile() {
