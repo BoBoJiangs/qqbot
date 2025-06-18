@@ -3,7 +3,8 @@ bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
   - type: ws
 #    url: ws://113.45.9.127:8081
-    url: ws://localhost:3001
+#    url: ws://localhost:3001
+    url: ws://1.94.129.2:8082
     accessToken: 1024*1024*1024
     #    修炼群号
     groupId: 824484501

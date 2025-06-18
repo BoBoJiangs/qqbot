@@ -42,6 +42,7 @@ public class TestService {
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
 //    public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_PRODUCT = new ConcurrentHashMap();
+    public  Map<Long, Buttons> botButtonMap = new ConcurrentHashMap();
     private boolean isStartAutoTalent = false;
     @Autowired
     private GroupManager groupManager;
@@ -793,11 +794,73 @@ public class TestService {
     }
 
     @GroupMessageHandler(
+            isAt = true,
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 控制小号点击按钮(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        if (checkControlQQ(bot, member) && message.contains("点击") && message.contains("按钮") && message.startsWith("@")) {
+            Iterator iterator = messageChain.iterator();
+
+            Message timeMessage;
+            while (iterator.hasNext()) {
+                timeMessage = (Message) iterator.next();
+                if ((timeMessage instanceof TextMessage) ) {
+                    if(((TextMessage) timeMessage).getText().contains("点击")){
+                        break;
+                    }
+                }
+
+                iterator.remove();
+            }
+
+            message = ((TextMessage) messageChain.get(0)).getText().trim();
+            if (message.contains("点击图形按钮")) {
+                String position = message.substring("点击图形按钮".length()).trim();
+                if(StringUtils.isNumeric(position)){
+                    Buttons buttons = botButtonMap.get(bot.getBotId());
+                    if (buttons!=null){
+                        Button button = buttons.getButtonList().get(Integer.parseInt(position)-1);
+                        bot.clickKeyboardButton(group.getGroupId(),buttons.getBotAppid(),button.getId(),button.getData(),buttons.getMsgSeq());
+                    }
+                }
+            }
+            if (message.contains("点击数字按钮")) {
+                String number = message.substring("点击数字按钮".length()).trim();
+                if(StringUtils.isNumeric(number)){
+                    Buttons buttons = botButtonMap.get(bot.getBotId());
+                    if (buttons!=null){
+                        List<Button> buttonList = buttons.getButtonList();
+                        for(Button button : buttonList){
+                            if(number.equals(button.getLabel())){
+                                bot.clickKeyboardButton(group.getGroupId(),buttons.getBotAppid(),button.getId(),button.getData(),buttons.getMsgSeq());
+                                break;
+                            }
+                        }
+
+                    }
+                }
+            }
+        }
+    }
+
+    @GroupMessageHandler(
+            senderIds = {3889001741L}
+    )
+    public void 自动点击按钮(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId, Buttons buttons) {
+        if(buttons!=null && !buttons.getButtonList().isEmpty() && message.contains("" + bot.getBotId())){
+
+        }
+    }
+
+
+    @GroupMessageHandler(
             senderIds = {3889001741L}
     )
     public void 点击验证码(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId, Buttons buttons) {
-        if(buttons!=null && !buttons.getRows().isEmpty() && !buttons.getRows().get(0).getButtons().isEmpty()){
-            Button button  = buttons.getRows().get(0).getButtons().get(0);
+        if(buttons!=null && !buttons.getButtonList().isEmpty() && message.contains("" + bot.getBotId())){
+//            BotFactory
+            List<Button> buttonList  = buttons.getButtonList();
+            botButtonMap.put(bot.getBotId(),buttons);
         }
     }
 
