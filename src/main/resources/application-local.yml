@@ -4,14 +4,16 @@ bot:
   - type: ws
 #    url: ws://113.45.9.127:8081
 #    url: ws://localhost:3001
-    url: ws://1.94.129.2:8082
-    accessToken: 1024*1024*1024
-    #    修炼群号
     groupId: 824484501
+    url: ws://1.94.129.2:8082
+#    groupId: 824484501
+    accessToken: 1024*1024*1024
+
+#    groupId: 824484501
     #    大号qq
-    controlQQ: 819463350&1018454301
+    controlQQ: 819463350&1018454301&3865898589
     #    大号qq
-    masterQQ: 819463350
+    masterQQ: 3865898589
     # 是否开启查价格
     enableCheckPrice: true
     # 是否开启猜成语
@@ -36,9 +38,10 @@ bot:
     enableGroupManager: false
     #悬赏令价格限制（超过这个价格会优先接取）
     xslPriceLimit: 1000
-    botNumber: 4
+    botNumber: 5
     enableSelfTitle: true
     enableXiaoBei: false
+    lingShiNum: 100
 
 #  - type: ws
 #    url: ws://localhost:8080
