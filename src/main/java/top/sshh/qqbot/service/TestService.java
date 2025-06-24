@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
 
@@ -820,7 +821,7 @@ public class TestService {
                     if(StringUtils.isNumeric(position)){
                         Buttons buttons = botButtonMap.get(bot.getBotId());
                         if (buttons!=null && !buttons.getButtonList().isEmpty()){
-                            if (Integer.parseInt(position) < buttons.getButtonList().size()){
+                            if (Integer.parseInt(position) <= buttons.getButtonList().size()){
                                 Button button = buttons.getButtonList().get(Integer.parseInt(position)-1);
                                 bot.clickKeyboardButton(group.getGroupId(),buttons.getBotAppid(),button.getId(),button.getData(),buttons.getMsgSeq());
                                 return;
@@ -830,13 +831,16 @@ public class TestService {
                     }
                 }
                 if (message.contains("点击文本")) {
-                    String number = message.substring("点击文本".length()).trim();
-                    if(StringUtils.isNumeric(number)){
+                    String text = message.substring("点击文本".length()).trim();
+                    if(GuessIdiom.getEmoji(text) != null){
+                        text = GuessIdiom.getEmoji(text);
+                    }
+                    if(StringUtils.isNotBlank(text)){
                         Buttons buttons = botButtonMap.get(bot.getBotId());
                         if (buttons!=null && !buttons.getButtonList().isEmpty()){
                             List<Button> buttonList = buttons.getButtonList();
                             for(Button button : buttonList){
-                                if(number.equals(button.getLabel())){
+                                if(text.equals(button.getLabel())){
                                     bot.clickKeyboardButton(group.getGroupId(),buttons.getBotAppid(),button.getId(),button.getData(),buttons.getMsgSeq());
                                     return;
                                 }

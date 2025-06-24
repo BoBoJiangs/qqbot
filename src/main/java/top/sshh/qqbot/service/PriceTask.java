@@ -64,13 +64,13 @@ public class PriceTask {
     public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         message = message.trim();
-        if (message.equals("同步坊市价格")) {
+        if (message.equals("同步坊市价格") || message.equals("同步数据") ||message.equals("同步坊市数据")) {
             this.savePrice(group);
         }
 
     }
 
-    private void readPrice() {
+    public void readPrice() {
         try {
             BufferedReader reader = new BufferedReader(new FileReader(targetDir+"properties/坊市价格.txt"));
 

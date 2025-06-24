@@ -16,6 +16,11 @@ public class GuessIdiom {
     private static final Logger log = LoggerFactory.getLogger(GuessIdiom.class);
     private static Map<String, String> CACHE = new HashMap();
     private static Map<String, String> riddleMap = new HashMap();
+    private static Map<String, String> EMOJI_MAP = new HashMap();
+
+    public static String getEmoji(String text) {
+        return (String)EMOJI_MAP.getOrDefault(text, text);
+    }
 
     public static String getIdiom(String emoji) {
         return (String)CACHE.get(emoji);
@@ -280,5 +285,16 @@ public class GuessIdiom {
         riddleMap.put("一座桥，地上架", "滑梯");
         riddleMap.put("威风凛凛山大王", "老虎");
         riddleMap.put("小小诸葛亮", "蜘蛛");
+        EMOJI_MAP.put("沙漏", "⌛");
+        EMOJI_MAP.put("鲸鱼", "\ud83d\udc33");
+        EMOJI_MAP.put("电池", "\ud83d\udd0b");
+        EMOJI_MAP.put("苹果", "\ud83c\udf4e");
+        EMOJI_MAP.put("葡萄", "\ud83c\udf47");
+        EMOJI_MAP.put("图钉", "\ud83d\udccc");
+        EMOJI_MAP.put("鸡", "\ud83d\udc14");
+        EMOJI_MAP.put("西瓜", "\ud83c\udf49");
+        EMOJI_MAP.put("电脑", "\ud83d\udcbb");
+        EMOJI_MAP.put("汽车", "\ud83d\ude97");
+        EMOJI_MAP.put("书", "\ud83d\udcd6");
     }
 }
