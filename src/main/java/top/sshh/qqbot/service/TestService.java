@@ -798,8 +798,8 @@ public class TestService {
             isAt = true,
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
-    public void 控制小号点击按钮(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (checkControlQQ(bot, member) && message.contains("点击") && message.startsWith("@")) {
+    public void 艾特小号执行(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        if (checkControlQQ(bot, member)) {
             Iterator iterator = messageChain.iterator();
 
             Message timeMessage;
@@ -813,8 +813,35 @@ public class TestService {
 
                 iterator.remove();
             }
-
             message = ((TextMessage) messageChain.get(0)).getText().trim();
+            clickButton(bot, group, member, messageChain, message);
+            setLingShiNum(bot, group, member, messageChain, message);
+
+        }
+    }
+
+    /**
+     * 设置赠送灵石数量
+     */
+    private void setLingShiNum(Bot bot, Group group, Member member, MessageChain messageChain, String message){
+        if(message.contains("我要灵石")){
+            BotConfig botConfig = bot.getBotConfig();
+            String num = message.substring("我要灵石".length()).trim();
+            if(StringUtils.isNumeric(num)){
+                botConfig.setLingShiNum(Integer.parseInt(num));
+                group.sendMessage((new MessageChain()).text("我的灵石准备好了，请发送你的接收码吧!"));
+            }else{
+                group.sendMessage((new MessageChain()).text("请输入正确的数量"));
+            }
+        }
+    }
+
+    /**
+     * 点击按钮
+     */
+    private void clickButton(Bot bot, Group group, Member member, MessageChain messageChain, String message){
+        if(message.contains("点击") && message.startsWith("@")){
+
             try {
                 if (message.contains("点击按钮")) {
                     String position = message.substring("点击按钮".length()).trim();
@@ -863,7 +890,7 @@ public class TestService {
     )
     public void 识别大号接收码(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        if( message.contains(botConfig.getMasterQQ()+"") && message.contains("您的接收码为") && botConfig.getLingShiNum() > 0){
+        if((message.contains(botConfig.getMasterQQ()+"") || message.contains(botConfig.getLingShiQQ()+"")) && message.contains("您的接收码为") && botConfig.getLingShiNum() > 0){
             String code = message.split("您的接收码为：| ")[1];
             group.sendMessage((new MessageChain()).at("3889001741").text("赠送灵石 ").text(code+" ").text(botConfig.getLingShiNum()*10000+""));
         }
