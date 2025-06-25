@@ -82,14 +82,12 @@ public class PriceTask {
                     jsonStr.append(line);
                 }
 
-                List<ProductPrice> personList = (List)JSON.parseObject(jsonStr.toString(), new TypeReference<List<ProductPrice>>() {
+                List<ProductPrice> personList = JSON.parseObject(jsonStr.toString(), new TypeReference<List<ProductPrice>>() {
                 }, new JSONReader.Feature[0]);
                 if (this.productPriceResponse != null) {
 
                     this.productPriceResponse.saveAll(personList);
-                    System.out.println("坊市价格读取成功！" + personList.size());
-                } else {
-                    System.out.println("********！");
+                    logger.info("坊市价格读取成功！{}", personList.size());
                 }
             } catch (Throwable var5) {
             }

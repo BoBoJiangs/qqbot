@@ -799,14 +799,16 @@ public class TestService {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 艾特小号执行(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (checkControlQQ(bot, member)) {
+        BotConfig botConfig = bot.getBotConfig();
+        if (checkControlQQ(bot, member)|| member.getUserId() == botConfig.getLingShiQQ()) {
             Iterator iterator = messageChain.iterator();
 
             Message timeMessage;
             while (iterator.hasNext()) {
                 timeMessage = (Message) iterator.next();
                 if ((timeMessage instanceof TextMessage) ) {
-                    if(((TextMessage) timeMessage).getText().contains("点击")){
+                    String text = ((TextMessage) timeMessage).getText().trim();
+                    if(StringUtils.isNotBlank(text)){
                         break;
                     }
                 }
@@ -814,8 +816,14 @@ public class TestService {
                 iterator.remove();
             }
             message = ((TextMessage) messageChain.get(0)).getText().trim();
-            clickButton(bot, group, member, messageChain, message);
-            setLingShiNum(bot, group, member, messageChain, message);
+
+            if(member.getUserId() == botConfig.getLingShiQQ() || checkControlQQ(bot, member)){
+                setLingShiNum(bot, group, member, messageChain, message);
+            }
+            if(checkControlQQ(bot, member)){
+                clickButton(bot, group, member, messageChain, message);
+            }
+
 
         }
     }
@@ -829,7 +837,7 @@ public class TestService {
             String num = message.substring("我要灵石".length()).trim();
             if(StringUtils.isNumeric(num)){
                 botConfig.setLingShiNum(Integer.parseInt(num));
-                group.sendMessage((new MessageChain()).text("我的灵石准备好了，请发送你的接收码吧!"));
+                group.sendMessage((new MessageChain()).text(num+"万灵石已经准备好了，请发送你的接收码吧!"));
             }else{
                 group.sendMessage((new MessageChain()).text("请输入正确的数量"));
             }
@@ -840,7 +848,7 @@ public class TestService {
      * 点击按钮
      */
     private void clickButton(Bot bot, Group group, Member member, MessageChain messageChain, String message){
-        if(message.contains("点击") && message.startsWith("@")){
+        if(message.contains("点击")){
 
             try {
                 if (message.contains("点击按钮")) {
@@ -1193,12 +1201,6 @@ public class TestService {
     private void processCommand(long groupId, String command,List<Bot> botList) {
         int time = 2;
         int count = 1;
-//        String action = "";
-//        Pattern commandPattern = Pattern.compile("听令([1-9]|10)(.*?)(?=(循环|间隔|$))");
-//        Matcher commandMatcher = commandPattern.matcher(command);
-//        if (commandMatcher.find()) {
-//            action = commandMatcher.group(1).trim();
-//        }
 
         // 提取循环次数（如 "循环2" → 2）
         Pattern loopPattern = Pattern.compile("循环(\\d+)");

@@ -2,18 +2,17 @@ xbGroupId: 993970673
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
   - type: ws
-#    url: ws://113.45.9.127:8081
     url: ws://localhost:3001
     groupId: 971327442
-#    url: ws://1.94.129.2:8082
-#    groupId: 824484501
+#    url: ws://117.72.213.211:8900
+#    groupId: 679831529
     accessToken: 1024*1024*1024
 
 #    groupId: 824484501
     #    大号qq
-    controlQQ: 819463350&1018454301&3865898589
+    controlQQ: 819463350
     #    大号qq
-    masterQQ: 3865898589
+    masterQQ: 819463350
     # 是否开启查价格
     enableCheckPrice: true
     # 是否开启猜成语
@@ -42,6 +41,7 @@ bot:
     enableSelfTitle: true
     enableXiaoBei: false
     lingShiNum: 100
+    lingShiQQ: 819463350
 
 #  - type: ws
 #    url: ws://localhost:8080
