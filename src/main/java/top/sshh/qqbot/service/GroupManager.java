@@ -77,8 +77,8 @@ public class GroupManager {
 //    private Long botId;
 
     public static List<Long> remindGroupIdList = Arrays.asList(1023764416L,971327442L,679831529L,824484501L,690933736L,978207420L);
-    @Autowired
-    public DanCalculator danCalculator;
+//    @Autowired
+//    public DanCalculator danCalculator;
     private Map<String, Map<String, PendingLingTianRecord>> pendingLingTianRecords = new ConcurrentHashMap();
     private Map<String, Set<String>> excludeAlchemyMap = new ConcurrentHashMap();
     private Map<String, Set<String>> excludeSellMap = new ConcurrentHashMap();
@@ -469,10 +469,10 @@ public class GroupManager {
                 }
 
             }
-            if ((danCalculator!=null && danCalculator.config!=null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
-                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) ) {
-                bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
-            }
+//            if ((danCalculator!=null && danCalculator.config!=null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
+//                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) ) {
+//                bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
+//            }
             MESSAGE_NUMBER_MAP.put(bot.getBotId()+"", messageNumber);
         }
         message = message.trim();

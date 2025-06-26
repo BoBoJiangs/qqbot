@@ -2,10 +2,10 @@ xbGroupId: 993970673
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
   - type: ws
-    url: ws://localhost:3001
-    groupId: 971327442
-#    url: ws://117.72.213.211:8900
-#    groupId: 679831529
+#    url: ws://localhost:3001
+#    groupId: 971327442
+    url: ws://117.72.213.211:8900
+    groupId: 679831529
     accessToken: 1024*1024*1024
 
 #    groupId: 824484501
@@ -41,7 +41,7 @@ bot:
     enableSelfTitle: true
     enableXiaoBei: false
     lingShiNum: 100
-    lingShiQQ: 819463350
+    lingShiQQ: 81946335
 
 #  - type: ws
 #    url: ws://localhost:8080
