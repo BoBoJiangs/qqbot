@@ -41,7 +41,7 @@ bot:
     enableSelfTitle: true
     enableXiaoBei: false
     lingShiNum: 100
-    lingShiQQ: 81946335
+    lingShiQQ: 819463350
 
 #  - type: ws
 #    url: ws://localhost:8080

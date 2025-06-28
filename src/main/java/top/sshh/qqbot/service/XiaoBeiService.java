@@ -576,6 +576,8 @@ public class XiaoBeiService {
 
             System.out.println("秘境结算时间" + parts[1]);
             botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double) System.currentTimeMillis()));
+        }else if (message.contains("道友现在正在秘境中")) {
+            sendBotMessage(bot, "秘境结算", true);
         }
 
     }

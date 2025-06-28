@@ -5,6 +5,11 @@
 
 package top.sshh.qqbot.service;
 
+import com.volcengine.ark.runtime.model.completion.chat.ChatCompletionContentPart;
+import com.volcengine.ark.runtime.model.completion.chat.ChatCompletionRequest;
+import com.volcengine.ark.runtime.model.completion.chat.ChatMessage;
+import com.volcengine.ark.runtime.model.completion.chat.ChatMessageRole;
+import com.volcengine.ark.runtime.service.ArkService;
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.*;
@@ -50,6 +55,39 @@ public class TestService {
     private static final List<String> KEYWORDS = Arrays.asList("烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后", "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困", "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得", "从腐朽道袍中滑落");
 
     public TestService() {
+        ArkService service = new ArkService("0b6a32d4-204d-4c84-a30d-cdeaf5c26252");
+        String url1="https://qqbot.ugcimg.cn/102074059/dee967b60b087b408885838a315cfd14fdf899d6/ec1e96cda9ccf559e6e59059c7dc20e5";
+
+        System.out.println("----- image input -----");
+        final List<ChatMessage> messages = new ArrayList<>();
+        final List<ChatCompletionContentPart> multiParts = new ArrayList<>();
+        multiParts.add(ChatCompletionContentPart.builder().type("text").text(
+                "。识别图片中的深色文字，并且给出结果"
+        ).build());
+        multiParts.add(ChatCompletionContentPart.builder().type("image_url").imageUrl(
+                new ChatCompletionContentPart.ChatCompletionContentPartImageURL(url1)
+        ).build());
+        final ChatMessage userMessage = ChatMessage.builder().role(ChatMessageRole.USER)
+                .multiContent(multiParts).build();
+        messages.add(userMessage);
+
+        ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest.builder()
+                .model("ep-20250626154238-tdmq8")
+                .messages(messages)
+                .build();
+
+        // 发送聊天完成请求并打印响应
+        try {
+            // 获取响应并打印每个选择的消息内容
+            service.createChatCompletion(chatCompletionRequest)
+                    .getChoices()
+                    .forEach(choice -> System.out.println(choice.getMessage().getContent()));
+        } catch (Exception e) {
+            System.out.println("请求失败: " + e.getMessage());
+        } finally {
+            // 关闭服务执行器
+            service.shutdownExecutor();
+        }
     }
 
     public static void proccessCultivation(Group group) {
@@ -1053,6 +1091,15 @@ public class TestService {
         if (message.contains("https") && message.contains("qqbot") && (!message.contains("修仙信息") || !message.contains("统计信息") || !message.contains("道号"))
                 && message.contains("" + bot.getBotId()) && (!message.contains("方向要求") || !message.contains("随机事件"))) {
 //            log.info("检测到按钮个数："+buttons.getButtonList().size());
+            // 定义正则表达式模式
+            String regex = "https?://[^\\s\\)]+";;
+            Pattern pattern = Pattern.compile(regex);
+            Matcher matcher = pattern.matcher(message);
+
+            // 查找并输出所有匹配的URL
+            while (matcher.find()) {
+                System.out.println("提取到的图片链接: " + matcher.group());
+            }
             showButtonMsg(bot, group, messageId, message, buttons);
             BotConfig botConfig = bot.getBotConfig();
             botConfig.setStop(true);
@@ -1121,14 +1168,15 @@ public class TestService {
     public void 执行命令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
 
 
-        if (checkControlQQ(bot, member) && message.contains("执行") && message.startsWith("@")) {
+        if (checkControlQQ(bot, member) && (message.contains("执行") || message.contains("听令"))) {
             Iterator iterator = messageChain.iterator();
 
             Message timeMessage;
             while (iterator.hasNext()) {
                 timeMessage = (Message) iterator.next();
                 if ((timeMessage instanceof TextMessage)) {
-                    if (((TextMessage) timeMessage).getText().contains("执行")) {
+                    String text = ((TextMessage) timeMessage).getText().trim();
+                    if (StringUtils.isNotBlank(text)) {
                         break;
                     }
                 }
@@ -1188,7 +1236,19 @@ public class TestService {
                 messageChain.set(0, new TextMessage(message.substring(message.indexOf("执行") + 2)));
                 messageChain.add(0, new AtMessage("3889001741"));
                 group.sendMessage(messageChain);
+            }else if (message.startsWith("听令1")) {
+                messageChain.set(0, new TextMessage(message.substring("听令1".length()).trim()));
+                group.sendMessage(messageChain);
+            }else if (message.startsWith("听令2")) {
+                messageChain.set(0, new TextMessage(message.substring("听令2".length()).trim()));
+                messageChain.add(0, new AtMessage("3889001741"));
+                group.sendMessage(messageChain);
+            }else if (message.startsWith("听令3")) {
+                messageChain.set(0, new TextMessage(message.substring("听令3".length()).trim()));
+                messageChain.add(0, new AtMessage("3889029313"));
+                group.sendMessage(messageChain);
             }
+
         }
 
     }
