@@ -119,9 +119,9 @@ public class FamilyTask {
                 }
 
                 long groupId = botConfig.getGroupId();
-                if (botConfig.getTaskId() != 0L) {
-                    groupId = botConfig.getTaskId();
-                }
+//                if (botConfig.getTaskId() != 0L) {
+//                    groupId = botConfig.getTaskId();
+//                }
 
                 Group group = bot.getGroup(groupId);
                 switch (botConfig.getFamilyTaskStatus()) {
@@ -192,7 +192,8 @@ public class FamilyTask {
     public void 宗门任务状态管理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isAtSelf = isAtSelf(message,bot,group);
-        if (isAtSelf) {
+        boolean isGroup = group.getGroupId() == botConfig.getGroupId();
+        if (isAtSelf && isGroup) {
             if (message.contains("道友目前还没有宗门任务")) {
                 botConfig.setFamilyTaskStatus(1);
             }
@@ -264,7 +265,7 @@ public class FamilyTask {
     )
     public void 灵田领取结果(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
+        boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         boolean isAtSelf = isAtSelf(message,bot,group);
         if (isGroup && isAtSelf) {
             if (message.contains("灵田还不能收取") || message.contains("道友的灵田灵气未满，尚需孕育")) {
@@ -278,6 +279,7 @@ public class FamilyTask {
                     double hours = Double.parseDouble(parts[1].trim());
                     long remindTime = (long) ((double) System.currentTimeMillis() + hours * 60.0 * 60.0 * 1000.0);
                     remindMap.put(bot.getBotId(), remindTime);
+                    group.sendMessage((new MessageChain()).text("下次收取时间为：" + sdf.format(new Date(remindTime))));
                 } catch (Exception e) {
                     logger.error("灵田收取时间失败", e);
                 }
@@ -310,9 +312,9 @@ public class FamilyTask {
             if (botConfig.isEnableAutoField()) {
 
                 long groupId = botConfig.getGroupId();
-                if (botConfig.getTaskId() != 0L) {
-                    groupId = botConfig.getTaskId();
-                }
+//                if (botConfig.getTaskId() != 0L) {
+//                    groupId = botConfig.getTaskId();
+//                }
 
 
                 if (remindMap.get(bot.getBotId()) == null) {

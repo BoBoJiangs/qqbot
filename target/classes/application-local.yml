@@ -1,11 +1,13 @@
 xbGroupId: 993970673
+# 小小的总群
+xxGroupId: 690933736
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
   - type: ws
 #    url: ws://localhost:3001
 #    groupId: 971327442
     url: ws://117.72.213.211:8900
-    groupId: 679831529
+    groupId: 1011466037
     accessToken: 1024*1024*1024
 
 #    groupId: 824484501
