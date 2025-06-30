@@ -352,7 +352,8 @@
 //    }
 //
 //    private boolean isAtSelf(String message,Bot bot){
-//        return message.contains("@" + bot.getBotId()) || message.contains("@" +bot.getBotName()) ;
+////        return message.contains("@" + bot.getBotId()) || message.contains("@" +bot.getBotName()) ;
+//        return true;
 //    }
 //
 //
@@ -502,11 +503,10 @@
 ////                            }
 //                            MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
 //                            //超过10分钟没有更新消息时间，暂停循环任务
-//                            if(messageNumber.getTime() < System.currentTimeMillis() - 600000){
-//                                logger.info("发送查询消息失败，暂停查看坊市药材");
-////                                botConfig.setStartAutoBuyHerbs(false);
-//                                botConfig.setStop(true);
-//                            }
+////                            if(messageNumber.getTime() < System.currentTimeMillis() - 600000){
+////                                logger.info("发送查询消息失败，暂停查看坊市药材");
+////                                botConfig.setStop(true);
+////                            }
 //                            botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
 //                            noQueriedCount = 0;
 //                        } catch (Exception var6) {

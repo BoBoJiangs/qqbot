@@ -55,39 +55,7 @@ public class TestService {
     private static final List<String> KEYWORDS = Arrays.asList("烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后", "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困", "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得", "从腐朽道袍中滑落");
 
     public TestService() {
-        ArkService service = new ArkService("0b6a32d4-204d-4c84-a30d-cdeaf5c26252");
-        String url1="https://qqbot.ugcimg.cn/102074059/dee967b60b087b408885838a315cfd14fdf899d6/ec1e96cda9ccf559e6e59059c7dc20e5";
 
-        System.out.println("----- image input -----");
-        final List<ChatMessage> messages = new ArrayList<>();
-        final List<ChatCompletionContentPart> multiParts = new ArrayList<>();
-        multiParts.add(ChatCompletionContentPart.builder().type("text").text(
-                "。识别图片中的深色文字，并且给出结果"
-        ).build());
-        multiParts.add(ChatCompletionContentPart.builder().type("image_url").imageUrl(
-                new ChatCompletionContentPart.ChatCompletionContentPartImageURL(url1)
-        ).build());
-        final ChatMessage userMessage = ChatMessage.builder().role(ChatMessageRole.USER)
-                .multiContent(multiParts).build();
-        messages.add(userMessage);
-
-        ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest.builder()
-                .model("ep-20250626154238-tdmq8")
-                .messages(messages)
-                .build();
-
-        // 发送聊天完成请求并打印响应
-        try {
-            // 获取响应并打印每个选择的消息内容
-            service.createChatCompletion(chatCompletionRequest)
-                    .getChoices()
-                    .forEach(choice -> System.out.println(choice.getMessage().getContent()));
-        } catch (Exception e) {
-            System.out.println("请求失败: " + e.getMessage());
-        } finally {
-            // 关闭服务执行器
-            service.shutdownExecutor();
-        }
     }
 
     public static void proccessCultivation(Group group) {
@@ -113,6 +81,10 @@ public class TestService {
     )
     public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
+        long groupId = botConfig.getGroupId();
+        if (botConfig.getTaskId() != 0L) {
+            groupId = botConfig.getTaskId();
+        }
         message = message.trim();
         if (StringUtils.isEmpty(message)) {
             return;
@@ -130,6 +102,19 @@ public class TestService {
                 botConfig.setStop(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
                 bot.getBotConfig().setCommand("");
+            }
+            if ("开始自动悬赏".equals(message)) {
+                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("悬赏令刷新"));
+            }
+            if ("开始自动秘境".equals(message)) {
+                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("探索秘境"));
+            }
+            if ("开始自动宗门任务".equals(message)) {
+                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("宗门任务接取"));
+            }
+            if ("开始自动刷天赋".equals(message)) {
+                isStartAutoTalent = true;
+                group.sendMessage((new MessageChain()).at("3889001741").text("道具使用涅槃造化丹"));
             }
 
             if ("开始自动刷天赋".equals(message)) {
@@ -848,7 +833,8 @@ public class TestService {
             if (member.getUserId() == botConfig.getLingShiQQ() || checkControlQQ(bot, member)) {
                 setLingShiNum(bot, group, member, messageChain, message);
             }
-        }else if (checkControlQQ(bot, member)) {
+        }
+        if (checkControlQQ(bot, member)) {
             messageChain = getMessageText(messageChain);
             message = ((TextMessage) messageChain.get(0)).getText().trim();
 
@@ -904,21 +890,7 @@ public class TestService {
         if (message.contains("点击")) {
 
             try {
-                if (message.contains("点击按钮")) {
-                    String position = message.substring("点击按钮".length()).trim();
-                    if (StringUtils.isNumeric(position)) {
-                        Buttons buttons = botButtonMap.get(bot.getBotId());
-                        if (buttons != null && !buttons.getButtonList().isEmpty()) {
-                            if (Integer.parseInt(position) <= buttons.getButtonList().size()) {
-                                Button button = buttons.getButtonList().get(Integer.parseInt(position) - 1);
-                                bot.clickKeyboardButton(group.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
-                                return;
-                            }
-
-                        }
-                    }
-                }
-                if (message.contains("点击文本")) {
+                if (message.contains("点击文本") || message.contains("点击按钮") || message.contains("点击表情")) {
                     String text = message.substring("点击文本".length()).trim();
                     if (GuessIdiom.getEmoji(text) != null) {
                         text = GuessIdiom.getEmoji(text);
@@ -929,7 +901,7 @@ public class TestService {
                             List<Button> buttonList = buttons.getButtonList();
                             for (Button button : buttonList) {
                                 if (text.equals(button.getLabel())) {
-                                    bot.clickKeyboardButton(group.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
+                                    bot.clickKeyboardButton(buttons.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
                                     return;
                                 }
                             }
@@ -951,19 +923,10 @@ public class TestService {
     )
     public void 识别大号接收码(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        if (message.contains("您的接收码为") && botConfig.getLingShiNum() > 0) {
-            String atQQ = getAtMessageQQ(messageChain);
-            if(botConfig.getLingShiQQ()!=null){
-                if (atQQ.equals(botConfig.getLingShiQQ() + "")) {
-                    String code = message.split("您的接收码为：| ")[1];
-                    group.sendMessage((new MessageChain()).at("3889001741").text("赠送灵石 ").text(code + " ").text(botConfig.getLingShiNum() * 10000 + ""));
-                }
-            }else{
-                if (atQQ.equals(botConfig.getMasterQQ() + "")) {
-                    String code = message.split("您的接收码为：| ")[1];
-                    group.sendMessage((new MessageChain()).at("3889001741").text("赠送灵石 ").text(code + " ").text(botConfig.getLingShiNum() * 10000 + ""));
-                }
-            }
+        if (message.contains("您的接收码为") && botConfig.getLingShiNum() > 0 && botConfig.getLingShiQQ()== group.getGroupId()) {
+//            String atQQ = getAtMessageQQ(messageChain);
+            String code = message.split("您的接收码为：| ")[1];
+            group.sendMessage((new MessageChain()).at("3889001741").text("赠送灵石 ").text(code + " ").text(botConfig.getLingShiNum() * 10000 + ""));
 
         }
     }
@@ -1020,52 +983,52 @@ public class TestService {
 
     private void showButtonMsg(Bot bot, Group group, Integer messageId, String message, Buttons buttons) {
         if (buttons != null && !buttons.getButtonList().isEmpty() && isAtSelf(message, bot, group)) {
-//            BotFactory
-            if (bot.getBotConfig().getMasterQQ() == bot.getBotId()) {
-                return;
-            }
-            List<Button> buttonList = buttons.getButtonList();
-            if (bot.getBotConfig().getGroupId() == group.getGroupId() || bot.getBotConfig().getTaskId() == group.getGroupId()) {
-                StringBuilder buttonBuilder = new StringBuilder();
-                buttonBuilder.append("请选择需要点击的按钮 @我+点击按钮+序号");
-                buttonBuilder.append("\n");
-                buttonBuilder.append("【");
-                if (buttonList.size() == 16) {
-                    int index = 0;
-                    for (int i = 0; i < 5 && index < buttonList.size(); i++, index++) {
-                        Button button = buttonList.get(index);
-                        buttonBuilder.append(" ").append(index + 1).append(" ").append(button.getLabel()).append(" ");
-                    }
-                    buttonBuilder.append("】");
-                    buttonBuilder.append("\n");
-
-                    for (int i = 0; i < 4 && index < buttonList.size(); i++, index++) {
-                        Button button = buttonList.get(index);
-                        buttonBuilder.append("【").append(index + 1).append("】").append(button.getLabel()).append(" ");
-                    }
-                    buttonBuilder.append("\n");
-
-                    for (int i = 0; i < 3 && index < buttonList.size(); i++, index++) {
-                        Button button = buttonList.get(index);
-                        buttonBuilder.append("【").append(index + 1).append("】").append(button.getLabel()).append("  ");
-                    }
-                    buttonBuilder.append("\n");
-
-                    for (int i = 0; i < 4 && index < buttonList.size(); i++, index++) {
-                        Button button = buttonList.get(index);
-                        buttonBuilder.append("【").append(index + 1).append("】").append(button.getLabel()).append(" ");
-                    }
-
-                } else {
-                    for (int i = 0; i < buttonList.size(); i++) {
-                        Button button = buttonList.get(i);
-                        buttonBuilder.append("【").append(i + 1).append("】").append(button.getLabel()).append("     ");
-
-                    }
-                }
-
-                group.sendMessage((new MessageChain()).reply(messageId).text(buttonBuilder.toString()));
-            }
+//            if (bot.getBotConfig().getMasterQQ() == bot.getBotId()) {
+//                return;
+//            }
+//            List<Button> buttonList = buttons.getButtonList();
+//            if (bot.getBotConfig().getGroupId() == group.getGroupId() || bot.getBotConfig().getTaskId() == group.getGroupId()) {
+//                StringBuilder buttonBuilder = new StringBuilder();
+//                buttonBuilder.append("请选择需要点击的按钮 @我+点击按钮+序号");
+//                buttonBuilder.append("\n");
+//                buttonBuilder.append("【");
+//                if (buttonList.size() == 16) {
+//                    int index = 0;
+//                    for (int i = 0; i < 5 && index < buttonList.size(); i++, index++) {
+//                        Button button = buttonList.get(index);
+//                        buttonBuilder.append(" ").append(index + 1).append(" ").append(button.getLabel()).append(" ");
+//                    }
+//                    buttonBuilder.append("】");
+//                    buttonBuilder.append("\n");
+//
+//                    for (int i = 0; i < 4 && index < buttonList.size(); i++, index++) {
+//                        Button button = buttonList.get(index);
+//                        buttonBuilder.append("【").append(index + 1).append("】").append(button.getLabel()).append(" ");
+//                    }
+//                    buttonBuilder.append("\n");
+//
+//                    for (int i = 0; i < 3 && index < buttonList.size(); i++, index++) {
+//                        Button button = buttonList.get(index);
+//                        buttonBuilder.append("【").append(index + 1).append("】").append(button.getLabel()).append("  ");
+//                    }
+//                    buttonBuilder.append("\n");
+//
+//                    for (int i = 0; i < 4 && index < buttonList.size(); i++, index++) {
+//                        Button button = buttonList.get(index);
+//                        buttonBuilder.append("【").append(index + 1).append("】").append(button.getLabel()).append(" ");
+//                    }
+//
+//                } else {
+//                    for (int i = 0; i < buttonList.size(); i++) {
+//                        Button button = buttonList.get(i);
+//                        buttonBuilder.append("【").append(i + 1).append("】").append(button.getLabel()).append("     ");
+//
+//                    }
+//                }
+//
+//                group.sendMessage((new MessageChain()).reply(messageId).text(buttonBuilder.toString()));
+//            }
+            buttons.setGroupId(group.getGroupId());
             botButtonMap.put(bot.getBotId(), buttons);
         }
     }
@@ -1092,14 +1055,14 @@ public class TestService {
                 && message.contains("" + bot.getBotId()) && (!message.contains("方向要求") || !message.contains("随机事件"))) {
 //            log.info("检测到按钮个数："+buttons.getButtonList().size());
             // 定义正则表达式模式
-            String regex = "https?://[^\\s\\)]+";;
-            Pattern pattern = Pattern.compile(regex);
-            Matcher matcher = pattern.matcher(message);
-
-            // 查找并输出所有匹配的URL
-            while (matcher.find()) {
-                System.out.println("提取到的图片链接: " + matcher.group());
-            }
+//            String regex = "https?://[^\\s\\)]+";;
+//            Pattern pattern = Pattern.compile(regex);
+//            Matcher matcher = pattern.matcher(message);
+//
+//            // 查找并输出所有匹配的URL
+//            while (matcher.find()) {
+//                System.out.println("提取到的图片链接: " + matcher.group());
+//            }
             showButtonMsg(bot, group, messageId, message, buttons);
             BotConfig botConfig = bot.getBotConfig();
             botConfig.setStop(true);
@@ -1931,12 +1894,13 @@ public class TestService {
     }
 
     private boolean isAtSelf(String message, Bot bot, Group group) {
-        String botName = bot.getBotName();
-        String cardName = group.getMember(bot.getBotId()).getCard();
-        if (StringUtils.isNotBlank(cardName)) {
-            botName = cardName;
-        }
-        return message.contains("@" + bot.getBotId()) || message.contains("@" + botName);
+//        String botName = bot.getBotName();
+//        String cardName = group.getMember(bot.getBotId()).getCard();
+//        if (StringUtils.isNotBlank(cardName)) {
+//            botName = cardName;
+//        }
+//        return message.contains("@" + bot.getBotId()) || message.contains("@" + botName);
+        return true;
     }
 
     public static List<Long> extractRewards(String input) {

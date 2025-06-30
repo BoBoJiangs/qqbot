@@ -19,9 +19,11 @@
 //import org.springframework.beans.factory.annotation.Autowired;
 //import org.springframework.stereotype.Component;
 //import top.sshh.qqbot.data.Config;
+//import top.sshh.qqbot.data.MessageNumber;
 //
 //import java.io.*;
 //import java.util.*;
+//import java.util.concurrent.ConcurrentHashMap;
 //import java.util.concurrent.CopyOnWriteArrayList;
 //import java.util.concurrent.ForkJoinPool;
 //import java.util.regex.Matcher;
@@ -37,6 +39,8 @@
 //    public int page = 1;
 //    @Autowired
 //    public DanCalculator danCalculator;
+//    @Autowired
+//    public GroupManager groupManager;
 //    private static final ForkJoinPool customPool = new ForkJoinPool(20);
 //    private List<String> alchemyList = new CopyOnWriteArrayList();
 //    private Group group;
@@ -51,7 +55,7 @@
 //    )
 //    public void enableScheduled(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
 //        BotConfig botConfig = bot.getBotConfig();
-//        if(StringUtils.isEmpty(message)){
+//        if (StringUtils.isEmpty(message)) {
 //            return;
 //        }
 //        if ("炼丹命令".equals(message)) {
@@ -67,8 +71,6 @@
 //        }
 //
 //
-//
-//
 //        if ("开始自动炼丹".equals(message)) {
 //            this.group = group;
 //            this.resetPram();
@@ -77,7 +79,7 @@
 //            customPool.submit(new Runnable() {
 //                public void run() {
 //                    try {
-//                        AutoAlchemyTask.clearFile(targetDir+"背包药材.txt");
+//                        AutoAlchemyTask.clearFile(targetDir + "背包药材.txt");
 //                        group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
 //                    } catch (Exception e) {
 //                        e.printStackTrace();
@@ -87,13 +89,13 @@
 //            });
 //        }
 //
-//        if ("停止自动炼丹".equals(message) ) {
+//        if ("停止自动炼丹".equals(message)) {
 //            this.resetPram();
 //            botConfig.setStartAuto(false);
 //            group.sendMessage((new MessageChain()).text("已停止自动炼丹"));
 //        }
 //
-//        if("未匹配到丹方，请检查丹方设置".equals(message)){
+//        if ("未匹配到丹方，请检查丹方设置".equals(message)) {
 //            this.resetPram();
 //            botConfig.setStartAuto(false);
 //        }
@@ -103,7 +105,7 @@
 //                public void run() {
 //                    try {
 //                        try {
-//                            File dataFile = new File(targetDir+"炼丹配方.txt");
+//                            File dataFile = new File(targetDir + "炼丹配方.txt");
 //                            if (dataFile.exists()) {
 ////
 //                                bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "炼丹配方.txt", "");
@@ -128,7 +130,7 @@
 //            customPool.submit(new Runnable() {
 //                public void run() {
 //                    try {
-//                        File dataFile = new File(targetDir+"properties/药材价格.txt");
+//                        File dataFile = new File(targetDir + "properties/药材价格.txt");
 //                        bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "药材价格.txt", "");
 //                    } catch (Exception var2) {
 //                        System.out.println("上传文件异常");
@@ -158,7 +160,7 @@
 //            customPool.submit(new Runnable() {
 //                public void run() {
 //                    try {
-//                        AutoAlchemyTask.this.danCalculator.parseRecipes(message, group,bot);
+//                        AutoAlchemyTask.this.danCalculator.parseRecipes(message, group, bot);
 //                    } catch (Exception var2) {
 //                        System.out.println("加载基础数据异常");
 //                    }
@@ -173,17 +175,18 @@
 //            Matcher matcher = pattern.matcher(message);
 //            if (matcher.find()) {
 //
-//                AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config);
-//                if((config.isAlchemy() != Boolean.parseBoolean(matcher.group(1))) ||
-//                        (config.getAlchemyNumber()!=Integer.parseInt(matcher.group(2)))||
-//                        (config.getMakeNumber()!=Integer.parseInt(matcher.group(3)))||
-//                        (config.getDanNumber()!=Integer.parseInt(matcher.group(4)))||
-//                        (!config.getMakeName().equals(matcher.group(5)))||
-//                        (config.getAlchemyQQ()!=(Long.parseLong(matcher.group(6))))){
+//
+//                if ((config.isAlchemy() != Boolean.parseBoolean(matcher.group(1))) ||
+//                        (config.getAlchemyNumber() != Integer.parseInt(matcher.group(2))) ||
+//                        (config.getMakeNumber() != Integer.parseInt(matcher.group(3))) ||
+//                        (config.getDanNumber() != Integer.parseInt(matcher.group(4))) ||
+//                        (!config.getMakeName().equals(matcher.group(5))) ||
+//                        (config.getAlchemyQQ() != (Long.parseLong(matcher.group(6))))) {
 //                    customPool.submit(new Runnable() {
 //                        public void run() {
 //                            try {
 //                                setConfig(matcher);
+//                                AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config);
 //                                group.sendMessage((new MessageChain()).text("丹方配置已更新，正在重新匹配丹方！"));
 //                                AutoAlchemyTask.this.danCalculator.loadData();
 //                                AutoAlchemyTask.this.danCalculator.calculateAllDans();
@@ -195,8 +198,9 @@
 //
 //                        }
 //                    });
-//                }else{
+//                } else {
 //                    setConfig(matcher);
+//                    AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config);
 //                    group.sendMessage((new MessageChain()).text("配置已更新！"));
 //                }
 //
@@ -209,7 +213,7 @@
 //
 //    }
 //
-//    private void setConfig(Matcher matcher){
+//    private void setConfig(Matcher matcher) {
 //        this.config.setAlchemy(Boolean.parseBoolean(matcher.group(1)));
 //        this.config.setAlchemyNumber(Integer.parseInt(matcher.group(2)));
 //        this.config.setMakeNumber(Integer.parseInt(matcher.group(3)));
@@ -231,7 +235,7 @@
 //            customPool.submit(new Runnable() {
 //                public void run() {
 //                    try {
-//                        AutoAlchemyTask.this.danCalculator.parseRecipes(string, group,bot);
+//                        AutoAlchemyTask.this.danCalculator.parseRecipes(string, group, bot);
 //                    } catch (Exception var2) {
 //                        System.out.println("加载基础数据异常");
 //                    }
@@ -283,7 +287,7 @@
 //    )
 //    public void 自动炼丹(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
 //        BotConfig botConfig = bot.getBotConfig();
-//        if (message.contains("" + bot.getBotId()) && botConfig.isStartAuto() && (message.contains("请检查炼丹炉是否在背包中") || message.contains("成功炼成丹药") || message.contains("药材是否在背包中"))) {
+//        if (isAtSelf(message,bot) && botConfig.isStartAuto() && (message.contains("请检查炼丹炉是否在背包中") || message.contains("成功炼成丹药") || message.contains("药材是否在背包中"))) {
 //            if (!this.alchemyList.isEmpty()) {
 //                this.alchemyList.remove(0);
 //            }
@@ -299,11 +303,16 @@
 //
 //    }
 //
+//    private boolean isAtSelf(String message,Bot bot){
+////        return message.contains("@" + bot.getBotId()) || message.contains("@" +bot.getBotName()) ;
+//        return true;
+//    }
+//
 //    private void autoAlchemy(Group group) {
 //        Iterator var3 = this.alchemyList.iterator();
 //
-//        while(var3.hasNext()) {
-//            String remedy = (String)var3.next();
+//        while (var3.hasNext()) {
+//            String remedy = (String) var3.next();
 //
 //            try {
 //                group.sendMessage((new MessageChain()).at("3889001741").text(remedy));
@@ -312,6 +321,22 @@
 //                Thread.currentThread().interrupt();
 //            }
 //        }
+//
+//    }
+//
+//    @GroupMessageHandler(
+//            ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
+//    )
+//    public void 统计群聊发言次数(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+//
+//        if (group != null && group.getGroupId() > 0) {
+//            MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
+//            if ((danCalculator != null && danCalculator.config != null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
+//                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0)) {
+//                bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName() + "(发言次数:" + messageNumber.getNumber() + ")");
+//            }
+//        }
+//
 //
 //    }
 //
@@ -332,9 +357,9 @@
 //            boolean hasNextPage = false;
 //            TextMessage textMessage = null;
 //            if (textMessages.size() > 1) {
-//                textMessage = (TextMessage)textMessages.get(textMessages.size()-1);
+//                textMessage = (TextMessage) textMessages.get(textMessages.size() - 1);
 //            } else {
-//                textMessage = (TextMessage)textMessages.get(0);
+//                textMessage = (TextMessage) textMessages.get(0);
 //            }
 //
 //            if (textMessage != null) {
@@ -367,7 +392,7 @@
 //        Map<String, List<String>> parseRecipes = this.parseRecipes();
 //        Iterator var2 = parseRecipes.entrySet().iterator();
 //
-//        while(true) {
+//        while (true) {
 //            List value;
 //            String v;
 //            do {
@@ -385,14 +410,14 @@
 //                        return;
 //                    }
 //
-//                    Map.Entry<String, List<String>> entry = (Map.Entry)var2.next();
-//                    value = (List)entry.getValue();
-//                    v = (String)entry.getKey();
-//                } while(value == null);
-//            } while(value.isEmpty());
+//                    Map.Entry<String, List<String>> entry = (Map.Entry) var2.next();
+//                    value = (List) entry.getValue();
+//                    v = (String) entry.getKey();
+//                } while (value == null);
+//            } while (value.isEmpty());
 //
-//            for(int d = 0; d < value.size(); ++d) {
-//                v = (String)value.get(d);
+//            for (int d = 0; d < value.size(); ++d) {
+//                v = (String) value.get(d);
 //                Map<String, String> herbMap = this.getParseRecipeMap(v);
 //                String main = "";
 //                String lead = "";
@@ -403,11 +428,11 @@
 //                Map.Entry herbEntry;
 //                String key;
 //                String herb;
-//                while(var13.hasNext()) {
-//                    herbEntry = (Map.Entry)var13.next();
-//                    key = (String)herbEntry.getKey();
+//                while (var13.hasNext()) {
+//                    herbEntry = (Map.Entry) var13.next();
+//                    key = (String) herbEntry.getKey();
 //                    herb = key.replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", "");
-//                    String[] sList = ((String)herbEntry.getValue()).split("&");
+//                    String[] sList = ((String) herbEntry.getValue()).split("&");
 //                    int herbCount = Integer.parseInt(sList[0]);
 //                    int herbPrice = Integer.parseInt(sList[1]);
 //                    if (key.contains("主药")) {
@@ -460,11 +485,11 @@
 //                    --d;
 //                    var13 = herbMap.entrySet().iterator();
 //
-//                    while(var13.hasNext()) {
-//                        herbEntry = (Map.Entry)var13.next();
-//                        key = (String)herbEntry.getKey();
+//                    while (var13.hasNext()) {
+//                        herbEntry = (Map.Entry) var13.next();
+//                        key = (String) herbEntry.getKey();
 //                        herb = key.replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", "");
-//                        int amount = Integer.parseInt(((String)herbEntry.getValue()).split("&")[0]);
+//                        int amount = Integer.parseInt(((String) herbEntry.getValue()).split("&")[0]);
 //                        modifyHerbCount(herb, amount);
 //                    }
 //                }
@@ -490,12 +515,12 @@
 //
 //    public Map<String, List<String>> parseRecipes() throws IOException {
 //        Map<String, List<String>> danRecipes = new LinkedHashMap();
-//        BufferedReader reader = new BufferedReader(new FileReader(targetDir+"炼丹配方.txt"));
+//        BufferedReader reader = new BufferedReader(new FileReader(targetDir + "炼丹配方.txt"));
 //        String currentDan = null;
 //        List<String> currentRecipes = null;
 //
 //        String line;
-//        while((line = reader.readLine()) != null) {
+//        while ((line = reader.readLine()) != null) {
 //            line = line.trim();
 //            if (!line.isEmpty()) {
 //                if (line.endsWith("配方")) {
@@ -530,7 +555,7 @@
 //        String[] var4 = str;
 //        int var5 = str.length;
 //
-//        for(int var6 = 0; var6 < var5; ++var6) {
+//        for (int var6 = 0; var6 < var5; ++var6) {
 //            String s = var4[var6];
 //            if (s.contains("主药") || s.contains("药引") || s.contains("辅药")) {
 //                String[] myStrs = s.split("-");
@@ -543,9 +568,9 @@
 //
 //    public static int getHerbCount(String name) {
 //        try {
-//            BufferedReader reader = new BufferedReader(new FileReader(targetDir+"背包药材.txt"));
+//            BufferedReader reader = new BufferedReader(new FileReader(targetDir + "背包药材.txt"));
 //
-//            while(true) {
+//            while (true) {
 //                try {
 //                    String line;
 //                    if ((line = reader.readLine()) != null) {
@@ -575,11 +600,11 @@
 //        boolean found = false;
 //
 //        try {
-//            BufferedReader reader = new BufferedReader(new FileReader(targetDir+"背包药材.txt"));
+//            BufferedReader reader = new BufferedReader(new FileReader(targetDir + "背包药材.txt"));
 //
 //            String line;
 //            try {
-//                while((line = reader.readLine()) != null) {
+//                while ((line = reader.readLine()) != null) {
 //                    String[] parts = line.split(" ");
 //                    if (parts[0].equals(name)) {
 //                        found = true;
@@ -604,7 +629,7 @@
 //        }
 //
 //        try {
-//            FileWriter fw = new FileWriter(targetDir+"背包药材.txt", false);
+//            FileWriter fw = new FileWriter(targetDir + "背包药材.txt", false);
 //
 //            try {
 //                BufferedWriter writer = new BufferedWriter(fw);
@@ -612,8 +637,8 @@
 //                try {
 //                    Iterator var19 = lines.iterator();
 //
-//                    while(var19.hasNext()) {
-//                        String line = (String)var19.next();
+//                    while (var19.hasNext()) {
+//                        String line = (String) var19.next();
 //                        writer.write(line);
 //                        writer.newLine();
 //                    }
@@ -638,8 +663,8 @@
 //        String currentHerb = null;
 //        Iterator var2 = this.medicinalList.iterator();
 //
-//        while(var2.hasNext()) {
-//            String line = (String)var2.next();
+//        while (var2.hasNext()) {
+//            String line = (String) var2.next();
 //            line = line.trim();
 //            if (line.contains("名字：")) {
 //                currentHerb = line.replaceAll("名字：", "");
@@ -664,7 +689,7 @@
 //    }
 //
 //    public void updateMedicine(String name, int quantity) {
-//        String filePath = targetDir+"背包药材.txt";
+//        String filePath = targetDir + "背包药材.txt";
 //        List<String> lines = new ArrayList<>();
 //        boolean found = false;
 //        // 读取文件内容并处理

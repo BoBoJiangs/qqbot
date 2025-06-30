@@ -14,23 +14,21 @@ import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.core.component.BotFactory;
-import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
+import com.zhuangxv.bot.message.support.ReplyMessage;
+import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Value;
 import top.sshh.qqbot.data.MessageNumber;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.data.RemindTime;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -76,8 +74,8 @@ public class GroupManager {
 //    @Value("${botId}")
 //    private Long botId;
 
-    public static List<Long> remindGroupIdList = Arrays.asList(1023764416L,971327442L,679831529L,824484501L,690933736L,978207420L);
-//    @Autowired
+    public static List<Long> remindGroupIdList = Arrays.asList(1023764416L, 971327442L, 679831529L, 824484501L, 690933736L, 978207420L);
+    //    @Autowired
 //    public DanCalculator danCalculator;
     private Map<String, Map<String, PendingLingTianRecord>> pendingLingTianRecords = new ConcurrentHashMap();
     private Map<String, Set<String>> excludeAlchemyMap = new ConcurrentHashMap();
@@ -97,12 +95,12 @@ public class GroupManager {
         BotConfig botConfig = bot.getBotConfig();
         message = message.trim();
         if (message.equals("清空发言统计")) {
-            MESSAGE_NUMBER_MAP.put(bot.getBotId()+"", new MessageNumber(0,  System.currentTimeMillis()));
+            MESSAGE_NUMBER_MAP.put(bot.getBotId() + "", new MessageNumber(0, System.currentTimeMillis()));
             group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
-        }else if (message.equals("同步发言统计")) {
+        } else if (message.equals("同步发言统计")) {
             saveTasksToFile();
             group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
-        }else if (message.equals("同步数据")) {
+        } else if (message.equals("同步数据")) {
             saveTasksToFile();
             group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
         }
@@ -121,9 +119,9 @@ public class GroupManager {
         if (message.startsWith("移除上架排除物品")) {
             botId = bot.getBotId();
             groupString = message.substring(8).trim();
-            if(StringUtils.isNotBlank(groupString)){
+            if (StringUtils.isNotBlank(groupString)) {
                 this.modifyExcludeSell(botId, groupString, false);
-            }else{
+            } else {
                 excludeSellMap.clear();
             }
 
@@ -150,9 +148,9 @@ public class GroupManager {
 
             botId = bot.getBotId();
             groupString = message.substring(8).trim();
-            if(StringUtils.isNotBlank(groupString)){
+            if (StringUtils.isNotBlank(groupString)) {
                 this.modifyExcludeAlchemy(botId, groupString, false);
-            }else{
+            } else {
                 excludeAlchemyMap.clear();
             }
 
@@ -172,18 +170,17 @@ public class GroupManager {
     public void executeMessageTask() {
         logger.info("定时清空发言统计");
         BotFactory.getBots().values().forEach((bot) -> {
-            MESSAGE_NUMBER_MAP.put(bot.getBotId()+"", new MessageNumber(0,  System.currentTimeMillis()));
+            MESSAGE_NUMBER_MAP.put(bot.getBotId() + "", new MessageNumber(0, System.currentTimeMillis()));
 
         });
     }
-
 
 
     @PostConstruct
     public void init() {
         this.loadTasksFromFile();
 
-        logger.info("已从本地加载{}个灵田任务 {}个发言统计",  this.ltmap.size(),this.MESSAGE_NUMBER_MAP.size());
+        logger.info("已从本地加载{}个灵田任务 {}个发言统计", this.ltmap.size(), this.MESSAGE_NUMBER_MAP.size());
     }
 
     @GroupMessageHandler(
@@ -194,7 +191,7 @@ public class GroupManager {
             String userName = member.getCard().trim();
             Long userId = member.getUserId();
             Long groupId = group.getGroupId();
-            ((Map)this.pendingLingTianRecords.computeIfAbsent(groupId+"", (k) -> {
+            ((Map) this.pendingLingTianRecords.computeIfAbsent(groupId + "", (k) -> {
                 return new ConcurrentHashMap();
             })).put(userName, new PendingLingTianRecord(userName, userId, groupId));
         }
@@ -247,7 +244,7 @@ public class GroupManager {
             logger.error("任务数据保存失败：", e);
         }
 
-        logger.info("正在保存 {} 个灵田任务 {}个发言统计", this.ltmap.size(),MESSAGE_NUMBER_MAP.size());
+        logger.info("正在保存 {} 个灵田任务 {}个发言统计", this.ltmap.size(), MESSAGE_NUMBER_MAP.size());
     }
 
     public synchronized void loadTasksFromFile() {
@@ -261,21 +258,26 @@ public class GroupManager {
 
             // 1. 处理灵田数据（Map<String, RemindTime>）
             this.ltmap = data.getObject("灵田",
-                    new TypeReference<Map<String, RemindTime>>() {});
+                    new TypeReference<Map<String, RemindTime>>() {
+                    });
 
             // 2. 处理发言统计（Map<String, MessageNumber>）
             this.MESSAGE_NUMBER_MAP = data.getObject("发言统计",
-                    new TypeReference<Map<String, MessageNumber>>() {});
+                    new TypeReference<Map<String, MessageNumber>>() {
+                    });
 
             // 3. 处理自动购买（嵌套Map）
             this.autoBuyProductMap = data.getObject("自动购买",
-                    new TypeReference<Map<String, Map<String, ProductPrice>>>() {});
+                    new TypeReference<Map<String, Map<String, ProductPrice>>>() {
+                    });
 
             // 4. 处理排除列表
             this.excludeAlchemyMap = data.getObject("炼金排除",
-                    new TypeReference<Map<String, Set<String>>>() {});
+                    new TypeReference<Map<String, Set<String>>>() {
+                    });
             this.excludeSellMap = data.getObject("上架排除",
-                    new TypeReference<Map<String, Set<String>>>() {});
+                    new TypeReference<Map<String, Set<String>>>() {
+                    });
 
             logger.info("加载成功：{} 个灵田任务，{} 条发言统计",
                     ltmap.size(), MESSAGE_NUMBER_MAP.size());
@@ -294,12 +296,12 @@ public class GroupManager {
     }
 
     public String getExcludeAlchemyList(Long botId) {
-        Set<String> items = (Set)this.excludeAlchemyMap.getOrDefault(botId+"", ConcurrentHashMap.newKeySet());
+        Set<String> items = (Set) this.excludeAlchemyMap.getOrDefault(botId + "", ConcurrentHashMap.newKeySet());
         return items.isEmpty() ? "无炼金排除道具" : StringUtils.join(items, "\n");
     }
 
     public void modifyExcludeAlchemy(Long botId, String itemsStr, boolean isAdd) {
-        Set<String> items = (Set)this.excludeAlchemyMap.computeIfAbsent(botId+"", (k) -> {
+        Set<String> items = (Set) this.excludeAlchemyMap.computeIfAbsent(botId + "", (k) -> {
             return ConcurrentHashMap.newKeySet();
         });
         Arrays.stream(itemsStr.split("[&＆]")).map(String::trim).filter(StringUtils::isNotBlank).forEach((item) -> {
@@ -314,12 +316,12 @@ public class GroupManager {
     }
 
     public String getExcludeSellList(Long botId) {
-        Set<String> items = (Set)this.excludeSellMap.getOrDefault(botId+"", ConcurrentHashMap.newKeySet());
+        Set<String> items = (Set) this.excludeSellMap.getOrDefault(botId + "", ConcurrentHashMap.newKeySet());
         return items.isEmpty() ? "无上架排除道具" : StringUtils.join(items, "\n");
     }
 
     public void modifyExcludeSell(Long botId, String itemsStr, boolean isAdd) {
-        Set<String> items = (Set)this.excludeSellMap.computeIfAbsent(botId+"", (k) -> {
+        Set<String> items = (Set) this.excludeSellMap.computeIfAbsent(botId + "", (k) -> {
             return ConcurrentHashMap.newKeySet();
         });
         Arrays.stream(itemsStr.split("[&＆]")).map(String::trim).filter(StringUtils::isNotBlank).forEach((item) -> {
@@ -334,11 +336,11 @@ public class GroupManager {
     }
 
     public boolean isAlchemyExcluded(Long botId, String itemName) {
-        return ((Set)this.excludeAlchemyMap.getOrDefault(botId+"", Collections.emptySet())).contains(itemName);
+        return ((Set) this.excludeAlchemyMap.getOrDefault(botId + "", Collections.emptySet())).contains(itemName);
     }
 
     public boolean isSellExcluded(Long botId, String itemName) {
-        return ((Set)this.excludeSellMap.getOrDefault(botId+"", Collections.emptySet())).contains(itemName);
+        return ((Set) this.excludeSellMap.getOrDefault(botId + "", Collections.emptySet())).contains(itemName);
     }
 
 //    private synchronized void loadTasksFromFile() {
@@ -409,14 +411,14 @@ public class GroupManager {
                     String qqNumber = matcher.group(2); // QQ号
                     customPool.submit(new Runnable() {
                         public void run() {
-                            bot.setGroupAdmin(Long.parseLong(qqNumber),group.getGroupId(),type.equals("上管"));
+                            bot.setGroupAdmin(Long.parseLong(qqNumber), group.getGroupId(), type.equals("上管"));
                             group.sendMessage((new MessageChain()).reply(messageId).text("操作成功"));
                         }
                     });
 
                 }
-            } catch (Exception e){
-                group.sendMessage((new MessageChain()).text("管理员设置失败，请注意格式：@我+上管/下管+QQ号" ));
+            } catch (Exception e) {
+                group.sendMessage((new MessageChain()).text("管理员设置失败，请注意格式：@我+上管/下管+QQ号"));
                 e.printStackTrace();
             }
         }
@@ -448,23 +450,22 @@ public class GroupManager {
     public void 统计群聊发言次数(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
 
 
-
-        if(group!=null && group.getGroupId()>0){
+        if (group != null && group.getGroupId() > 0) {
             // 确保Map存在
             if (MESSAGE_NUMBER_MAP == null) {
                 MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
             }
-            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
-            if(messageNumber == null){
+            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId() + "");
+            if (messageNumber == null) {
                 messageNumber = new MessageNumber();
                 messageNumber.setNumber(1);
                 messageNumber.setTime(System.currentTimeMillis());
-            }else{
-                if(messageNumber.isCrossResetTime()){
+            } else {
+                if (messageNumber.isCrossResetTime()) {
                     messageNumber.setNumber(1);
                     messageNumber.setTime(System.currentTimeMillis());
-                }else{
-                    messageNumber.setNumber(messageNumber.getNumber()+1);
+                } else {
+                    messageNumber.setNumber(messageNumber.getNumber() + 1);
                     messageNumber.setTime(System.currentTimeMillis());
                 }
 
@@ -473,12 +474,12 @@ public class GroupManager {
 //                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) ) {
 //                bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
 //            }
-            MESSAGE_NUMBER_MAP.put(bot.getBotId()+"", messageNumber);
+            MESSAGE_NUMBER_MAP.put(bot.getBotId() + "", messageNumber);
         }
         message = message.trim();
         if (message.equals("发言统计")) {
-            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
-            if(messageNumber!=null){
+            MessageNumber messageNumber = MESSAGE_NUMBER_MAP.get(bot.getBotId() + "");
+            if (messageNumber != null) {
                 StringBuilder sb = new StringBuilder();
                 sb.append("今日发言次数：").append(messageNumber.getNumber()).append("\n");
                 sb.append("最新更新时间：").append(sdf.format(new Date(messageNumber.getTime())));
@@ -502,17 +503,19 @@ public class GroupManager {
     }
 
     @GroupMessageHandler(
-            senderIds = {3889001741L}
+            isAt = true,
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 秘境结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())) {
+        message = processReplyMessage(messageChain);
+        if (bot.getBotConfig().isEnableGroupManager() ) {
 
-            if (isRemindGroup(bot,group)) {
+            if (isRemindGroup(bot, group)) {
                 if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
-                    this.extractInfo(message, "秘境", group,bot);
-                }else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
-                    this.extractInfo(message, "秘境", group,bot);
-                }else if (message.contains("秘境") && message.contains("道友已") && message.contains("分钟")) {
+                    this.extractInfo(message, "秘境", group, bot,member);
+                } else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
+                    this.extractInfo(message, "秘境", group, bot,member);
+                } else if (message.contains("秘境") && message.contains("道友已") && message.contains("分钟")) {
                     this.handleNewsExploration(message, group, bot);
                 } else if (message.contains("秘境") && message.contains("时轮压缩") && message.contains("分钟")) {
                     this.handleNewsExploration(message, group, bot);
@@ -524,7 +527,7 @@ public class GroupManager {
 
     }
 
-    public boolean isRemindGroup(Bot bot,Group group) {
+    public boolean isRemindGroup(Bot bot, Group group) {
         boolean isGroupQQ = true;
         if (StringUtils.isNotBlank(bot.getBotConfig().getGroupQQ())) {
             isGroupQQ = ("&" + bot.getBotConfig().getGroupQQ() + "&").contains("&" + group.getGroupId() + "&");
@@ -534,28 +537,28 @@ public class GroupManager {
     }
 
     private void handleNewsExploration(String msg, Group group, Bot bot) {
-        Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId()+"");
+        Map<String, PendingLingTianRecord> groupRecords = (Map) this.pendingLingTianRecords.get(group.getGroupId() + "");
         if (groupRecords != null && !groupRecords.isEmpty()) {
             Optional<Map.Entry<String, PendingLingTianRecord>> matchedEntry = groupRecords.entrySet().stream().filter((entryx) -> {
-                return msg.contains((CharSequence)entryx.getKey());
+                return msg.contains((CharSequence) entryx.getKey());
             }).findFirst();
             if (matchedEntry.isPresent()) {
-                Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry)matchedEntry.get();
-                PendingLingTianRecord record = (PendingLingTianRecord)entry.getValue();
+                Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry) matchedEntry.get();
+                PendingLingTianRecord record = (PendingLingTianRecord) entry.getValue();
 
                 try {
                     Pattern pattern = Pattern.compile("⏳\\s*[^:]*：\\s*(\\d+\\.?\\d*)\\s*(分钟|小时)");
                     Matcher matcher = pattern.matcher(msg);
                     if (matcher.find()) {
                         String minutes = matcher.group(1);
-                        addMjXslMap(record.userId.toString(),"秘境",group,minutes,bot);
+                        addMjXslMap(record.userId.toString(), "秘境", group, minutes, bot);
 //                        this.updateAutoReplyMap(record.userId.toString(), (long)(minutes * 60000.0), group.getGroupId(), bot.getBotId());
                         logger.info("秘境提醒 - 用户[{}:{}]", record.userName, record.userId);
                     }
                 } finally {
                     groupRecords.remove(record.userName);
                     if (groupRecords.isEmpty()) {
-                        this.pendingLingTianRecords.remove(group.getGroupId()+"");
+                        this.pendingLingTianRecords.remove(group.getGroupId() + "");
                     }
 
                 }
@@ -565,14 +568,16 @@ public class GroupManager {
     }
 
     @GroupMessageHandler(
-            senderIds = {3889001741L}
+            isAt = true,
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+        message = processReplyMessage(messageChain);
         if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())
                 && message.contains("进行中的悬赏令") && message.contains("可结束")) {
 
-            if (isRemindGroup(bot,group)) {
-                this.extractInfo(message, "悬赏", group,bot);
+            if (isRemindGroup(bot, group)) {
+                this.extractInfo(message, "悬赏", group, bot,member);
             }
 
         }
@@ -580,29 +585,31 @@ public class GroupManager {
     }
 
     @GroupMessageHandler(
-            senderIds = {3889001741L}
+            isAt = true,
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 新版悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())
-                && (message.contains("悬赏令进行中")  || message.contains("悬赏令接取成功")) && message.contains("预计")) {
-            if (isRemindGroup(bot,group)) {
+        message = processReplyMessage(messageChain);
+        if (bot.getBotConfig().isEnableGroupManager()
+                && (message.contains("悬赏令进行中") || message.contains("悬赏令接取成功")) && message.contains("预计")) {
+            if (isRemindGroup(bot, group)) {
                 // 提取QQ号
-                Pattern qqPattern = Pattern.compile("@(\\d+)");
-                Matcher qqMatcher = qqPattern.matcher(message);
-                String qq = qqMatcher.find() ? qqMatcher.group(1) : "未找到QQ号";
-
+//                Pattern qqPattern = Pattern.compile("@(\\d+)");
+//                Matcher qqMatcher = qqPattern.matcher(message);
+//                String qq = qqMatcher.find() ? qqMatcher.group(1) : "未找到QQ号";
+                String qq = member.getUserId() + "";
                 // 提取预计时间
                 Pattern timePattern = null;
-                if(message.contains("预计时间")){
+                if (message.contains("预计时间")) {
                     timePattern = Pattern.compile("预计时间：(\\d+\\.?\\d*)分钟");
                 }
-                if(message.contains("预计剩余时间")){
+                if (message.contains("预计剩余时间")) {
                     timePattern = Pattern.compile("预计剩余时间：(\\d+\\.?\\d*)分钟");
                 }
-                if(timePattern!=null){
+                if (timePattern != null) {
                     Matcher timeMatcher = timePattern.matcher(message);
                     String time = timeMatcher.find() ? timeMatcher.group(1) : "未找到预计时间";
-                    addMjXslMap(qq,"悬赏",group,time,bot);
+                    addMjXslMap(qq, "悬赏", group, time, bot);
                 }
             }
 
@@ -612,19 +619,37 @@ public class GroupManager {
 
     }
 
-    public void extractInfo(String input, String type, Group group,Bot bot) {
+    // 处理回复消息
+    private String processReplyMessage(MessageChain messageChain) {
+        List<ReplyMessage> replyMessageList =  messageChain.getMessageByType(ReplyMessage.class);
+        if(!replyMessageList.isEmpty()){
+            ReplyMessage replyMessage = messageChain.getMessageByType(ReplyMessage.class).get(0);
+            MessageChain replyMessageChain = replyMessage.getChain();
+
+            if (replyMessageChain != null) {
+                List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
+                if (textMessageList != null && !textMessageList.isEmpty()) {
+                    return textMessageList.get(textMessageList.size() - 1).getText();
+                }
+            }
+        }
+
+        return "";
+    }
+
+    public void extractInfo(String input, String type, Group group, Bot bot,Member member) {
         String qqPattern = "@(\\d+)";
         String timePattern = "(\\d+\\.?\\d*)(?:\\(原\\d+\\.?\\d*\\))?(?:分钟|分钟后)";
         Pattern qqRegex = Pattern.compile(qqPattern);
         Pattern timeRegex = Pattern.compile(timePattern);
-        Matcher qqMatcher = qqRegex.matcher(input);
-        String qq = "";
-        if (qqMatcher.find()) {
-            qq = qqMatcher.group(1);
-        } else {
-            logger.warn("未找到QQ号");
-        }
-
+//        Matcher qqMatcher = qqRegex.matcher(input);
+//        String qq = "";
+//        if (qqMatcher.find()) {
+//            qq = qqMatcher.group(1);
+//        } else {
+//            logger.warn("未找到QQ号");
+//        }
+        String qq = member.getUserId() + "";
         Matcher timeMatcher = timeRegex.matcher(input);
         String time = "";
         if (timeMatcher.find()) {
@@ -632,34 +657,45 @@ public class GroupManager {
         } else {
             logger.warn("未找到时间");
         }
-        addMjXslMap(qq,type,group,time,bot);
+        addMjXslMap(qq, type, group, time, bot);
 
     }
 
-    private void addMjXslMap(String qq,String type, Group group,String time,Bot bot){
+    private void addMjXslMap(String qq, String type, Group group, String time, Bot bot) {
         if (StringUtils.isNotBlank(qq) && StringUtils.isNotBlank(time)) {
             RemindTime remindTime = new RemindTime();
             remindTime.setQq(Long.parseLong(qq));
-            remindTime.setExpireTime((long)(Double.parseDouble(time) * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
+            long expireTime = (long) (Double.parseDouble(time) * 60.0 * 1000.0 + (double) System.currentTimeMillis());
+            remindTime.setExpireTime(expireTime);
             remindTime.setText(type);
             remindTime.setGroupId(group.getGroupId());
             remindTime.setRemindQq(bot.getBotId());
             this.mjXslmap.put(qq, remindTime);
+            group.sendMessage(new MessageChain().at(qq).text("收到结算提醒，将在" + sdf.format(expireTime) + "提醒你结算任务"));
         }
     }
 
     @GroupMessageHandler(
-            senderIds = {3889001741L}
+            isAt = true,
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 灵田领取提醒(Bot bot, Group group, Member member, MessageChain messageChain, String msg, Integer messageId) throws InterruptedException {
+        msg = processReplyMessage(messageChain);
         if (bot.getBotConfig().isEnableGroupManager()) {
-            if (isRemindGroup(bot,group)) {
+            if (isRemindGroup(bot, group)) {
                 if (msg.contains("灵田还不能收取") && msg.contains("下次收取时间为")) {
-                    this.handleLingTianMessage(msg, group, bot);
-                }else if (msg.contains("收获药材") && !msg.contains("道友的洞天福地") && (msg.contains("道友成功") || msg.contains("道友本次采集"))) {
-                    this.handleFormat2(msg, group, bot, messageId);
+                    this.handleLingTianMessage(msg, group, bot,member);
+                } else if (msg.contains("收获药材") && !msg.contains("道友的洞天福地") && (msg.contains("道友成功") || msg.contains("道友本次采集"))) {
+//                    this.handleFormat2(msg, group, bot, messageId);
+                    this.updateLingTianTimer(member.getUserId()+"", "47.0", group, bot.getBotId());
                 } else if (msg.contains("道友的灵田灵气未满，尚需孕育") && msg.contains("下次收成时间")) {
-                    this.handleFormat3(msg, group, bot);
+                    Pattern pattern = Pattern.compile("下次收成时间：(\\d+\\.\\d+)小时");
+                    Matcher matcher = pattern.matcher(msg);
+                    if (matcher.find()) {
+                        String hours = matcher.group(1);
+                        this.updateLingTianTimer(member.getUserId()+"", hours, group, bot.getBotId());
+                    }
+//                    this.handleFormat3(msg, group, bot);
                 }
             }
 
@@ -668,16 +704,15 @@ public class GroupManager {
     }
 
 
-
     private void handleFormat3(String msg, Group group, Bot bot) {
-        Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId()+"");
+        Map<String, PendingLingTianRecord> groupRecords = (Map) this.pendingLingTianRecords.get(group.getGroupId() + "");
         if (groupRecords != null && !groupRecords.isEmpty()) {
             Optional<Map.Entry<String, PendingLingTianRecord>> matchedEntry = groupRecords.entrySet().stream().filter((entryx) -> {
-                return msg.contains((CharSequence)entryx.getKey());
+                return msg.contains((CharSequence) entryx.getKey());
             }).findFirst();
             if (matchedEntry.isPresent()) {
-                Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry)matchedEntry.get();
-                PendingLingTianRecord record = (PendingLingTianRecord)entry.getValue();
+                Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry) matchedEntry.get();
+                PendingLingTianRecord record = (PendingLingTianRecord) entry.getValue();
 
                 try {
                     Pattern pattern = Pattern.compile("下次收成时间：(\\d+\\.\\d+)小时");
@@ -690,7 +725,7 @@ public class GroupManager {
                 } finally {
                     groupRecords.remove(record.userName);
                     if (groupRecords.isEmpty()) {
-                        this.pendingLingTianRecords.remove(group.getGroupId()+"");
+                        this.pendingLingTianRecords.remove(group.getGroupId() + "");
                     }
 
                 }
@@ -710,25 +745,25 @@ public class GroupManager {
                 if (qq.length() > 8 && qq.length() < 13) {
                     this.updateLingTianTimer(qq, "47.0", group, bot.getBotId());
                 }
-            } else{
-                Map<String, PendingLingTianRecord> groupRecords = (Map)this.pendingLingTianRecords.get(group.getGroupId()+"");
+            } else {
+                Map<String, PendingLingTianRecord> groupRecords = (Map) this.pendingLingTianRecords.get(group.getGroupId() + "");
                 if (groupRecords == null || groupRecords.isEmpty()) {
                     return;
                 }
 
                 Optional<Map.Entry<String, PendingLingTianRecord>> matchedEntry = groupRecords.entrySet().stream().filter((entryxx) -> {
-                    return msg.contains((CharSequence)entryxx.getKey());
+                    return msg.contains((CharSequence) entryxx.getKey());
                 }).findFirst();
                 if (matchedEntry.isPresent()) {
-                    Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry)matchedEntry.get();
-                    PendingLingTianRecord record = (PendingLingTianRecord)entry.getValue();
+                    Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry) matchedEntry.get();
+                    PendingLingTianRecord record = (PendingLingTianRecord) entry.getValue();
 
                     try {
                         this.updateLingTianTimer(record.userId.toString(), "47.0", group, bot.getBotId());
                     } finally {
                         groupRecords.remove(record.userName);
                         if (groupRecords.isEmpty()) {
-                            this.pendingLingTianRecords.remove(group.getGroupId()+"");
+                            this.pendingLingTianRecords.remove(group.getGroupId() + "");
                         }
 
                     }
@@ -739,14 +774,13 @@ public class GroupManager {
     }
 
 
-
-    private void handleLingTianMessage(String message, Group group,Bot bot) {
+    private void handleLingTianMessage(String message, Group group, Bot bot,Member member) {
         Pattern pattern = Pattern.compile("@(\\d+).*?(\\d+\\.\\d+)小时", 32);
         Matcher matcher = pattern.matcher(message);
-        String qqNumber = "";
+        String qqNumber =member.getUserId() + "";
         String time = "";
         if (matcher.find()) {
-            qqNumber = matcher.group(1);
+//            qqNumber = matcher.group(1);
             time = matcher.group(2);
         }
         updateLingTianTimer(qqNumber, time, group, bot.getBotId());
@@ -758,7 +792,7 @@ public class GroupManager {
             RemindTime remindTime = new RemindTime();
             remindTime.setText("灵田");
             remindTime.setQq(Long.parseLong(qqNumber));
-            remindTime.setExpireTime((long)(Double.parseDouble(time) * 60.0 * 60.0 * 1000.0 + (double)System.currentTimeMillis()));
+            remindTime.setExpireTime((long) (Double.parseDouble(time) * 60.0 * 60.0 * 1000.0 + (double) System.currentTimeMillis()));
             remindTime.setGroupId(group.getGroupId());
             remindTime.setRemindQq(botId);
             this.ltmap.put(qqNumber, remindTime);
@@ -778,11 +812,11 @@ public class GroupManager {
     private void checkAndNotify(Map<String, RemindTime> map, String taskType1, String taskType2) {
         Iterator<Map.Entry<String, RemindTime>> iterator = map.entrySet().iterator();
 
-        while(iterator.hasNext()) {
-            Map.Entry<String, RemindTime> entry = (Map.Entry)iterator.next();
-            RemindTime remindTime = (RemindTime)entry.getValue();
+        while (iterator.hasNext()) {
+            Map.Entry<String, RemindTime> entry = (Map.Entry) iterator.next();
+            RemindTime remindTime = (RemindTime) entry.getValue();
             if (remindTime.getExpireTime() > 0L && System.currentTimeMillis() >= remindTime.getExpireTime()) {
-                if(System.currentTimeMillis() - remindTime.getExpireTime() < 1000L * 60 * 30){
+                if (System.currentTimeMillis() - remindTime.getExpireTime() < 1000L * 60 * 30) {
                     Bot bot = BotFactory.getBots().get(remindTime.getRemindQq());
                     if (bot != null) {
                         switch (remindTime.getText()) {
@@ -810,6 +844,7 @@ public class GroupManager {
 
 
     }
+
     private static class PendingLingTianRecord {
         String userName;
         Long userId;

@@ -250,12 +250,13 @@ public class FamilyTask {
 
     }
     private boolean isAtSelf(String message, Bot bot,Group group) {
-        String botName = bot.getBotName();
-        String cardName = group.getMember(bot.getBotId()).getCard();
-        if(StringUtils.isNotBlank(cardName)){
-            botName = cardName;
-        }
-        return message.contains("@" + bot.getBotId()) || message.contains("@" + botName);
+//        String botName = bot.getBotName();
+//        String cardName = group.getMember(bot.getBotId()).getCard();
+//        if(StringUtils.isNotBlank(cardName)){
+//            botName = cardName;
+//        }
+//        return message.contains("@" + bot.getBotId()) || message.contains("@" + botName);
+        return true;
     }
 
     @GroupMessageHandler(
