@@ -249,6 +249,15 @@ public class GroupManager {
         taskStateMap.put(bot.getBotId()+"", taskStatus);
     }
 
+    public void setDanYaoFinished(Bot bot) {
+        if(taskStateMap.get(bot.getBotId()+"") == null){
+            taskStateMap.put(bot.getBotId()+"", new TaskStatus().init(bot.getBotId(), System.currentTimeMillis()));
+        }
+        TaskStatus taskStatus = taskStateMap.get(bot.getBotId()+"");
+        taskStatus.setDanyaoFinished(true);
+        taskStateMap.put(bot.getBotId()+"", taskStatus);
+    }
+
 
     @PostConstruct
     public void init() {
@@ -651,7 +660,7 @@ public class GroupManager {
 
     // 处理回复消息
     private String processReplyMessage(MessageChain messageChain) {
-        String text = messageChain.get(messageChain.size()-1).toString();
+        String text = messageChain.get(messageChain.size()-1).toString().trim();
         if(StringUtils.isEmpty(text) || text.contains("提醒")){
             List<ReplyMessage> replyMessageList =  messageChain.getMessageByType(ReplyMessage.class);
             if(!replyMessageList.isEmpty()){
@@ -808,14 +817,9 @@ public class GroupManager {
 
 
     private void handleLingTianMessage(String message, Group group, Bot bot,Member member) {
-        Pattern pattern = Pattern.compile("@(\\d+).*?(\\d+\\.\\d+)小时", 32);
-        Matcher matcher = pattern.matcher(message);
+
         String qqNumber =member.getUserId() + "";
-        String time = "";
-        if (matcher.find()) {
-//            qqNumber = matcher.group(1);
-            time = matcher.group(2);
-        }
+        String time =  message.split("：|小时")[1];
         updateLingTianTimer(qqNumber, time, group, bot.getBotId());
 
     }

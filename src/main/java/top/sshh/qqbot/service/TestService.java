@@ -58,6 +58,7 @@ public class TestService {
     private Long xxGroupId;
     private static final List<String> KEYWORDS = Arrays.asList("烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后", "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困", "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得", "从腐朽道袍中滑落");
     private static final List<String> commandWords = Arrays.asList("悬赏令","秘境","宗门任务","宗门丹药","灵田");
+    private static final List<String> forwardWords = Arrays.asList("宗门系统繁忙","宗门闭关室");
 
     public TestService() {
 
@@ -929,7 +930,7 @@ public class TestService {
                             if (Integer.parseInt(position) < buttons.getButtonList().size()) {
                                 if (Integer.parseInt(position) <= buttons.getButtonList().size()) {
                                     Button button = buttons.getButtonList().get(Integer.parseInt(position) - 1);
-                                    bot.clickKeyboardButton(group.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
+                                    bot.clickKeyboardButton(buttons.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
                                     return;
                                 }
 
@@ -1038,16 +1039,6 @@ public class TestService {
             List<Button> buttonList = buttons.getButtonList();
             StringBuilder buttonBuilder = new StringBuilder();
             if (bot.getBotConfig().getGroupId() == group.getGroupId()) {
-
-//                buttonBuilder.append(buttons.getImageText());
-//                buttonBuilder.append("\n");
-//                buttonBuilder.append("    ");
-//                for (int i = 0; i < buttonList.size(); i++) {
-//                    Button button = buttonList.get(i);
-//                    buttonBuilder.append(button.getLabel()).append("     ");
-//
-//                }
-//                StringBuilder buttonBuilder = new StringBuilder();
                 buttonBuilder.append("题目：" + buttons.getImageText());
                 buttonBuilder.append("\n");
                 buttonBuilder.append("@我+点击序号+对应答案前面的序号");
@@ -1092,8 +1083,8 @@ public class TestService {
             messageChain1.at(remindBot.getBotConfig().getMasterQQ() + "").text("\n").image(buttons.getImageUrl()).text(buttonBuilder.toString());
 
             bot.getGroup(groupId).sendMessage(messageChain1);
-            buttons.setGroupId(group.getGroupId());
-            botButtonMap.put(bot.getBotId(), buttons);
+
+
         } else {
             remindBot.getGroup(groupId).sendMessage((new MessageChain()).at(String.valueOf(remindBot.getBotConfig().getMasterQQ())).text(bot.getBotName() + "的" + group.getGroupName() + "出现验证码！！！！"));
         }
@@ -1104,8 +1095,7 @@ public class TestService {
     )
     public void 验证码判断(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId, Buttons buttons) {
 
-
-        if (message.contains("解除限制") && message.contains("" + bot.getBotId())) {
+        if (message.contains("解除限制") && bot.getBotConfig().getGroupId() == group.getGroupId()) {
             bot.getBotConfig().setStop(true);
             bot.getBotConfig().setLastRefreshTime(System.currentTimeMillis() + 300000L);
             bot.getBotConfig().setFamilyTaskStatus(0);
@@ -1119,9 +1109,7 @@ public class TestService {
 
         if (message.contains("https") && message.contains("qqbot") && (!message.contains("修仙信息") || !message.contains("统计信息") || !message.contains("道号"))
                 && message.contains("" + bot.getBotId()) && (!message.contains("方向要求") || !message.contains("随机事件"))) {
-//            log.info("检测到按钮个数："+buttons.getButtonList().size());
-            // 定义正则表达式模式
-
+//
 
             BotConfig botConfig = bot.getBotConfig();
             botConfig.setStop(true);
@@ -1131,7 +1119,13 @@ public class TestService {
             botConfig.setStartScheduledSkills(false);
             botConfig.setStartScheduledHerbs(false);
 
-            showButtonMsg(bot, group, messageId, message, buttons, messageChain);
+
+            if (buttons != null && !buttons.getButtonList().isEmpty()) {
+                botButtonMap.put(bot.getBotId(), buttons);
+                buttons.setGroupId(group.getGroupId());
+                showButtonMsg(bot, group, messageId, message, buttons, messageChain);
+            }
+
 
 
         }
@@ -1149,6 +1143,7 @@ public class TestService {
 
         if ((message.contains("奖励") && message.contains("灵石") || message.contains("不需要验证") || message.contains("验证码已过期")) && message.contains("" + bot.getBotId())) {
             bot.getBotConfig().setStop(false);
+            forwardMessage(bot, message);
             if (message.contains("奖励") && message.contains("灵石") && StringUtils.isNotBlank(bot.getBotConfig().getCommand())) {
                 if (!("一键使用追捕令".equals(bot.getBotConfig().getCommand()) || "一键使用次元之钥".equals(bot.getBotConfig().getCommand()))) {
                     group.sendMessage((new MessageChain()).text(bot.getBotConfig().getCommand()));
@@ -1157,6 +1152,14 @@ public class TestService {
                 bot.getBotConfig().setCommand("");
             }
         }
+
+    }
+
+    private void forwardMessage(Bot bot, String message){
+        if(bot.getBotConfig().isEnableForwardMessage()){
+            bot.getGroup(getRemindGroupId(bot)).sendMessage(new MessageChain().text(cleanMessage(message)));
+        }
+
 
     }
 
@@ -1803,7 +1806,6 @@ public class TestService {
                 bot.getBotConfig().setXslTime(-1L);
                 Thread.sleep(2000L);
                 proccessCultivation(group);
-                bot.getGroup(botConfig.getGroupId()).sendMessage(new MessageChain().text("今日悬赏已完成"));
                 groupManager.setXslTaskFinished(bot);
             }
 
@@ -2071,7 +2073,7 @@ public class TestService {
 
             if (KEYWORDS.stream().anyMatch(message::contains) && !message.contains("时间：")) {
                 bot.getBotConfig().setMjTime(-1L);
-
+                forwardMessage(bot, message);
                 if ("一键使用次元之钥".equals(botConfig.getCommand())) {
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text(" 道具使用次元之钥"));
                 } else {
@@ -2082,6 +2084,27 @@ public class TestService {
             }
         }
 
+    }
+
+    @GroupMessageHandler(
+            senderIds = {3889001741L}
+    )
+    public void 转发小小消息到控制群(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId){
+        BotConfig botConfig = bot.getBotConfig();
+        boolean isGroup = group.getGroupId() == botConfig.getGroupId();
+        if (isGroup) {
+            if (forwardWords.stream().anyMatch(message::contains)) {
+                forwardMessage(bot, message);
+            }
+            if(message.contains("道友成功领取到丹药")||message.contains("道友已经领取过了")){
+                groupManager.setDanYaoFinished(bot);
+            }
+        }
+    }
+
+    private String cleanMessage(String message) {
+        String cleaned = message.replaceAll("content\\[\\[.*?\\][\\s\\S]*?](?=\\s|$)", "");
+        return cleaned.replaceAll("(\\n\\s*)+$", "").trim();
     }
 
     @Scheduled(
