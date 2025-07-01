@@ -19,6 +19,7 @@ import com.zhuangxv.bot.message.support.ReplyMessage;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
+import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -26,6 +27,7 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.MessageNumber;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.data.RemindTime;
+import top.sshh.qqbot.data.TaskStatus;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -82,6 +84,7 @@ public class GroupManager {
     private Map<String, Set<String>> excludeSellMap = new ConcurrentHashMap();
     public Map<String, Map<String, ProductPrice>> autoBuyProductMap = new ConcurrentHashMap();
     public Map<String, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
+    public Map<String, TaskStatus> taskStateMap = new ConcurrentHashMap();
 
     public GroupManager() {
 
@@ -103,7 +106,17 @@ public class GroupManager {
         } else if (message.equals("同步数据")) {
             saveTasksToFile();
             group.sendMessage((new MessageChain()).reply(messageId).text("执行成功"));
+        }else if (message.equals("任务统计")) {
+            if(taskStateMap.get(bot.getBotId()+"") == null){
+                taskStateMap.put(bot.getBotId()+"", new TaskStatus().init(bot.getBotId(), System.currentTimeMillis()));
+            }
+            TaskStatus taskStatus = taskStateMap.get(bot.getBotId()+"");
+            StringBuilder sb = getStringBuilder(taskStatus);
+            group.sendMessage((new MessageChain()).reply(messageId).text(sb.toString()));
+        }else if (message.equals("重置任务统计")) {
+            clearTaskSate();
         }
+
 
         Long botId;
         Long groupId;
@@ -165,6 +178,31 @@ public class GroupManager {
 
     }
 
+    private StringBuilder getStringBuilder(TaskStatus taskStatus) {
+        StringBuilder sb = new StringBuilder();
+        if (taskStatus.isDanyaoFinished()) {
+            sb.append("宗门丹药：已领取\n");
+        } else {
+            sb.append("宗门丹药：未领取\n");
+        }
+        if (taskStatus.isZongMenFinished()) {
+            sb.append("宗门任务：已完成\n");
+        } else {
+            sb.append("宗门任务：未完成\n");
+        }
+        if (taskStatus.isXslFinished()) {
+            sb.append("悬赏任务：已完成\n");
+        }else {
+            sb.append("悬赏任务：未完成\n");
+        }
+        if (taskStatus.isMjFinished()) {
+            sb.append("秘境任务：已完成\n");
+        } else {
+            sb.append("秘境任务：未完成\n");
+        }
+        return sb;
+    }
+
     // cron 表达式：0 55 7 * * * 表示每天早上 7 点 55 分执行
     @Scheduled(cron = "0 58 7 * * *")
     public void executeMessageTask() {
@@ -173,6 +211,42 @@ public class GroupManager {
             MESSAGE_NUMBER_MAP.put(bot.getBotId() + "", new MessageNumber(0, System.currentTimeMillis()));
 
         });
+    }
+
+    @Scheduled(cron = "0 0 4 * * *")
+    public void clearTaskSate() {
+        logger.info("定时清空任务统计");
+        BotFactory.getBots().values().forEach((bot) -> {
+            taskStateMap.put(bot.getBotId() + "", new TaskStatus().init(bot.getBotId(), System.currentTimeMillis()));
+
+        });
+    }
+
+    public void setZonMenTaskFinished(Bot bot) {
+        if(taskStateMap.get(bot.getBotId()+"") == null){
+            taskStateMap.put(bot.getBotId()+"", new TaskStatus().init(bot.getBotId(), System.currentTimeMillis()));
+        }
+        TaskStatus taskStatus = taskStateMap.get(bot.getBotId()+"");
+        taskStatus.setZongMenFinished(true);
+        taskStateMap.put(bot.getBotId()+"", taskStatus);
+    }
+
+    public void setXslTaskFinished(Bot bot) {
+        if(taskStateMap.get(bot.getBotId()+"") == null){
+            taskStateMap.put(bot.getBotId()+"", new TaskStatus().init(bot.getBotId(), System.currentTimeMillis()));
+        }
+        TaskStatus taskStatus = taskStateMap.get(bot.getBotId()+"");
+        taskStatus.setXslFinished(true);
+        taskStateMap.put(bot.getBotId()+"", taskStatus);
+    }
+
+    public void setMjTaskFinished(Bot bot) {
+        if(taskStateMap.get(bot.getBotId()+"") == null){
+            taskStateMap.put(bot.getBotId()+"", new TaskStatus().init(bot.getBotId(), System.currentTimeMillis()));
+        }
+        TaskStatus taskStatus = taskStateMap.get(bot.getBotId()+"");
+        taskStatus.setMjFinished(true);
+        taskStateMap.put(bot.getBotId()+"", taskStatus);
     }
 
 
@@ -213,25 +287,12 @@ public class GroupManager {
     }
 
     public synchronized void saveTasksToFile() {
-//        try {
-//            ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(FILE_PATH)));
-//            Map<String, Object> data = new HashMap();
-//            data.put("灵田", this.ltmap);
-//            data.put("发言统计", MESSAGE_NUMBER_MAP);
-//            data.put("自动购买", this.autoBuyProductMap);
-//            data.put("炼金排除", this.excludeAlchemyMap);
-//            data.put("上架排除", this.excludeSellMap);
-//            oos.writeObject(data);
-////            oos.writeChars(JSON.toJSONString(data));
-//            oos.close();
-//        } catch (Throwable var5) {
-//            logger.error("任务数据保存失败：", var5);
-//        }
 
         try {
             Map<String, Object> data = new HashMap<>();
             data.put("灵田", this.ltmap);
             data.put("发言统计", MESSAGE_NUMBER_MAP);
+            data.put("任务统计", taskStateMap);
             data.put("自动购买", this.autoBuyProductMap);
             data.put("炼金排除", this.excludeAlchemyMap);
             data.put("上架排除", this.excludeSellMap);
@@ -278,6 +339,12 @@ public class GroupManager {
             this.excludeSellMap = data.getObject("上架排除",
                     new TypeReference<Map<String, Set<String>>>() {
                     });
+            this.taskStateMap = data.getObject("任务统计",
+                    new TypeReference<Map<String, TaskStatus>>() {
+                    });
+            if(this.taskStateMap == null){
+                this.taskStateMap = new ConcurrentHashMap<>();
+            }
 
             logger.info("加载成功：{} 个灵田任务，{} 条发言统计",
                     ltmap.size(), MESSAGE_NUMBER_MAP.size());
@@ -293,6 +360,7 @@ public class GroupManager {
         this.autoBuyProductMap = new ConcurrentHashMap<>();
         this.excludeAlchemyMap = new ConcurrentHashMap<>();
         this.excludeSellMap = new ConcurrentHashMap<>();
+        this.taskStateMap = new ConcurrentHashMap<>();
     }
 
     public String getExcludeAlchemyList(Long botId) {
@@ -343,42 +411,7 @@ public class GroupManager {
         return ((Set) this.excludeSellMap.getOrDefault(botId + "", Collections.emptySet())).contains(itemName);
     }
 
-//    private synchronized void loadTasksFromFile() {
-//        File dataFile = new File(FILE_PATH);
-//        if (dataFile.exists()) {
-//            try (ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(dataFile.toPath()))) {
-//                Map<String, Object> data = (Map)ois.readObject();
-//
-//                // 安全初始化 map
-//                this.ltmap = data.containsKey("灵田") ?
-//                        (ConcurrentHashMap<String, RemindTime>)data.get("灵田") :
-//                        new ConcurrentHashMap<>();
-//
-//                this.MESSAGE_NUMBER_MAP = data.containsKey("发言统计") ?
-//                        (ConcurrentHashMap<Long, MessageNumber>)data.get("发言统计") :
-//                        new ConcurrentHashMap<>();
-//
-//                this.excludeAlchemyMap = data.containsKey("炼金排除") ?
-//                        (ConcurrentHashMap<Long, Set<String>>)data.get("炼金排除") :
-//                        new ConcurrentHashMap<>();
-//
-//                this.excludeSellMap = data.containsKey("上架排除") ?
-//                        (ConcurrentHashMap<Long, Set<String>>)data.get("上架排除") :
-//                        new ConcurrentHashMap<>();
-//            } catch (Exception e) {
-//                logger.error("任务数据加载失败，初始化空map", e);
-//                this.ltmap = new ConcurrentHashMap<>();
-//                this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
-//            }
-//        } else {
-//            logger.warn("未找到序列化文件，初始化空map");
-//            this.ltmap = new ConcurrentHashMap<>();
-//            this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
-//        }
-//    }
-
     @GroupMessageHandler(
-            isAt = true,
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 群管设置(final Bot bot, final Group group, final Member member, MessageChain messageChain, String message, Integer messageId) {
@@ -468,12 +501,12 @@ public class GroupManager {
                     messageNumber.setNumber(messageNumber.getNumber() + 1);
                     messageNumber.setTime(System.currentTimeMillis());
                 }
+                if (messageNumber.isCrossResetTask()) {
+                    logger.info("----------任务已重置------------");
+                    clearTaskSate();
+                }
 
             }
-//            if ((danCalculator!=null && danCalculator.config!=null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
-//                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0 ) ) {
-//                bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName()+"(发言次数:"+messageNumber.getNumber()+")");
-//            }
             MESSAGE_NUMBER_MAP.put(bot.getBotId() + "", messageNumber);
         }
         message = message.trim();
@@ -503,7 +536,6 @@ public class GroupManager {
     }
 
     @GroupMessageHandler(
-            isAt = true,
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 秘境结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
@@ -568,7 +600,6 @@ public class GroupManager {
     }
 
     @GroupMessageHandler(
-            isAt = true,
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
@@ -585,7 +616,6 @@ public class GroupManager {
     }
 
     @GroupMessageHandler(
-            isAt = true,
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 新版悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
@@ -621,18 +651,22 @@ public class GroupManager {
 
     // 处理回复消息
     private String processReplyMessage(MessageChain messageChain) {
-        List<ReplyMessage> replyMessageList =  messageChain.getMessageByType(ReplyMessage.class);
-        if(!replyMessageList.isEmpty()){
-            ReplyMessage replyMessage = messageChain.getMessageByType(ReplyMessage.class).get(0);
-            MessageChain replyMessageChain = replyMessage.getChain();
+        String text = messageChain.get(messageChain.size()-1).toString();
+        if(StringUtils.isEmpty(text) || text.contains("提醒")){
+            List<ReplyMessage> replyMessageList =  messageChain.getMessageByType(ReplyMessage.class);
+            if(!replyMessageList.isEmpty()){
+                ReplyMessage replyMessage = messageChain.getMessageByType(ReplyMessage.class).get(0);
+                MessageChain replyMessageChain = replyMessage.getChain();
 
-            if (replyMessageChain != null) {
-                List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
-                if (textMessageList != null && !textMessageList.isEmpty()) {
-                    return textMessageList.get(textMessageList.size() - 1).getText();
+                if (replyMessageChain != null) {
+                    List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
+                    if (textMessageList != null && !textMessageList.isEmpty()) {
+                        return textMessageList.get(textMessageList.size() - 1).getText();
+                    }
                 }
             }
         }
+
 
         return "";
     }
@@ -676,7 +710,6 @@ public class GroupManager {
     }
 
     @GroupMessageHandler(
-            isAt = true,
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 灵田领取提醒(Bot bot, Group group, Member member, MessageChain messageChain, String msg, Integer messageId) throws InterruptedException {

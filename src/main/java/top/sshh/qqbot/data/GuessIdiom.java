@@ -296,5 +296,6 @@ public class GuessIdiom {
         EMOJI_MAP.put("电脑", "\ud83d\udcbb");
         EMOJI_MAP.put("汽车", "\ud83d\ude97");
         EMOJI_MAP.put("书", "\ud83d\udcd6");
+        EMOJI_MAP.put("书本", "\ud83d\udcd6");
     }
 }

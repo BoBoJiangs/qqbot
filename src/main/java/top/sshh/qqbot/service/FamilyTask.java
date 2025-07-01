@@ -15,6 +15,8 @@ import com.zhuangxv.bot.message.MessageChain;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.RemindTime;
@@ -38,6 +40,10 @@ public class FamilyTask {
     };
     private static final String FILE_PATH = "./cache/field_remind_data.ser";
     Map<Long, Long> remindMap = new ConcurrentHashMap();
+    @Value("${xxGroupId:0}")
+    private long xxGroupId;
+    @Autowired
+    private GroupManager groupManager;
 
     public FamilyTask() {
     }
@@ -201,9 +207,14 @@ public class FamilyTask {
             if (message.contains("今日无法再获取宗门任务")) {
                 botConfig.setFamilyTaskStatus(0);
                 TestService.proccessCultivation(group);
+                groupManager.setZonMenTaskFinished(bot);
+//                bot.getGroup(xxGroupId).sendMessage(new MessageChain().text("今日宗门任务"))
             }
 
             if (message.contains("道友大战一番") && message.contains("获得修为") && message.contains("宗门建设度增加")) {
+                botConfig.setFamilyTaskStatus(1);
+            }
+            if (message.contains("恭喜道友完成宗门任务")) {
                 botConfig.setFamilyTaskStatus(1);
             }
 
