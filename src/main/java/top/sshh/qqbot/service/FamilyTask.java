@@ -219,8 +219,13 @@ public class FamilyTask {
             }
 
             if (message.contains("出门做任务") && message.contains("不扣你任务次数")) {
-                botConfig.setLastRefreshTime(System.currentTimeMillis() + 360000L);
-                botConfig.setFamilyTaskStatus(3);
+                if (botConfig.getCultivationMode() == 0) {
+                    botConfig.setFamilyTaskStatus(0);
+                }else{
+                    botConfig.setLastRefreshTime(System.currentTimeMillis() + 360000L);
+                    botConfig.setFamilyTaskStatus(3);
+                }
+
             }
 
             if (message.contains("时间还没到") && message.contains("歇会歇会")) {

@@ -62,7 +62,7 @@ public class XiaoBeiService {
     public static final String botQQ = "3889029313";
     private static final String FILE_PATH = "xb_bot_config_map.json";
     private long updateBotTime = 0;
-
+    private Map<Long, EndlessState> endlessStateMap = new ConcurrentHashMap();
 
     public XiaoBeiService() {
         this.loadOrCreateConfig();
@@ -115,6 +115,14 @@ public class XiaoBeiService {
         if ("关闭小北自动宗门任务".equals(message)) {
             botConfig.setEnableFamilyTask(false);
             group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+        }
+        if ("开始小北自动悬赏".equals(message)) {
+            botConfig.setEnableXsl(true);
+            sendBotMessage(bot, "悬赏令", true);
+        }
+        if ("开始小北自动秘境".equals(message)) {
+            botConfig.setEnableXsl(true);
+            sendBotMessage(bot, "探索秘境", true);
         }
 
         if ("启用小北自动悬赏".equals(message)) {
@@ -224,6 +232,16 @@ public class XiaoBeiService {
             }
         }
 
+        if (message.matches("开始自动挑战无尽\\d+")) {
+            int floor = Integer.parseInt(message.replaceAll("\\D+", ""));
+            EndlessState state = new EndlessState();
+            state.status = 1;
+            state.floor = floor;
+            state.retryCount = 0;
+            this.endlessStateMap.put(bot.getBotId(), state);
+            this.sendBotMessage(bot, "无尽镜像挑战" + floor, true);
+        }
+
     }
 
     @Scheduled(
@@ -294,12 +312,14 @@ public class XiaoBeiService {
         if (message.equals("小北命令")) {
             sb.append("－－－－－功能设置－－－－－\n");
             sb.append("开始/停止小北自动宗门任务\n");
+            sb.append("开始小北自动/悬赏/秘境\n");
             sb.append("启用/关闭小北私聊\n");
 //            sb.append("小北修炼模式1闭关2灵石修炼\n");
             sb.append("小北自动药材上架\n");
             sb.append("启用/关闭小北自动宗门任务\n");
             sb.append("启用/关闭小北自动悬赏\n");
             sb.append("启用/关闭小北自动秘境\n");
+            sb.append("开始自动挑战无尽X\n");
             return sb.toString();
         } else {
             if (message.equals("小北当前设置")) {
@@ -668,7 +688,7 @@ public class XiaoBeiService {
         // 1. 检查是否有优先物品
         for (String item : priorityItems) {
             for (Task task : tasks) {
-                if (task.getRewardItem().contains(item)) {
+                if (task.getRewardItem()!=null && task.getRewardItem().contains(item)) {
                     return task.getNumber();
                 }
             }
@@ -1030,23 +1050,81 @@ public class XiaoBeiService {
 
     }
 
+
+
+
+    @FriendMessageHandler(
+            senderIds = {3889029313L}
+    )
+    public void handleEndlessChallenge(Bot bot, Friend member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+        EndlessState state = (EndlessState)this.endlessStateMap.get(bot.getBotId());
+        if (state != null && state.status == 1) {
+            int floor = state.floor;
+            if (message.contains("重伤未愈")) {
+                bot.sendPrivateMessage(3889029313L, (new MessageChain()).text("使用道源丹"));
+            } else if (message.contains("无尽模式挑战失败")) {
+                ++state.retryCount;
+                if (state.retryCount > 50) {
+                    bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text("无尽挑战" + floor + "失败（超过重试次数）"));
+                    this.endlessStateMap.remove(bot.getBotId());
+                } else {
+                    bot.sendPrivateMessage(3889029313L, (new MessageChain()).text("使用道源丹"));
+                    Thread.sleep(3000L);
+                    bot.sendPrivateMessage(3889029313L, (new MessageChain()).text("无尽镜像挑战" + floor));
+                }
+            } else if (message.contains("无尽模式胜利")) {
+                bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text("无尽挑战" + floor + "成功"));
+                this.endlessStateMap.remove(bot.getBotId());
+            } else if (message.contains("请检查该道具是否在背包内")) {
+                bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text("道源丹不足"));
+                this.endlessStateMap.remove(bot.getBotId());
+            }
+
+        }
+    }
+
+    @GroupMessageHandler(
+            senderIds = {3889029313L}
+    )
+    public void handleGroupEndlessResponse(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        if (this.isAtSelf(message, bot, group)) {
+            try {
+                this.handleEndlessChallenge(bot, (Friend)null, (MessageChain)null, message, (Integer)null);
+            } catch (InterruptedException var8) {
+                InterruptedException e = var8;
+                log.error("处理无尽挑战异常", e);
+            }
+
+        }
+    }
+
     private void sendBotMessage(Bot bot, String message, boolean isAtBot) {
         try {
-            QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+            QQBotConfig botConfig = (QQBotConfig)this.botConfigMap.get(bot.getBotId() + "");
             if (botConfig.isPrivateChat()) {
                 Thread.sleep(2000L);
-                bot.sendPrivateMessage(Long.parseLong(botQQ), (new MessageChain()).text(message));
+                bot.sendPrivateMessage(Long.parseLong("3889029313"), (new MessageChain()).text(message));
+            } else if (isAtBot) {
+                Thread.sleep(2000L);
+                bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).at("3889029313").text(message));
             } else {
-                if (isAtBot) {
-                    Thread.sleep(2000L);
-                    bot.getGroup(xbGroupId).sendMessage((new MessageChain()).at(botQQ).text(message));
-                } else {
-                    Thread.sleep(2000L);
-                    bot.getGroup(xbGroupId).sendMessage((new MessageChain()).text(message));
-                }
+                Thread.sleep(2000L);
+                bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text(message));
             }
+
         } catch (InterruptedException e) {
-            throw new RuntimeException(e);
+            e.printStackTrace();
+        }
+    }
+
+
+
+    private static class EndlessState {
+        int status;
+        int floor;
+        int retryCount;
+
+        private EndlessState() {
         }
     }
 }

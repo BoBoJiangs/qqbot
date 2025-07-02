@@ -3,7 +3,7 @@
 // (powered by FernFlower decompiler)
 //
 
-package top.sshh.qqbot.service;
+package top.sshh.qqbot.service.liandan;
 
 import com.alibaba.fastjson2.JSON;
 import com.zhuangxv.bot.core.Bot;

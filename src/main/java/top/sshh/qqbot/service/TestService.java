@@ -1485,6 +1485,7 @@ public class TestService {
                 Pattern pattern = Pattern.compile("弟子听令(\\d*)执行");
                 Matcher matcher = pattern.matcher(message);
                 boolean found = matcher.find();
+                boolean isAtXx = false;
                 if ((message.contains("弟子听令") && found && message.contains("执行") || message.contains("弟子听令执行")) && !message.contains("@0")) {
                     int delaySeconds = 0;
                     if (found) {
@@ -1525,23 +1526,29 @@ public class TestService {
                         if (!processedMsg.startsWith("弟子听令执行")) {
                             return;
                         }
-
+                        isAtXx = true;
                         processedMsg = processedMsg.substring("弟子听令执行".length()).trim();
                         messageChain.set(0, new TextMessage(processedMsg));
                         messageChain.add(0, new AtMessage("3889001741"));
                     }
 
                     String finalProcessedMsg = processedMsg;
+                    boolean finalIsAtXx = isAtXx;
                     CompletableFuture.runAsync(() -> {
                         try {
                             if (actualDelay > 0) {
                                 TimeUnit.SECONDS.sleep((long) actualDelay);
                             }
-                            if (commandWords.stream().anyMatch(finalProcessedMsg::contains)) {
-                                bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage(messageChain);
+                            if(finalIsAtXx){
+                                if (commandWords.stream().anyMatch(finalProcessedMsg::contains)) {
+                                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage(messageChain);
+                                }else{
+                                    group.sendMessage(messageChain);
+                                }
                             }else{
                                 group.sendMessage(messageChain);
                             }
+
 
                         } catch (InterruptedException var4) {
                             Thread.currentThread().interrupt();
@@ -1785,9 +1792,9 @@ public class TestService {
     )
     public void 悬赏令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
+//        boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
         boolean isAtSelf = isAtSelf(message, bot, group);
-        if (isGroup && isAtSelf && botConfig.getRewardMode() != 1) {
+        if (isAtSelf && botConfig.getRewardMode() != 1) {
             if (message.contains("在做悬赏令呢") && message.contains("分身乏术")) {
                 botConfig.setStartScheduled(false);
                 bot.getBotConfig().setMjTime(-1L);
@@ -1968,7 +1975,8 @@ public class TestService {
 //            botName = cardName;
 //        }
 //        return message.contains("@" + bot.getBotId()) || message.contains("@" + botName);
-        return true;
+//        return true;
+        return  group.getGroupId() == bot.getBotConfig().getGroupId();
     }
 
     public static List<Long> extractRewards(String input) {
@@ -2078,7 +2086,6 @@ public class TestService {
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text(" 道具使用次元之钥"));
                 } else {
                     groupManager.setMjTaskFinished(bot);
-                    bot.getGroup(botConfig.getGroupId()).sendMessage(new MessageChain().text("今日秘境已完成"));
                     proccessCultivation(group);
                 }
             }

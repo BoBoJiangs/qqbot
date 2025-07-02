@@ -1,6 +1,9 @@
 xbGroupId: 993970673
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
 xxGroupId: 690933736
+apiKey: 0b6a32d4-204d-4c84-a30d-cdeaf5c26252
+model: ep-20250626154238-tdmq8
+
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
   - type: ws

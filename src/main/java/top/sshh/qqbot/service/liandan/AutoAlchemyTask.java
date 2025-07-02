@@ -3,7 +3,7 @@
 // (powered by FernFlower decompiler)
 //
 
-package top.sshh.qqbot.service;
+package top.sshh.qqbot.service.liandan;
 
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
@@ -17,13 +17,14 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.MessageNumber;
+import top.sshh.qqbot.service.GroupManager;
 
 import java.io.*;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinPool;
 import java.util.regex.Matcher;

@@ -61,6 +61,7 @@ public class MemoryCleaner {
     private final MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
 
     public MemoryCleaner() {
+
     }
 
     private String getSystemStatus() {

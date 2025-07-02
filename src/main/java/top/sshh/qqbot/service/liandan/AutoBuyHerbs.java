@@ -3,7 +3,7 @@
 // (powered by FernFlower decompiler)
 //
 
-package top.sshh.qqbot.service;
+package top.sshh.qqbot.service.liandan;
 
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
@@ -21,6 +21,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.MessageNumber;
 import top.sshh.qqbot.data.ProductPrice;
+import top.sshh.qqbot.service.GroupManager;
 
 import java.io.*;
 import java.nio.file.Files;
