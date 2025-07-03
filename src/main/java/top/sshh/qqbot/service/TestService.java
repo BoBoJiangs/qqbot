@@ -1038,10 +1038,13 @@ public class TestService {
             }
             List<Button> buttonList = buttons.getButtonList();
             StringBuilder buttonBuilder = new StringBuilder();
-            if (bot.getBotConfig().getGroupId() == group.getGroupId()) {
-                buttonBuilder.append("题目：" + buttons.getImageText());
+            boolean isSelfGroup = (group.getGroupId() == bot.getBotConfig().getGroupId() || xxGroupId == group.getGroupId());
+            if (isSelfGroup) {
+                buttonBuilder.append(buttons.getImageText());
+                buttonBuilder.append("\n");
                 buttonBuilder.append("\n");
                 buttonBuilder.append("@我+点击序号+对应答案前面的序号");
+                buttonBuilder.append("\n");
                 buttonBuilder.append("\n");
                 buttonBuilder.append("【");
                 if (buttonList.size() == 16 || buttonList.size() == 15) {

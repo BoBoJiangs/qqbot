@@ -297,5 +297,17 @@ public class GuessIdiom {
         EMOJI_MAP.put("汽车", "\ud83d\ude97");
         EMOJI_MAP.put("书", "\ud83d\udcd6");
         EMOJI_MAP.put("书本", "\ud83d\udcd6");
+
+        EMOJI_MAP.put("⌛", "沙漏");
+        EMOJI_MAP.put("\ud83d\udc33", "鲸鱼");
+        EMOJI_MAP.put("\ud83d\udd0b", "电池");
+        EMOJI_MAP.put("\ud83c\udf4e", "苹果");
+        EMOJI_MAP.put("\ud83c\udf47", "葡萄");
+        EMOJI_MAP.put("\ud83d\udccc", "图钉");
+        EMOJI_MAP.put("\ud83d\udc14", "鸡");
+        EMOJI_MAP.put("\ud83c\udf49", "西瓜");
+        EMOJI_MAP.put("\ud83d\udcbb", "电脑");
+        EMOJI_MAP.put("\ud83d\ude97", "汽车");
+        EMOJI_MAP.put("\ud83d\udcd6", "书");
     }
 }

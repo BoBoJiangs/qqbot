@@ -552,7 +552,9 @@ public class GroupManager {
         if (bot.getBotConfig().isEnableGroupManager() ) {
 
             if (isRemindGroup(bot, group)) {
-                if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
+                if (message.contains("秘境通告") && message.contains("探索时长")) {
+                    this.extractInfo(message, "秘境", group, bot,member);
+                } else if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
                     this.extractInfo(message, "秘境", group, bot,member);
                 } else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
                     this.extractInfo(message, "秘境", group, bot,member);
