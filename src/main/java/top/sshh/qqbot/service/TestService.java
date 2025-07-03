@@ -1259,9 +1259,15 @@ public class TestService {
                 messageChain.set(0, new TextMessage(message.substring(message.indexOf("执行命令") + 4)));
                 group.sendMessage(messageChain);
             } else if (message.startsWith("执行")) {
-                messageChain.set(0, new TextMessage(message.substring(message.indexOf("执行") + 2)));
+                String textMessage = message.substring(message.indexOf("执行") + 2);
+                messageChain.set(0, new TextMessage(textMessage));
                 messageChain.add(0, new AtMessage("3889001741"));
-                group.sendMessage(messageChain);
+                if (commandWords.stream().anyMatch(textMessage::contains)) {
+                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage(messageChain);
+                }else{
+                    group.sendMessage(messageChain);
+                }
+//                bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage(messageChain)
             } else if (message.startsWith("听令1")) {
                 messageChain.set(0, new TextMessage(message.substring("听令1".length()).trim()));
                 group.sendMessage(messageChain);
