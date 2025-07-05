@@ -77,17 +77,16 @@ public class XiaoBeiService {
     }
 
 
-
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
     )
     public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         message = message.trim();
-        if(StringUtils.isEmpty(message)){
+        if (StringUtils.isEmpty(message)) {
             return;
         }
-        if (message.equals("小北命令") || message.equals("小北当前设置")){
+        if (message.equals("小北命令") || message.equals("小北当前设置")) {
             group.sendMessage((new MessageChain()).reply(messageId).text(this.showReplyMessage(message, botConfig, bot)));
         }
 
@@ -167,7 +166,7 @@ public class XiaoBeiService {
             group.sendMessage((new MessageChain()).at("3889029313").text("药材"));
         }
 
-        if ("停止执行".equals(message) && botConfig!=null) {
+        if ("停止执行".equals(message) && botConfig != null) {
             botConfig.setStop(true);
             botConfig.setCommand("");
         }
@@ -266,7 +265,7 @@ public class XiaoBeiService {
     }
 
     public void loadOrCreateConfig() {
-        Path configFile = Paths.get(targetDir+FILE_PATH);
+        Path configFile = Paths.get(targetDir + FILE_PATH);
 
         try {
             if (Files.exists(configFile, new LinkOption[0])) {
@@ -279,7 +278,7 @@ public class XiaoBeiService {
     }
 
     // 序列化 Map 到文件
-    public  void saveMapToFile() {
+    public void saveMapToFile() {
         try {
             String jsonStr = JSON.toJSONString(botConfigMap);
             Files.write(Paths.get(FILE_PATH), jsonStr.getBytes());
@@ -289,24 +288,25 @@ public class XiaoBeiService {
     }
 
     // 从文件反序列化到 Map
-    public  Map<String, QQBotConfig> loadMapFromFile() {
+    public Map<String, QQBotConfig> loadMapFromFile() {
         try {
             Path path = Paths.get(FILE_PATH);
             if (Files.exists(path)) {
                 String jsonStr = new String(Files.readAllBytes(path));
                 return JSON.parseObject(jsonStr,
-                        new TypeReference<ConcurrentHashMap<String, QQBotConfig>>() {});
+                        new TypeReference<ConcurrentHashMap<String, QQBotConfig>>() {
+                        });
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return  new ConcurrentHashMap() ; // 文件不存在时返回空 Map
+        return new ConcurrentHashMap(); // 文件不存在时返回空 Map
     }
 
 
     private String showReplyMessage(String message, QQBotConfig botConfig, Bot bot) {
-        if(botConfig == null){
-            return  "bot正在启动，请稍后";
+        if (botConfig == null) {
+            return "bot正在启动，请稍后";
         }
         StringBuilder sb = new StringBuilder();
         if (message.equals("小北命令")) {
@@ -334,7 +334,6 @@ public class XiaoBeiService {
             return sb.toString();
         }
     }
-
 
 
     @GroupMessageHandler(
@@ -375,19 +374,19 @@ public class XiaoBeiService {
             senderIds = {3889029313L}
     )
     public void 灵石修炼(Bot bot, Friend member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
-        if(botConfig!=null && botConfig.getCultivateMode() == 2){
-            if(message.contains("突破神火圆满境成功")){
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
+        if (botConfig != null && botConfig.getCultivateMode() == 2) {
+            if (message.contains("突破神火圆满境成功")) {
                 botConfig.setCultivateMode(1);
-            }else if(message.contains("形意不成，回去练练再来吧")){
+            } else if (message.contains("形意不成，回去练练再来吧")) {
                 sendBotMessage(bot, "灵石修炼50000000", true);
-            }else if(message.contains("突破失败") || message.contains("为道友护道成功")){
+            } else if (message.contains("突破失败") || message.contains("为道友护道成功")) {
                 sendBotMessage(bot, "直接突破", true);
-            }else if(message.contains("恭喜道友") && message.contains("突破")&& message.contains("成功")){
+            } else if (message.contains("恭喜道友") && message.contains("突破") && message.contains("成功")) {
                 sendBotMessage(bot, "直接突破", true);
-            }else if(message.contains("修炼结束") && message.contains("修炼到达上限")){
+            } else if (message.contains("修炼结束") && message.contains("修炼到达上限")) {
                 sendBotMessage(bot, "直接突破", true);
-            }else if(message.contains("修炼结束") && message.contains("修炼到达上限")){
+            } else if (message.contains("修炼结束") && message.contains("修炼到达上限")) {
                 sendBotMessage(bot, "直接突破", true);
             }
         }
@@ -401,7 +400,7 @@ public class XiaoBeiService {
     public void 讨伐世界boss(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         boolean isControlQQ = bot.getBotConfig().getMasterQQ() == member.getUserId();
 
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         boolean isGroup = isXbGroup(group, botConfig);
         if (isGroup && isControlQQ && (message.contains("讨伐世界boss") || message.contains("讨伐世界BOSS")) && bot.getBotConfig().getMasterQQ() != bot.getBotId()) {
             Pattern pattern = Pattern.compile("讨伐世界boss(\\d+)");
@@ -423,13 +422,13 @@ public class XiaoBeiService {
         return group.getGroupId() == xbGroupId;
     }
 
-    private boolean isAtSelf(String message, Bot bot,Group group) {
+    private boolean isAtSelf(String message, Bot bot, Group group) {
         String botName = bot.getBotName();
         String cardName = group.getMember(bot.getBotId()).getCard();
-        if(StringUtils.isNotBlank(cardName)){
+        if (StringUtils.isNotBlank(cardName)) {
             botName = cardName;
         }
-        return message.contains("@" + bot.getBotId()) || message.contains("@" + botName);
+        return message.contains(botName);
     }
 
     public static Map<String, Integer> extractHerbs(String input) {
@@ -450,10 +449,10 @@ public class XiaoBeiService {
             senderIds = {3889029313L}
     )
     public void 小北药材上架(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        boolean isAtSelf = isAtSelf(message, bot,  group);
+        boolean isAtSelf = isAtSelf(message, bot, group);
         if (isAtSelf && message.contains("的药材背包")) {
             System.out.println(message);
-            QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+            QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
             if (StringUtils.isNotBlank(botConfig.getCommand()) && botConfig.getCommand().equals("小北自动药材上架")) {
                 group.sendMessage((new MessageChain()).reply(messageId).text("小北药材上架"));
             }
@@ -466,20 +465,17 @@ public class XiaoBeiService {
     )
     public void 宗门任务接取刷新() throws InterruptedException {
         if (xbGroupId > 0) {
-//            initBots();
             BotFactory.getBots().values().forEach((bot) -> {
-                if(bot.getBotConfig()!=null && bot.getBotConfig().isEnableXiaoBei()){
-                    if (botConfigMap.get(bot.getBotId()+"") == null) {
-                        botConfigMap.put(bot.getBotId()+"", new QQBotConfig());
-//                    saveMapToFile();
+                if (bot.getBotConfig() != null && bot.getBotConfig().isEnableXiaoBei()) {
+                    if (botConfigMap.get(bot.getBotId() + "") == null) {
+                        botConfigMap.put(bot.getBotId() + "", new QQBotConfig());
                     }
-                    QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+                    QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
                     Group group = bot.getGroup(xbGroupId);
                     switch (botConfig.getFamilyTaskStatus()) {
                         case 0:
                             return;
                         case 1:
-
                             sendBotMessage(bot, "宗门任务接取", true);
                             return;
                         case 2:
@@ -505,9 +501,9 @@ public class XiaoBeiService {
             senderIds = {3889029313L}
     )
     public void 宗门任务状态管理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         boolean isGroup = isXbGroup(group, botConfig);
-        boolean isAtSelf = isAtSelf(message, bot,  group);
+        boolean isAtSelf = isAtSelf(message, bot, group);
         if (isGroup && isAtSelf) {
             sectMessage(bot, message);
 
@@ -524,9 +520,10 @@ public class XiaoBeiService {
     }
 
     private void sectMessage(Bot bot, String message) throws InterruptedException {
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         if (message.contains("今日无法再获取宗门任务")) {
             proccessCultivation(bot, botConfig);
+            sendGroupMessage(bot, "小北宗门任务已完成");
         } else if (message.contains("请检查该道具是否在背包内") || message.contains("道友不满足使用条件")) {
             botConfig.setFamilyTaskStatus(0);
         } else if (message.contains("灵石带少了") && message.contains("出门做任务") && message.contains("不扣你任务次数")) {
@@ -551,13 +548,20 @@ public class XiaoBeiService {
         }
     }
 
+    private void sendGroupMessage(Bot bot, String message) {
+        if (this.xbGroupId > 0) {
+            bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text(message));
+        }
+
+    }
+
     @GroupMessageHandler(
             senderIds = {3889029313L}
     )
     public void 秘境(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         boolean isGroup = isXbGroup(group, botConfig);
-        boolean isAtSelf = isAtSelf(message, bot,  group);
+        boolean isAtSelf = isAtSelf(message, bot, group);
         if (isGroup && isAtSelf) {
             mjMessage(bot, message);
         }
@@ -573,9 +577,10 @@ public class XiaoBeiService {
     }
 
     private void mjMessage(Bot bot, String message) {
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         if (message.contains("参加过本次所有秘境")) {
             proccessCultivation(bot, botConfig);
+            sendGroupMessage(bot, "小北秘境任务已完成");
         } else if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
             String[] parts;
             if (message.contains("(原")) {
@@ -596,7 +601,7 @@ public class XiaoBeiService {
 
             System.out.println("秘境结算时间" + parts[1]);
             botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * 60.0 * 1000.0 + (double) System.currentTimeMillis()));
-        }else if (message.contains("道友现在正在秘境中")) {
+        } else if (message.contains("道友现在正在秘境中")) {
             sendBotMessage(bot, "秘境结算", true);
         }
 
@@ -606,9 +611,9 @@ public class XiaoBeiService {
             senderIds = {3889029313L}
     )
     public void 悬赏令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         boolean isGroup = isXbGroup(group, botConfig);
-        boolean isAtSelf = isAtSelf(message, bot,  group);
+        boolean isAtSelf = isAtSelf(message, bot, group);
         if (isGroup && isAtSelf) {
             xslMessage(bot, message);
         }
@@ -624,7 +629,7 @@ public class XiaoBeiService {
     }
 
     private void xslMessage(Bot bot, String message) {
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         if (message.contains("道友现在在做悬赏令呢")) {
             sendBotMessage(bot, "悬赏令结算", true);
         } else if (message.contains("没有查到你的悬赏令信息")) {
@@ -634,6 +639,7 @@ public class XiaoBeiService {
         } else if (message.contains("悬赏令刷新次数已用尽") || message.contains("道友的免费刷新次数已耗尽")) {
             botConfig.setXslTime(-1L);
             proccessCultivation(bot, botConfig);
+            sendGroupMessage(bot, "小北悬赏任务已完成");
         } else if (message.contains("进行中的悬赏令") && message.contains("可结束")) {
             String[] parts;
             if (message.contains("(原")) {
@@ -651,7 +657,7 @@ public class XiaoBeiService {
 
         } else if (message.contains("发布悬赏令如下")) {
             sendBotMessage(bot, "悬赏令接取" + selectBestTask(message), true);
-        }else if (message.contains("悬赏令结算") && message.contains("增加修为")) {
+        } else if (message.contains("悬赏令结算") && message.contains("增加修为")) {
             botConfig.setXslTime(-1L);
             sendBotMessage(bot, "悬赏令刷新", true);
         }
@@ -682,15 +688,15 @@ public class XiaoBeiService {
 
         String[] priorityItems = {
                 "佛怒火莲", "天剑破虚", "仙火焚天", "千慄鬼噬", "灭剑", "万剑", "宿命通", "明心问道果",
-                "离火梧桐芝", "剑魄竹笋", "尘磊岩麟果","木灵三针花","鎏鑫天晶草","檀芒九叶花","坎水玄冰果","大荒星陨指","万魔渡",
-                "八角玄冰草","地心淬灵乳","天麻翡石精","奇茸通天菊","风神诀", "合欢魔功",
+                "离火梧桐芝", "剑魄竹笋", "尘磊岩麟果", "木灵三针花", "鎏鑫天晶草", "檀芒九叶花", "坎水玄冰果", "大荒星陨指", "万魔渡",
+                "八角玄冰草", "地心淬灵乳", "天麻翡石精", "奇茸通天菊", "风神诀", "合欢魔功",
 
         };
 
         // 1. 检查是否有优先物品
         for (String item : priorityItems) {
             for (Task task : tasks) {
-                if (task.getRewardItem()!=null && task.getRewardItem().contains(item)) {
+                if (task.getRewardItem() != null && task.getRewardItem().contains(item)) {
                     return task.getNumber();
                 }
             }
@@ -815,8 +821,8 @@ public class XiaoBeiService {
     public void 结算() {
         if (xbGroupId > 0) {
             BotFactory.getBots().values().forEach((bot) -> {
-                if(bot.getBotConfig().isEnableXiaoBei()){
-                    QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+                if (bot.getBotConfig().isEnableXiaoBei()) {
+                    QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
                     if (botConfig != null && botConfig.getMjTime() > 0L && botConfig.getMjTime() < System.currentTimeMillis()) {
                         botConfig.setMjTime(-1L);
 
@@ -834,7 +840,7 @@ public class XiaoBeiService {
 
             });
             BotFactory.getBots().values().forEach((bot) -> {
-                QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+                QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
                 if (botConfig != null && botConfig.getXslTime() > 0L && botConfig.getXslTime() < System.currentTimeMillis()) {
                     botConfig.setXslTime(-1L);
                     sendBotMessage(bot, "悬赏令结算", true);
@@ -850,9 +856,9 @@ public class XiaoBeiService {
     )
     public void 灵田领取结果(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
 //        QQBotConfig botConfig = bot.getBotConfig();
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         boolean isGroup = isXbGroup(group, botConfig);
-        boolean isAtSelf = isAtSelf(message, bot,  group);
+        boolean isAtSelf = isAtSelf(message, bot, group);
         if (isGroup && isAtSelf) {
             lingTianReceive(bot, message);
         }
@@ -867,7 +873,7 @@ public class XiaoBeiService {
     }
 
     private void lingTianReceive(Bot bot, String message) throws InterruptedException {
-        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
         if (message.contains("灵田还不能收取")) {
             String[] parts = message.split("：|小时");
             if (parts.length < 2) {
@@ -918,6 +924,10 @@ public class XiaoBeiService {
                         numberKeyword = Integer.parseInt(numberMatcher.group());
                     }
 
+                    if (numberKeyword > 30) {
+                        numberKeyword = 30;
+                    }
+
                     messageChain.set(0, new TextMessage(textKeyword));
                     messageChain.add(0, new AtMessage(botQQ));
                     this.forSendMessage(bot, group, messageChain, numberKeyword, 3);
@@ -931,7 +941,8 @@ public class XiaoBeiService {
 
     private void forSendMessage(Bot bot, Group group, MessageChain messageChain, int count, int time) {
         for (int i = 0; i < count; ++i) {
-            QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");;
+            QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
+            ;
             if (botConfig.isStop()) {
                 botConfig.setStop(false);
                 return;
@@ -953,8 +964,8 @@ public class XiaoBeiService {
         if (xbGroupId > 0) {
 
             for (Bot bot : BotFactory.getBots().values()) {
-                QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
-                if(bot.getBotConfig().isEnableXiaoBei()){
+                QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
+                if (bot.getBotConfig().isEnableXiaoBei()) {
                     if (botConfig != null && botConfig.getLastExecuteTime() + 60000L < System.currentTimeMillis()) {
                         sendBotMessage(bot, "灵田结算", true);
                     }
@@ -976,9 +987,9 @@ public class XiaoBeiService {
 
             while (var1.hasNext()) {
                 Bot bot = (Bot) var1.next();
-                if(bot.getBotConfig().isEnableXiaoBei()){
+                if (bot.getBotConfig().isEnableXiaoBei()) {
                     try {
-                        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
+                        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
                         if (botConfig != null && botConfig.isEnableXsl()) {
                             sendBotMessage(bot, "出关", true);
                             Thread.sleep(5000L);
@@ -1005,10 +1016,10 @@ public class XiaoBeiService {
             log.info("秘境定时任务执行啦！");
 
             for (Bot bot : BotFactory.getBots().values()) {
-                if(bot.getBotConfig().isEnableXiaoBei()){
+                if (bot.getBotConfig().isEnableXiaoBei()) {
                     try {
-                        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
-                        if (botConfig!= null && botConfig.isEnableMj()){
+                        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
+                        if (botConfig != null && botConfig.isEnableMj()) {
                             sendBotMessage(bot, "出关", true);
                             Thread.sleep(5000L);
                             sendBotMessage(bot, "探索秘境", true);
@@ -1033,10 +1044,10 @@ public class XiaoBeiService {
             log.info("宗门任务定时任务执行啦！");
 
             for (Bot bot : BotFactory.getBots().values()) {
-                if(bot.getBotConfig().isEnableXiaoBei()){
+                if (bot.getBotConfig().isEnableXiaoBei()) {
                     try {
-                        QQBotConfig botConfig = botConfigMap.get(bot.getBotId()+"");
-                        if (botConfig!= null && botConfig.isEnableFamilyTask()){
+                        QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
+                        if (botConfig != null && botConfig.isEnableFamilyTask()) {
                             sendBotMessage(bot, "宗门丹药领取", true);
                             Thread.sleep(2000L);
                             bot.getGroup(xbGroupId).sendMessage((new MessageChain()).text("开始小北自动宗门任务"));
@@ -1053,13 +1064,11 @@ public class XiaoBeiService {
     }
 
 
-
-
     @FriendMessageHandler(
             senderIds = {3889029313L}
     )
     public void handleEndlessChallenge(Bot bot, Friend member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
-        EndlessState state = (EndlessState)this.endlessStateMap.get(bot.getBotId());
+        EndlessState state = (EndlessState) this.endlessStateMap.get(bot.getBotId());
         if (state != null && state.status == 1) {
             int floor = state.floor;
             if (message.contains("重伤未愈")) {
@@ -1091,7 +1100,7 @@ public class XiaoBeiService {
     public void handleGroupEndlessResponse(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (this.isAtSelf(message, bot, group)) {
             try {
-                this.handleEndlessChallenge(bot, (Friend)null, (MessageChain)null, message, (Integer)null);
+                this.handleEndlessChallenge(bot, (Friend) null, (MessageChain) null, message, (Integer) null);
             } catch (InterruptedException var8) {
                 InterruptedException e = var8;
                 log.error("处理无尽挑战异常", e);
@@ -1102,7 +1111,7 @@ public class XiaoBeiService {
 
     private void sendBotMessage(Bot bot, String message, boolean isAtBot) {
         try {
-            QQBotConfig botConfig = (QQBotConfig)this.botConfigMap.get(bot.getBotId() + "");
+            QQBotConfig botConfig = (QQBotConfig) this.botConfigMap.get(bot.getBotId() + "");
             if (botConfig.isPrivateChat()) {
                 Thread.sleep(2000L);
                 bot.sendPrivateMessage(Long.parseLong("3889029313"), (new MessageChain()).text(message));
@@ -1118,7 +1127,6 @@ public class XiaoBeiService {
             e.printStackTrace();
         }
     }
-
 
 
     private static class EndlessState {

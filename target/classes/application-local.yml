@@ -1,20 +1,16 @@
 xbGroupId: 993970673
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
 xxGroupId: 690933736
-apiKey: 0b6a32d4-204d-4c84-a30d-cdeaf5c26252
-model: ep-20250703153250-pn89k
+#apiKey: 0b6a32d4-204d-4c84-a30d-cdeaf5c26252
+#model: ep-20250703153250-pn89k
 
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
   - type: ws
-#    url: ws://localhost:3001
-#    groupId: 971327442
     url: ws://117.72.213.211:8900
     #修炼+任务群
     groupId: 1011466037
     accessToken: 1024*1024*1024
-
-#    groupId: 824484501
     #    大号qq
     controlQQ: 819463350
     #    大号qq
@@ -48,42 +44,6 @@ bot:
     enableXiaoBei: false
     lingShiNum: 100
     lingShiQQ: 679831529
-
-#  - type: ws
-#    url: ws://localhost:8080
-#    accessToken: 1024*1024*1024
-#    #    修炼群号
-#    groupId: 1023764416
-#    #    大号qq
-#    controlQQ: 819463350&1018454301
-#    #    大号qq
-#    masterQQ: 819463350
-#    # 是否开启查价格
-#    enableCheckPrice: true
-#    # 是否开启猜成语
-#    enableGuessTheIdiom: false
-#    # 是否开启查行情
-#    enableCheckMarket: false
-#    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
-#    enableXslPriceQuery: false
-#    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-#    cultivationMode: 3
-#    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认） 4时长最短 5修为最高
-#    rewardMode: 5
-#    #宗门任务1：邪修和查抄（默认） 2：所有任务
-#    sectMode: 2
-#    #自动灵田结算（默认 true）
-#    enableAutoField: true
-#    #自动秘境结算 （默认 true）
-#    enableAutoSecret: true
-#    #无偿双修
-#    enableAutoRepair: true
-#    #群管提醒
-#    enableGroupManager: false
-#    #悬赏令价格限制（超过这个价格会优先接取）
-#    xslPriceLimit: 1000
-#    botNumber: 3
-#    enableSelfTitle: true
 
 spring:
   datasource:

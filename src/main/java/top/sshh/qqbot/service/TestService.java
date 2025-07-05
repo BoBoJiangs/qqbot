@@ -42,6 +42,7 @@ import java.util.regex.Pattern;
 import static org.aspectj.bridge.Version.getText;
 import static top.sshh.qqbot.constant.Constant.MAKE_DAN_SET;
 import static top.sshh.qqbot.constant.Constant.padRight;
+import static top.sshh.qqbot.service.utils.Utils.forwardMessage;
 
 @Component
 public class TestService {
@@ -130,7 +131,7 @@ public class TestService {
 
             if ("开始自动刷天赋".equals(message)) {
                 isStartAutoTalent = true;
-                group.sendMessage((new MessageChain()).at("3889001741").text("道具使用涅槃造化丹"));
+                bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("道具使用涅槃造化丹"));
             }
             if ("停止自动刷天赋".equals(message)) {
                 isStartAutoTalent = false;
@@ -179,22 +180,22 @@ public class TestService {
 
             if ("确认一键丹药炼金".equals(message)) {
                 botConfig.setCommand("确认一键丹药炼金");
-                group.sendMessage((new MessageChain()).at("3889001741").text("丹药背包"));
+                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("丹药背包"));
             }
             if ("确认一键装备炼金".equals(message)) {
                 botConfig.setCommand("确认一键装备炼金");
-                group.sendMessage((new MessageChain()).at("3889001741").text("我的背包"));
+                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("我的背包"));
             }
 
             if ("确认一键药材上架".equals(message)) {
                 botConfig.setCommand("确认一键药材上架");
-                group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
             }
 
 
             if ("开始一键刷灵根".equals(message)) {
                 botConfig.setStartAutoLingG(true);
-                group.sendMessage((new MessageChain()).at("3889001741").text("重入仙途"));
+                bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("重入仙途"));
             }
 
             if ("停止一键刷灵根".equals(message)) {
@@ -625,7 +626,7 @@ public class TestService {
             sb.append("－－－－－快捷命令－－－－－\n");
             sb.append("确认一键丹药炼金\n");
             sb.append("确认一键装备炼金\n");
-            sb.append("确认一键药材上架\n");
+            sb.append("批量上架药材\n");
             sb.append("一键使用次元之钥\n");
             sb.append("一键使用追捕令\n");
             sb.append("开始自动悬赏/秘境/宗门任务\n");
@@ -718,6 +719,7 @@ public class TestService {
                 botConfig.setMjTime(-1L);
                 botConfig.setLastSendTime(System.currentTimeMillis());
                 group.sendMessage((new MessageChain()).at("3889001741").text("修炼"));
+
             } else if (message.contains("本次修炼增加")) {
                 LocalTime now = LocalTime.now();
                 if ((now.getHour() != 12 || now.getMinute() != 30 && now.getMinute() != 31 && now.getMinute() != 32) && botConfig.getCultivationMode() != 1) {
@@ -1146,9 +1148,9 @@ public class TestService {
 
         if ((message.contains("奖励") && message.contains("灵石") || message.contains("不需要验证") || message.contains("验证码已过期")) && message.contains("" + bot.getBotId())) {
             bot.getBotConfig().setStop(false);
-            forwardMessage(bot, message);
+            forwardMessage(bot, xxGroupId, message);
             if (message.contains("奖励") && message.contains("灵石") && StringUtils.isNotBlank(bot.getBotConfig().getCommand())) {
-                if (!("一键使用追捕令".equals(bot.getBotConfig().getCommand()) || "一键使用次元之钥".equals(bot.getBotConfig().getCommand()))) {
+                if (!("批量上架药材".equals(bot.getBotConfig().getCommand()) || "一键使用追捕令".equals(bot.getBotConfig().getCommand()) || "一键使用次元之钥".equals(bot.getBotConfig().getCommand()))) {
                     group.sendMessage((new MessageChain()).text(bot.getBotConfig().getCommand()));
                 }
             } else if (StringUtils.isNotBlank(bot.getBotConfig().getCommand())) {
@@ -1158,13 +1160,7 @@ public class TestService {
 
     }
 
-    private void forwardMessage(Bot bot, String message){
-        if(bot.getBotConfig().isEnableForwardMessage()){
-            bot.getGroup(getRemindGroupId(bot)).sendMessage(new MessageChain().text(cleanMessage(message)));
-        }
 
-
-    }
 
     private Bot getRemindAtQQ(Bot bot) {
         if (bot.getBotConfig().getMasterQQ() != 0L) {
@@ -1649,6 +1645,33 @@ public class TestService {
 
     }
 
+    @Scheduled(
+            cron = "0 0 5 * * ?"
+    )
+    public void 重置双修() {
+        Iterator var1 = BotFactory.getBots().values().iterator();
+
+        while(var1.hasNext()) {
+
+            Bot bot = (Bot)var1.next();
+            BotConfig botConfig = bot.getBotConfig();
+            botConfig.setRemainingSxNumber(botConfig.getShuangXuNumber());
+            if (bot.getBotId() != bot.getBotConfig().getMasterQQ()) {
+                if(bot.getGroup(682220759L) != null){
+                    bot.setGroupCard(682220759L, bot.getBotId(), "A无偿双修");
+                }
+
+            }
+//            if (initialNumber != null) {
+//                bot.getBotConfig().setShuangXuNumber(bot);
+//                System.out.println("已重置bot：" + bot.getBotId() + "的无偿双修次数为：" + initialNumber + "次");
+//            } else {
+//                System.out.println("未找到bot：" + bot.getBotId() + "的初始次数，跳过重置");
+//            }
+        }
+
+    }
+
     @GroupMessageHandler(
             isAt = true,
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
@@ -1681,7 +1704,24 @@ public class TestService {
                     int numberKeyword = 0;
                     if (numberMatcher.find()) {
                         numberKeyword = Integer.parseInt(numberMatcher.group());
+                        int shuangxu = bot.getBotConfig().getRemainingSxNumber();
+                        if (numberKeyword > shuangxu) {
+                            numberKeyword = shuangxu;
+                        }
+
+                        if (numberKeyword <= 0) {
+                            if(group.getGroupId() == 682220759L){
+                                bot.setGroupCard(group.getGroupId(), bot.getBotId(), "A无偿双修(剩余0次)");
+                            }
+                            group.sendMessage(new MessageChain().text("我已经被道友们榨干了，请找其他道友双修吧！"));
+                            return;
+                        }
+
+                        shuangxu -= numberKeyword;
+                        bot.getBotConfig().setRemainingSxNumber(shuangxu);
                     }
+
+
 
                     messageChain.set(0, new TextMessage(textKeyword));
                     messageChain.add(0, new AtMessage("3889001741"));
@@ -1699,39 +1739,46 @@ public class TestService {
     }
 
     private void forSendMessage(Bot bot, Group group, MessageChain messageChain, int count, int time) {
-        for (int i = 0; i < count; ++i) {
-            BotConfig botConfig = bot.getBotConfig();
-            if (botConfig.isStop()) {
-                botConfig.setStop(false);
-                return;
-            }
-
-            try {
-                group.sendMessage(messageChain);
-                Thread.sleep((long) time * 1000L);
-
-            } catch (Exception var9) {
-            }
-        }
-
-    }
-
-    private void executeSendAllMessage(final Group group, final MessageChain messageChain, final int count, final int time) {
         customPool.submit(new Runnable() {
             public void run() {
-                Iterator var1 = BotFactory.getBots().values().iterator();
+                for (int i = 0; i < count; ++i) {
+                    BotConfig botConfig = bot.getBotConfig();
+                    if (botConfig.isStop()) {
+                        botConfig.setStop(false);
+                        return;
+                    }
 
-                while (var1.hasNext()) {
                     try {
-                        Bot bot1 = (Bot) var1.next();
-                        Group bot1Group = bot1.getGroup(group.getGroupId());
-                        forSendMessage(bot1, bot1Group, messageChain, count, time);
-                    } catch (Exception var4) {
+                        group.sendMessage(messageChain);
+                        Thread.sleep((long) time * 1000L);
+
+                    } catch (Exception var9) {
                     }
                 }
 
             }
         });
+
+
+    }
+
+    private void executeSendAllMessage(final Group group, final MessageChain messageChain, final int count, final int time) {
+//        customPool.submit(new Runnable() {
+//            public void run() {
+//
+//
+//            }
+//        });
+        Iterator var1 = BotFactory.getBots().values().iterator();
+
+        while (var1.hasNext()) {
+            try {
+                Bot bot1 = (Bot) var1.next();
+                Group bot1Group = bot1.getGroup(group.getGroupId());
+                forSendMessage(bot1, bot1Group, messageChain, count, time);
+            } catch (Exception var4) {
+            }
+        }
     }
 
     @GroupMessageHandler(
@@ -2090,7 +2137,7 @@ public class TestService {
 
             if (KEYWORDS.stream().anyMatch(message::contains) && !message.contains("时间：")) {
                 bot.getBotConfig().setMjTime(-1L);
-                forwardMessage(bot, message);
+                forwardMessage(bot, xxGroupId, message);
                 if ("一键使用次元之钥".equals(botConfig.getCommand())) {
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text(" 道具使用次元之钥"));
                 } else {
@@ -2110,18 +2157,16 @@ public class TestService {
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         if (isGroup) {
             if (forwardWords.stream().anyMatch(message::contains)) {
-                forwardMessage(bot, message);
+                forwardMessage(bot, xxGroupId, message);
             }
             if(message.contains("道友成功领取到丹药")||message.contains("道友已经领取过了")){
+                forwardMessage(bot, xxGroupId, message);
                 groupManager.setDanYaoFinished(bot);
             }
         }
     }
 
-    private String cleanMessage(String message) {
-        String cleaned = message.replaceAll("content\\[\\[.*?\\][\\s\\S]*?](?=\\s|$)", "");
-        return cleaned.replaceAll("(\\n\\s*)+$", "").trim();
-    }
+
 
     @Scheduled(
             fixedDelay = 60000L,

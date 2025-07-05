@@ -467,24 +467,7 @@ public class GroupManager {
 
     }
 
-    @GroupMessageHandler(
-            senderIds = {3889001741L}
-    )
-    public void 修改群昵称(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        boolean isAtSelf = message.contains("" + bot.getBotId());
-        if (group.getGroupId() == 682220759L && isAtSelf && message.contains("道友今天双修次数已经到达上限")) {
-            customPool.submit(new Runnable() {
-                public void run() {
-                    try {
-                        bot.setGroupCard(group.getGroupId(), bot.getBotId(), "A无偿双修(剩余0次)");
-                    } catch (Exception var2) {
-                    }
 
-                }
-            });
-        }
-
-    }
 
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
@@ -532,17 +515,7 @@ public class GroupManager {
 
     }
 
-    @Scheduled(
-            cron = "0 0 4 * * *"
-    )
-    public void 重置双修次数() throws Exception {
-        BotFactory.getBots().values().forEach((bot) -> {
-            if (bot.getBotId() != bot.getBotConfig().getMasterQQ()) {
-                bot.setGroupCard(682220759L, bot.getBotId(), "A无偿双修");
-            }
 
-        });
-    }
 
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE

@@ -63,7 +63,7 @@
 //            multiParts.add(ChatCompletionContentPart.builder()
 //                    .type("text")
 //                    .text("结合图片以及题目信息，从以下答案中选出一个你认为正确的答案 " + answer )
-//                    .text("回答结果按照 正确答案是：1 这种格式输出")
+//                    .text("回答结果按照 正确答案是： 这种格式输出")
 //                    .build());
 //            logger.info(buttons.getImageText());
 //            logger.info(buttons.getImageUrl());
