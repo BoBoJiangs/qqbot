@@ -1702,27 +1702,27 @@ public class TestService {
                     Pattern numberPattern = Pattern.compile("\\d+");
                     Matcher numberMatcher = numberPattern.matcher(message);
                     int numberKeyword = 0;
+                    int shuangxu = bot.getBotConfig().getRemainingSxNumber();
                     if (numberMatcher.find()) {
                         numberKeyword = Integer.parseInt(numberMatcher.group());
-                        int shuangxu = bot.getBotConfig().getRemainingSxNumber();
-                        if (numberKeyword > shuangxu) {
-                            numberKeyword = shuangxu;
-                        }
 
-                        if (numberKeyword <= 0) {
+                        if(shuangxu == 0){
+                            shuangxu = bot.getBotConfig().getShuangXuNumber();
+                        }
+                        if (shuangxu <= 0) {
                             if(group.getGroupId() == 682220759L){
                                 bot.setGroupCard(group.getGroupId(), bot.getBotId(), "A无偿双修(剩余0次)");
                             }
+                            bot.getBotConfig().setRemainingSxNumber(-1);
                             group.sendMessage(new MessageChain().text("我已经被道友们榨干了，请找其他道友双修吧！"));
                             return;
                         }
 
-                        shuangxu -= numberKeyword;
-                        bot.getBotConfig().setRemainingSxNumber(shuangxu);
+                        bot.getBotConfig().setRemainingSxNumber(shuangxu - numberKeyword);
                     }
-
-
-
+                    if (numberKeyword > shuangxu) {
+                        numberKeyword = shuangxu;
+                    }
                     messageChain.set(0, new TextMessage(textKeyword));
                     messageChain.add(0, new AtMessage("3889001741"));
                     this.forSendMessage(bot, group, messageChain, numberKeyword, 3);

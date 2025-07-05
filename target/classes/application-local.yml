@@ -44,6 +44,7 @@ bot:
     enableXiaoBei: false
     lingShiNum: 100
     lingShiQQ: 679831529
+    shuangXuNumber: 3
 
 spring:
   datasource:

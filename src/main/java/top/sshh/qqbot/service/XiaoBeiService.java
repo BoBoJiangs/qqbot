@@ -819,7 +819,7 @@ public class XiaoBeiService {
             initialDelay = 3000L
     )
     public void 结算() {
-        if (xbGroupId > 0) {
+        if (xbGroupId > 0 && botConfigMap!=null) {
             BotFactory.getBots().values().forEach((bot) -> {
                 if (bot.getBotConfig().isEnableXiaoBei()) {
                     QQBotConfig botConfig = botConfigMap.get(bot.getBotId() + "");
