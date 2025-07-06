@@ -85,6 +85,8 @@ public class GroupManager {
     public Map<String, Map<String, ProductPrice>> autoBuyProductMap = new ConcurrentHashMap();
     public Map<String, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
     public Map<String, TaskStatus> taskStateMap = new ConcurrentHashMap();
+    public volatile boolean taskReminder = false;
+    private final Map<String, Map<String, Long>> taskRecords = new ConcurrentHashMap();
 
     public GroupManager() {
 
@@ -305,7 +307,7 @@ public class GroupManager {
             data.put("自动购买", this.autoBuyProductMap);
             data.put("炼金排除", this.excludeAlchemyMap);
             data.put("上架排除", this.excludeSellMap);
-
+            data.put("taskReminder", this.taskReminder);
             // 直接写入JSON字节（UTF-8编码）
             Files.write(Paths.get(FILE_PATH),
                     JSON.toJSONString(data).getBytes(StandardCharsets.UTF_8));
@@ -354,6 +356,12 @@ public class GroupManager {
             if(this.taskStateMap == null){
                 this.taskStateMap = new ConcurrentHashMap<>();
             }
+
+            Boolean savedReminder = data.getBoolean("taskReminder");
+            if (savedReminder != null) {
+                this.taskReminder = savedReminder;
+            }
+
 
             logger.info("加载成功：{} 个灵田任务，{} 条发言统计",
                     ltmap.size(), MESSAGE_NUMBER_MAP.size());
@@ -515,6 +523,44 @@ public class GroupManager {
 
     }
 
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 监控群友发言(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
+        if (bot.getBotConfig().isEnableAutomaticReply() && this.taskReminder && msg.contains("@3889001741")) {
+            Long groupId = group.getGroupId();
+            Long userId = member.getUserId();
+            if (userId == 3889001741L) {
+                return;
+            }
+
+            String mode = "";
+            if (msg.contains("悬赏令接取")) {
+                mode = "悬赏";
+            } else if (msg.contains("探索秘境")) {
+                mode = "秘境";
+            } else if (!msg.contains("灵田收取") && !msg.contains("灵田结算")) {
+                if (!msg.contains("使用次元之钥")) {
+                    return;
+                }
+
+                mode = "次元秘境";
+            } else {
+                mode = "灵田";
+            }
+
+            if (StringUtils.isNotBlank(mode)) {
+                String key = groupId + "_" + mode;
+                Map<String, Long> record = new HashMap();
+                record.put("userId", userId);
+                record.put("timestamp", System.currentTimeMillis());
+                this.taskRecords.put(key, record);
+                logger.info("记录任务：group={}, user={}, mode={}", new Object[]{groupId, userId, mode});
+            }
+        }
+
+    }
+
 
 
     @GroupMessageHandler(
@@ -522,25 +568,67 @@ public class GroupManager {
     )
     public void 秘境结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         message = processReplyMessage(messageChain);
-        if (bot.getBotConfig().isEnableGroupManager() ) {
+        if (bot.getBotConfig().isEnableAutomaticReply() ) {
 
             if (isRemindGroup(bot, group)) {
-                if (message.contains("秘境通告") && message.contains("探索时长")) {
-                    this.extractInfo(message, "秘境", group, bot,member);
-                } else if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
-                    this.extractInfo(message, "秘境", group, bot,member);
-                } else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
-                    this.extractInfo(message, "秘境", group, bot,member);
-                } else if (message.contains("秘境") && message.contains("道友已") && message.contains("分钟")) {
-                    this.handleNewsExploration(message, group, bot);
-                } else if (message.contains("秘境") && message.contains("时轮压缩") && message.contains("分钟")) {
-                    this.handleNewsExploration(message, group, bot);
-                }
+                sendMjTimeInfo(message,group,bot,member.getUserId());
             }
-
-
         }
 
+    }
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 自动秘境提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
+        if (!msg.contains("秘境之灵") && bot.getBotConfig().isEnableAutomaticReply()) {
+            Long userId = member.getUserId();
+            if (this.taskReminder) {
+                String taskKey = "";
+                if (userId != 3889001741L) {
+                    return;
+                }
+
+                if (!msg.contains("撕裂虚空") && !msg.contains("虚空破界")) {
+                    taskKey = group.getGroupId() + "_秘境";
+                } else {
+                    taskKey = group.getGroupId() + "_次元秘境";
+                }
+
+                Map<String, Long> record = (Map)this.taskRecords.get(taskKey);
+                if (record != null) {
+                    long recordTime = (Long)record.getOrDefault("timestamp", 0L);
+                    if (System.currentTimeMillis() - recordTime < 120000L) {
+                        userId = (Long)record.get("userId");
+                        logger.info("使用秘境记录用户：{}", userId);
+                    } else {
+                        this.taskRecords.remove(taskKey);
+                    }
+                }
+            } else if (userId == 3889029313L || userId == 3889282919L || userId == 3889002013L || userId == 3889360329L || userId == 3889015870L || userId == 3889001741L || userId == bot.getBotId()) {
+                return;
+            }
+
+            if (userId == 3889001741L) {
+                return;
+            }
+
+            sendMjTimeInfo(msg,group,bot,member.getUserId());
+        }
+    }
+
+    private void sendMjTimeInfo(String message, Group group, Bot bot,Long userId) {
+        if (message.contains("秘境通告") && message.contains("探索时长")) {
+            this.extractInfo(message, "秘境", group, bot,userId);
+        } else if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
+            this.extractInfo(message, "秘境", group, bot,userId);
+        } else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
+            this.extractInfo(message, "秘境", group, bot,userId);
+        } else if (message.contains("秘境") && message.contains("道友已") && message.contains("分钟")) {
+            this.handleNewsExploration(message, group, bot,userId);
+        } else if (message.contains("秘境") && message.contains("时轮压缩") && message.contains("分钟")) {
+            this.handleNewsExploration(message, group, bot,userId);
+        }
     }
 
     public boolean isRemindGroup(Bot bot, Group group) {
@@ -552,33 +640,14 @@ public class GroupManager {
         return isGroupQQ;
     }
 
-    private void handleNewsExploration(String msg, Group group, Bot bot) {
-        Map<String, PendingLingTianRecord> groupRecords = (Map) this.pendingLingTianRecords.get(group.getGroupId() + "");
-        if (groupRecords != null && !groupRecords.isEmpty()) {
-            Optional<Map.Entry<String, PendingLingTianRecord>> matchedEntry = groupRecords.entrySet().stream().filter((entryx) -> {
-                return msg.contains((CharSequence) entryx.getKey());
-            }).findFirst();
-            if (matchedEntry.isPresent()) {
-                Map.Entry<String, PendingLingTianRecord> entry = (Map.Entry) matchedEntry.get();
-                PendingLingTianRecord record = (PendingLingTianRecord) entry.getValue();
+    private void handleNewsExploration(String msg, Group group, Bot bot,Long userId) {
 
-                try {
-                    Pattern pattern = Pattern.compile("⏳\\s*[^:]*：\\s*(\\d+\\.?\\d*)\\s*(分钟|小时)");
-                    Matcher matcher = pattern.matcher(msg);
-                    if (matcher.find()) {
-                        String minutes = matcher.group(1);
-                        addMjXslMap(record.userId.toString(), "秘境", group, minutes, bot);
-//                        this.updateAutoReplyMap(record.userId.toString(), (long)(minutes * 60000.0), group.getGroupId(), bot.getBotId());
-                        logger.info("秘境提醒 - 用户[{}:{}]", record.userName, record.userId);
-                    }
-                } finally {
-                    groupRecords.remove(record.userName);
-                    if (groupRecords.isEmpty()) {
-                        this.pendingLingTianRecords.remove(group.getGroupId() + "");
-                    }
-
-                }
-            }
+        Pattern pattern = Pattern.compile("⏳\\s*[^:]*：\\s*(\\d+\\.?\\d*)\\s*(分钟|小时)");
+        Matcher matcher = pattern.matcher(msg);
+        double minutes = 0.0;
+        String qq = String.valueOf(userId);
+        if (matcher.find()) {
+            addMjXslMap(qq, "秘境", group, matcher.group(1), bot);
         }
 
     }
@@ -588,29 +657,27 @@ public class GroupManager {
     )
     public void 悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         message = processReplyMessage(messageChain);
-        if (bot.getBotConfig().isEnableGroupManager() && !remindGroupIdList.contains(group.getGroupId())
+        if (bot.getBotConfig().isEnableAutomaticReply() && !remindGroupIdList.contains(group.getGroupId())
                 && message.contains("进行中的悬赏令") && message.contains("可结束")) {
 
             if (isRemindGroup(bot, group)) {
-                this.extractInfo(message, "悬赏", group, bot,member);
+                this.extractInfo(message, "悬赏", group, bot,member.getUserId());
             }
 
         }
 
     }
 
+
+
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 新版悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         message = processReplyMessage(messageChain);
-        if (bot.getBotConfig().isEnableGroupManager()
+        if (bot.getBotConfig().isEnableAutomaticReply()
                 && (message.contains("悬赏令进行中") || message.contains("悬赏令接取成功")) && message.contains("预计")) {
             if (isRemindGroup(bot, group)) {
-                // 提取QQ号
-//                Pattern qqPattern = Pattern.compile("@(\\d+)");
-//                Matcher qqMatcher = qqPattern.matcher(message);
-//                String qq = qqMatcher.find() ? qqMatcher.group(1) : "未找到QQ号";
                 String qq = member.getUserId() + "";
                 // 提取预计时间
                 Pattern timePattern = null;
@@ -628,7 +695,49 @@ public class GroupManager {
             }
 
 
-//            this.extractInfo(message, "悬赏", group);
+        }
+
+    }
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 自动悬赏令提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
+        if (!msg.contains("悬赏令计时更新") && bot.getBotConfig().isEnableAutomaticReply() && msg.contains("悬赏令")) {
+            long userId = member.getUserId();
+            if (this.taskReminder) {
+                if (userId != 3889001741L) {
+                    return;
+                }
+
+                String taskKey = group.getGroupId() + "_悬赏";
+                Map<String, Long> record = (Map)this.taskRecords.get(taskKey);
+                if (record != null) {
+                    long recordTime = (Long)record.getOrDefault("timestamp", 0L);
+                    if (System.currentTimeMillis() - recordTime < 120000L) {
+                        userId = (Long)record.get("userId");
+                        logger.info("使用悬赏令记录用户：{}", userId);
+                    } else {
+                        this.taskRecords.remove(taskKey);
+                    }
+                }
+            } else if (userId == 3889029313L || userId == 3889282919L || userId == 3889002013L || userId == 3889360329L || userId == 3889015870L || userId == 3889001741L || userId == bot.getBotId()) {
+                return;
+            }
+
+            if (userId == 3889001741L) {
+                return;
+            }
+
+            Pattern pattern = Pattern.compile("[\\s\\S]*?(?:预计剩余时间[:：]?|预计时间[:：]?|预计)\\s*([\\d.]+)(原\\d+\\.?\\d*\\))?(?:分钟|分钟后)");
+            Matcher matcher = pattern.matcher(msg);
+            if (matcher.find()) {
+                double minutes = Double.parseDouble(matcher.group(1));
+                long groupId = group.getGroupId();
+                String qq = String.valueOf(userId);
+                addMjXslMap(qq, "悬赏", group, matcher.group(1), bot);
+
+            }
         }
 
     }
@@ -655,7 +764,7 @@ public class GroupManager {
         return "";
     }
 
-    public void extractInfo(String input, String type, Group group, Bot bot,Member member) {
+    public void extractInfo(String input, String type, Group group, Bot bot,Long userId) {
         String qqPattern = "@(\\d+)";
         String timePattern = "(\\d+\\.?\\d*)(?:\\(原\\d+\\.?\\d*\\))?(?:分钟|分钟后)";
         Pattern qqRegex = Pattern.compile(qqPattern);
@@ -667,7 +776,7 @@ public class GroupManager {
 //        } else {
 //            logger.warn("未找到QQ号");
 //        }
-        String qq = member.getUserId() + "";
+        String qq = userId + "";
         Matcher timeMatcher = timeRegex.matcher(input);
         String time = "";
         if (timeMatcher.find()) {
@@ -690,6 +799,14 @@ public class GroupManager {
             remindTime.setRemindQq(bot.getBotId());
             this.mjXslmap.put(qq, remindTime);
             group.sendMessage(new MessageChain().at(qq).text("收到结算提醒，将在" + sdf.format(expireTime) + "提醒你结算任务"));
+            String taskKey = group.getGroupId() + "_"+type;
+            if (this.taskRecords.containsKey(taskKey)) {
+                Long recordUserId = (Long)((Map)this.taskRecords.get(taskKey)).get("userId");
+                if (Long.parseLong(qq) == recordUserId) {
+                    this.taskRecords.remove(taskKey);
+                    logger.info("{}任务创建成功，删除记录: group={}, user={}",  type,group.getGroupId(), qq);
+                }
+            }
         }
     }
 
@@ -698,26 +815,74 @@ public class GroupManager {
     )
     public void 灵田领取提醒(Bot bot, Group group, Member member, MessageChain messageChain, String msg, Integer messageId) throws InterruptedException {
         msg = processReplyMessage(messageChain);
-        if (bot.getBotConfig().isEnableGroupManager()) {
+        if (bot.getBotConfig().isEnableAutomaticReply()) {
             if (isRemindGroup(bot, group)) {
-                if (msg.contains("灵田还不能收取") && msg.contains("下次收取时间为")) {
-                    this.handleLingTianMessage(msg, group, bot,member);
-                } else if (msg.contains("收获药材") && !msg.contains("道友的洞天福地") && (msg.contains("道友成功") || msg.contains("道友本次采集"))) {
-//                    this.handleFormat2(msg, group, bot, messageId);
-                    this.updateLingTianTimer(member.getUserId()+"", "47.0", group, bot.getBotId());
-                } else if (msg.contains("道友的灵田灵气未满，尚需孕育") && msg.contains("下次收成时间")) {
-                    Pattern pattern = Pattern.compile("下次收成时间：(\\d+\\.\\d+)小时");
-                    Matcher matcher = pattern.matcher(msg);
-                    if (matcher.find()) {
-                        String hours = matcher.group(1);
-                        this.updateLingTianTimer(member.getUserId()+"", hours, group, bot.getBotId());
-                    }
-//                    this.handleFormat3(msg, group, bot);
-                }
+                sendLingTianRecord(group, bot, msg, member.getUserId());
             }
 
         }
 
+    }
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 灵田自动提醒服务(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
+        if (!msg.contains("洞天之灵")  && bot.getBotConfig().isEnableAutomaticReply()) {
+            long userId = member.getUserId();
+            if (this.taskReminder) {
+                if (userId != 3889001741L) {
+                    return;
+                }
+
+                String taskKey = group.getGroupId() + "_灵田";
+                Map<String, Long> record = (Map)this.taskRecords.get(taskKey);
+                if (record != null) {
+                    long recordTime = (Long)record.getOrDefault("timestamp", 0L);
+                    if (System.currentTimeMillis() - recordTime < 120000L) {
+                        userId = (Long)record.get("userId");
+                        logger.info("使用灵田记录用户：{}", userId);
+                    } else {
+                        this.taskRecords.remove(taskKey);
+                    }
+                }
+            } else if (userId == 3889029313L || userId == 3889282919L || userId == 3889002013L || userId == 3889360329L || userId == 3889015870L || userId == 3889001741L || userId == bot.getBotId()) {
+                return;
+            }
+
+            if (userId == 3889001741L) {
+                return;
+            }
+
+            sendLingTianRecord(group, bot, msg, userId);
+
+//            if (msg.contains("灵田还不能收取") && msg.contains("下次收取时间为")) {
+//                this.handleFormat1(msg, group, bot, userId);
+//            } else if (!msg.contains("收获药材") || msg.contains("道友的洞天福地") || !msg.contains("道友成功") && !msg.contains("道友本次采集")) {
+//                if (msg.contains("道友的灵田灵气未满，尚需孕育") && msg.contains("下次收成时间")) {
+//                    this.handleFormat3(msg, group, bot, userId);
+//                }
+//            } else {
+//                this.handleFormat2(msg, group, bot, msgId, userId);
+//            }
+        }
+
+    }
+
+    private void sendLingTianRecord(Group group, Bot bot, String msg, Long userId) {
+        if (msg.contains("灵田还不能收取") && msg.contains("下次收取时间为")) {
+            this.handleLingTianMessage(msg, group, bot,userId);
+        } else if (msg.contains("收获药材") && !msg.contains("道友的洞天福地") && (msg.contains("道友成功") || msg.contains("道友本次采集"))) {
+
+            this.updateLingTianTimer(userId+"", "47.0", group, bot.getBotId());
+        } else if (msg.contains("道友的灵田灵气未满，尚需孕育") && msg.contains("下次收成时间")) {
+            Pattern pattern = Pattern.compile("下次收成时间：(\\d+\\.\\d+)小时");
+            Matcher matcher = pattern.matcher(msg);
+            if (matcher.find()) {
+                String hours = matcher.group(1);
+                this.updateLingTianTimer(userId+"", hours, group, bot.getBotId());
+            }
+        }
     }
 
 
@@ -791,9 +956,9 @@ public class GroupManager {
     }
 
 
-    private void handleLingTianMessage(String message, Group group, Bot bot,Member member) {
+    private void handleLingTianMessage(String message, Group group, Bot bot,Long userId) {
 
-        String qqNumber =member.getUserId() + "";
+        String qqNumber = userId + "";
         String time =  message.split("：|小时")[1];
         updateLingTianTimer(qqNumber, time, group, bot.getBotId());
 
@@ -809,6 +974,14 @@ public class GroupManager {
             remindTime.setRemindQq(botId);
             this.ltmap.put(qqNumber, remindTime);
             group.sendMessage((new MessageChain()).at(qqNumber).text("道友下次灵田收取时间：" + sdf.format(new Date(remindTime.getExpireTime()))));
+            String taskKey = group.getGroupId() + "_灵田";
+            if (this.taskRecords.containsKey(taskKey)) {
+                Long recordUserId = (Long)((Map)this.taskRecords.get(taskKey)).get("userId");
+                if (Long.parseLong(qqNumber) == recordUserId) {
+                    this.taskRecords.remove(taskKey);
+                    logger.info("灵田任务创建成功，删除记录: group={}, user={}",  group.getGroupId(), qqNumber);
+                }
+            }
         }
     }
 

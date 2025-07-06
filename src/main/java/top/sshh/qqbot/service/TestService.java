@@ -286,12 +286,12 @@ public class TestService {
 
 
             if ("开启群管提醒".equals(message)) {
-                botConfig.setEnableGroupManager(true);
+                botConfig.setEnableAutomaticReply(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
             }
 
             if ("关闭群管提醒".equals(message)) {
-                botConfig.setEnableGroupManager(false);
+                botConfig.setEnableAutomaticReply(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
             }
 
@@ -470,6 +470,18 @@ public class TestService {
                         }
                     }
                 }
+            }
+
+            if ("切换提醒模式".equals(message)) {
+                if (this.groupManager.taskReminder) {
+                    this.groupManager.taskReminder = false;
+                    group.sendMessage((new MessageChain()).reply(messageId).text("已切提醒模式为手动模式。\n注：需要复制小小消息触发！"));
+                } else {
+                    this.groupManager.taskReminder = true;
+                    group.sendMessage((new MessageChain()).reply(messageId).text("已切提醒模式为自动模式。\n注：多人同时触发可能会误判！"));
+                }
+
+                this.groupManager.saveTasksToFile();
             }
 
             if (message.endsWith("一键上架") || message.endsWith("一键炼金")) {
@@ -938,6 +950,8 @@ public class TestService {
 
                             }
                         }
+                    }else{
+                        return;
                     }
 
 
