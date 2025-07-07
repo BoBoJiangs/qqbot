@@ -609,7 +609,7 @@ public class GroupManager {
                 return;
             }
 
-            sendMjTimeInfo(msg,group,bot,member.getUserId());
+            sendMjTimeInfo(msg,group,bot,userId);
         }
     }
 
@@ -699,7 +699,7 @@ public class GroupManager {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 自动悬赏令提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
-        if (!msg.contains("悬赏令计时更新") && bot.getBotConfig().isEnableAutomaticReply() && msg.contains("悬赏令")) {
+        if (!msg.contains("悬赏令计时更新") && bot.getBotConfig().isEnableAutomaticReply() && msg.contains("悬赏令接取成功")) {
             long userId = member.getUserId();
             if (this.taskReminder) {
                 if (userId != 3889001741L) {
@@ -765,13 +765,6 @@ public class GroupManager {
         String timePattern = "(\\d+\\.?\\d*)(?:\\(原\\d+\\.?\\d*\\))?(?:分钟|分钟后)";
         Pattern qqRegex = Pattern.compile(qqPattern);
         Pattern timeRegex = Pattern.compile(timePattern);
-//        Matcher qqMatcher = qqRegex.matcher(input);
-//        String qq = "";
-//        if (qqMatcher.find()) {
-//            qq = qqMatcher.group(1);
-//        } else {
-//            logger.warn("未找到QQ号");
-//        }
         String qq = userId + "";
         Matcher timeMatcher = timeRegex.matcher(input);
         String time = "";
