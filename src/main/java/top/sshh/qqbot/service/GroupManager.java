@@ -85,7 +85,7 @@ public class GroupManager {
     public Map<String, Map<String, ProductPrice>> autoBuyProductMap = new ConcurrentHashMap();
     public Map<String, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
     public Map<String, TaskStatus> taskStateMap = new ConcurrentHashMap();
-    public volatile boolean taskReminder = false;
+    public volatile boolean taskReminder = true;
     private final Map<String, Map<String, Long>> taskRecords = new ConcurrentHashMap();
 
     public GroupManager() {
@@ -539,13 +539,9 @@ public class GroupManager {
                 mode = "悬赏";
             } else if (msg.contains("探索秘境")) {
                 mode = "秘境";
-            } else if (!msg.contains("灵田收取") && !msg.contains("灵田结算")) {
-                if (!msg.contains("使用次元之钥")) {
-                    return;
-                }
-
+            } else if (msg.contains("使用次元之钥")) {
                 mode = "次元秘境";
-            } else {
+            } else if(msg.contains("灵田收取") || msg.contains("灵田结算")) {
                 mode = "灵田";
             }
 
@@ -798,7 +794,7 @@ public class GroupManager {
             remindTime.setGroupId(group.getGroupId());
             remindTime.setRemindQq(bot.getBotId());
             this.mjXslmap.put(qq, remindTime);
-            group.sendMessage(new MessageChain().at(qq).text("收到结算提醒，将在" + sdf.format(expireTime) + "提醒你结算任务"));
+            group.sendMessage(new MessageChain().at(qq).text("收到"+type+"结算提醒，将在" + time + "分钟后提醒你结算任务"));
             String taskKey = group.getGroupId() + "_"+type;
             if (this.taskRecords.containsKey(taskKey)) {
                 Long recordUserId = (Long)((Map)this.taskRecords.get(taskKey)).get("userId");

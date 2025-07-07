@@ -41,6 +41,8 @@
 //            @Value("${model:''}") String model) {
 //        this.apiKey = apiKey;
 //        this.model = model;
+//        logger.info("apiKey=="+apiKey);
+//        logger.info("model=="+model);
 //        this.service = new ArkService(apiKey);
 //    }
 //
@@ -55,14 +57,13 @@
 //            multiParts.add(ChatCompletionContentPart.builder()
 //                    .type("image_url")
 //                    .imageUrl(new ChatCompletionContentPart.ChatCompletionContentPartImageURL(buttons.getImageUrl()))
+//
 //                    .build());
 //            multiParts.add(ChatCompletionContentPart.builder()
 //                    .type("text")
 //                    .text("题目："+buttons.getImageText())
-//                    .build());
-//            multiParts.add(ChatCompletionContentPart.builder()
-//                    .type("text")
-//                    .text("结合图片以及题目信息，从以下答案中选出一个你认为正确的答案 " + answer )
+//                    .text("答案："+ answer)
+//                    .text("结合图片理解以及题目信息，从上面给出的答案中选出一个正确的答案 " )
 //                    .text("回答结果按照 正确答案是： 这种格式输出")
 //                    .build());
 //            logger.info(buttons.getImageText());
@@ -79,6 +80,7 @@
 //            ChatCompletionRequest chatCompletionRequest = ChatCompletionRequest.builder()
 //                    .model(model)
 //                    .messages(messages)
+////                    .thinking(new ChatCompletionRequest.ChatCompletionRequestThinking("disabled"))
 //                    .build();
 //
 //            StringBuilder result = new StringBuilder();

@@ -63,9 +63,9 @@ public class AutoSellGoods {
     public void 成功上架药材(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         if (Utils.isAtSelf(bot, group) && (message.contains("物品成功上架坊市") || message.contains("道友的上一条指令还没执行完")
-                || message.contains("操作失败")|| message.contains("物品数量不足"))) {
+                || message.contains("操作失败")|| message.contains("物品数量不足")) && "批量上架药材".equals(botConfig.getCommand())) {
             List<ProductPrice> autoBuyList = herbPackMap.get(bot.getBotId());
-            if (!autoBuyList.isEmpty()) {
+            if (autoBuyList!=null && !autoBuyList.isEmpty()) {
                 autoBuyList.remove(0);
             }
             if(autoBuyList.isEmpty()){

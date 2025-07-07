@@ -15,7 +15,7 @@ public class MessageNumber implements Serializable {
     private int number;
     private long time;
     private static final LocalTime RESET_TIME = LocalTime.of(7, 55); // 7:55
-    private static final LocalTime RESET_TASK_TIME = LocalTime.of(4, 0); // 7:55
+    private static final LocalTime RESET_TASK_TIME = LocalTime.of(4, 10); // 7:55
 
     public boolean isCrossResetTime() {
         LocalDateTime lastTime = LocalDateTime.ofInstant(
@@ -36,7 +36,7 @@ public class MessageNumber implements Serializable {
         LocalDateTime currentTime = LocalDateTime.now();
 
         // 计算当前时间的"理论重置时间"（今天的07:55）
-        LocalDateTime todayReset = LocalDateTime.of(currentTime.toLocalDate(), RESET_TIME);
+        LocalDateTime todayReset = LocalDateTime.of(currentTime.toLocalDate(), RESET_TASK_TIME);
 
         // 检查是否跨越了重置时间点
         return lastTime.isBefore(todayReset) &&
