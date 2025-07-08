@@ -168,7 +168,9 @@ public class AutoSellGoods {
                 ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(productPrice.getName().trim());
                 if (first != null) {
                     if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(productPrice.getName()) * 1.1) {
-                        group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice() + "万，炼金：" + ProductLowPrice.getLowPrice(first.getName()) + "万，不上架。"));
+                        group.sendMessage((new MessageChain()).at("3889001741")
+                                .text("炼金 " + first.getName() + " " + productPrice.getHerbCount()));
+                        group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice() + "万，炼金：" + ProductLowPrice.getLowPrice(first.getName()) + "万，直接炼金处理。"));
                         if (!autoBuyList.isEmpty()) {
                             autoBuyList.remove(0);
                         }

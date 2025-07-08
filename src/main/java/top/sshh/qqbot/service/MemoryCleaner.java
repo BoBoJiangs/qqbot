@@ -10,6 +10,7 @@ import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
+import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import java.io.BufferedReader;
@@ -38,6 +39,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.annotation.PostConstruct;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -80,6 +83,36 @@ public class MemoryCleaner {
         long max = heapUsage.getMax();
         double ratio = (double)used / (double)max;
         return String.format("堆内存：%.1f%% \n(已用 %s / 最大 %s)", ratio * 100.0, this.formatSize(used), this.formatSize(max));
+    }
+
+    @Scheduled(
+            fixedRate = 21600000L,
+            initialDelay = 600000L
+    )
+    public void autoCleanMessageCache() {
+        logger.info("开始自动清理聊天记录缓存");
+        Map<Long, Bot> bots = BotFactory.getBots();
+        if (bots != null && !bots.isEmpty()) {
+            int totalRemoved = 0;
+            Iterator var3 = bots.values().iterator();
+
+            while(var3.hasNext()) {
+                Bot bot = (Bot)var3.next();
+
+                try {
+                    int removedCount = bot.cleanCacheMessageChain(100);
+                    totalRemoved += removedCount;
+                    logger.info("Bot({}) 清理了 {} 条聊天记录", bot.getBotId(), removedCount);
+                } catch (Exception var6) {
+                    Exception e = var6;
+                    logger.error("清理Bot(" + bot.getBotId() + ")的聊天记录缓存时出错", e);
+                }
+            }
+
+            logger.info("完成聊天记录缓存清理，共清理了 {} 条记录", totalRemoved);
+        } else {
+            logger.info("没有找到任何Bot实例");
+        }
     }
 
     private String getProcessMemoryUsage() {
@@ -314,16 +347,17 @@ public class MemoryCleaner {
         }
 
         if ((member.getUserId() == bot.getBotId() || isControlQQ && msg.contains("" + bot.getBotId()) || member.getUserId() == 2013363413L && msg.contains("" + bot.getBotId())) && !msg.contains("调试功能")) {
-            Exception e;
-            long groupId;
-            if (msg.equals("清理内存")) {
+            Exception var18;
+            int num;
+            if (msg.contains("/清理内存")) {
                 try {
                     logger.info("由主人QQ或自身发起的缓存手动清理：{}", member.getUserId());
-                    groupId = this.memoryMXBean.getHeapMemoryUsage().getUsed();
+                    num = bot.cleanCacheMessageChain(100);
+                    long beforeMemory = this.memoryMXBean.getHeapMemoryUsage().getUsed();
                     this.cleanCaches(true);
                     long afterMemory = this.memoryMXBean.getHeapMemoryUsage().getUsed();
                     double memoryUsageRatio = this.getHeapMemoryUsageRatio();
-                    long freedMemory = groupId - afterMemory;
+                    long freedMemory = beforeMemory - afterMemory;
                     String freedMemoryStr;
                     if (freedMemory > 1048576L) {
                         freedMemoryStr = String.format("%.2f MB", (double)freedMemory / 1048576.0);
@@ -334,38 +368,61 @@ public class MemoryCleaner {
                     }
 
                     logger.info("手动清理完成。当前内存使用率：{}%，共释放内存：{}", String.format("%.2f", memoryUsageRatio * 100.0), freedMemoryStr);
-                    group.sendMessage((new MessageChain()).reply(msgId).text(String.format("内存清理完成\n共释放内存：%s\n当前状态：\n%s\n%s\n%s", freedMemoryStr, this.getHeapMemoryUsage(), this.getProcessMemoryUsage(), this.getSystemMemoryUsage())));
-                } catch (Exception var19) {
-                    e = var19;
-                    logger.error("手动缓存清理过程中出错", e);
+                    group.sendMessage((new MessageChain()).reply(msgId).text(String.format("内存清理完成\n共清理:%s条聊天记录\n\n共释放内存：%s\n当前状态：\n%s\n%s\n%s", num, freedMemoryStr, this.getHeapMemoryUsage(), this.getProcessMemoryUsage(), this.getSystemMemoryUsage())));
+                } catch (Exception var21) {
+                    var18 = var21;
+                    logger.error("手动缓存清理过程中出错", var18);
                     group.sendMessage((new MessageChain()).reply(msgId).text("内存清理失败，请检查日志。"));
                 }
             }
 
-            if (msg.equals("系统状态")) {
+            if (msg.contains("/系统状态")) {
                 try {
                     String status = this.getSystemStatus();
                     group.sendMessage((new MessageChain()).reply(msgId).text("====>>>Java Bot<<<====\n" + status));
-                } catch (Exception var18) {
-                    e = var18;
-                    logger.error("获取系统状态失败", e);
+                } catch (Exception var20) {
+                    var18 = var20;
+                    logger.error("获取系统状态失败", var18);
                     group.sendMessage((new MessageChain()).reply(msgId).text("获取系统状态失败，请检查日志。"));
                 }
             }
 
-            if (msg.equals("版本号")) {
-                group.sendMessage((new MessageChain()).reply(msgId).text("Java Bot：1.0（内存清理）"));
+            if (msg.contains("/版本号")) {
+                group.sendMessage((new MessageChain()).reply(msgId).text("Java Bot：1.2（内存清理）"));
             }
 
-            if (msg.equals("重启自身")) {
+            if (msg.contains("/清理聊天记录保留最近") && msg.contains("条")) {
+                num = 0;
+                Pattern pattern = Pattern.compile("保留最近\\s*(\\d+)\\s*条");
+                Matcher matcher = pattern.matcher(msg);
+                if (!matcher.find()) {
+                    return;
+                }
+
+                String numStr = matcher.group(1);
+
                 try {
-                    groupId = group.getGroupId();
+                    num = Integer.parseInt(numStr);
+                } catch (NumberFormatException var19) {
+                    var19.printStackTrace();
+                }
+
+                int removedCount = bot.cleanCacheMessageChain(num);
+                group.sendMessage((new MessageChain()).reply(msgId).text(String.format("共清理:%s条聊天记录,保留最近%s条", removedCount, num)));
+            } else if (msg.contains("/清理聊天记录")) {
+                num = bot.cleanCacheMessageChain(100);
+                group.sendMessage((new MessageChain()).reply(msgId).text(String.format("共清理:%s条聊天记录,保留最近100条", num)));
+            }
+
+            if (msg.contains("/重启自身")) {
+                try {
+                    long groupId = group.getGroupId();
                     this.groupManager.loadTasksFromFile();
                     group.sendMessage((new MessageChain()).reply(msgId).text("✅ 重启指令已接收，正在准备重启..."));
                     this.handleRestart(groupId, bot);
-                } catch (Exception var17) {
-                    e = var17;
-                    logger.error("重启处理失败", e);
+                } catch (Exception e) {
+
+                    logger.error("重启处理失败", e.getMessage());
                     group.sendMessage((new MessageChain()).reply(msgId).text("❌ 重启失败：" + e.getMessage()));
                 }
             }

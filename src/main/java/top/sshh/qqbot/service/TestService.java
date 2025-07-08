@@ -555,7 +555,8 @@ public class TestService {
     public void 开始自动秘境悬赏(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
         boolean isBiGuan = (message.contains("闭关时长") && message.contains("修为提升")) || (message.contains("闭关结束") && message.contains("增加修为"));
-        if (isAtSelf(bot, group) && (message.contains("道友现在什么都没干呢") || isBiGuan)) {
+        boolean isXiuLian = message.contains("本次修炼增加");
+        if (isAtSelf(bot, group) && (message.contains("道友现在什么都没干呢") || isBiGuan || isXiuLian) && StringUtils.isNotBlank(botConfig.getCommand())) {
             if ("开始自动悬赏".equals(botConfig.getCommand())) {
                 botConfig.setCommand("");
                 bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("悬赏令刷新"));
@@ -1005,8 +1006,7 @@ public class TestService {
 
                         }
                     }
-                }
-                if (message.contains("点击序号")) {
+                }else if (message.contains("点击序号")) {
                     String position = message.substring("点击序号".length()).trim();
                     if (StringUtils.isNumeric(position)) {
                         Buttons buttons = botButtonMap.get(bot.getBotId());
@@ -1024,7 +1024,24 @@ public class TestService {
                         return;
                     }
 
+                }else if (message.contains("点击")) {
+                    String text = message.substring("点击".length()).trim();
+                    if (GuessIdiom.getEmoji(text) != null) {
+                        text = GuessIdiom.getEmoji(text);
+                    }
+                    if (StringUtils.isNotBlank(text)) {
+                        Buttons buttons = botButtonMap.get(bot.getBotId());
+                        if (buttons != null && !buttons.getButtonList().isEmpty()) {
+                            List<Button> buttonList = buttons.getButtonList();
+                            for (Button button : buttonList) {
+                                if (text.equals(button.getLabel())) {
+                                    bot.clickKeyboardButton(buttons.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
+                                    return;
+                                }
+                            }
 
+                        }
+                    }
                 }
                 group.sendMessage((new MessageChain()).text("未找到对应按钮信息"));
             } catch (Exception e) {
