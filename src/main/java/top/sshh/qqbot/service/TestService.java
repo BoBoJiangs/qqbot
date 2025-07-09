@@ -559,11 +559,23 @@ public class TestService {
         if (isAtSelf(bot, group) && (message.contains("道友现在什么都没干呢") || isBiGuan || isXiuLian) && StringUtils.isNotBlank(botConfig.getCommand())) {
             if ("开始自动悬赏".equals(botConfig.getCommand())) {
                 botConfig.setCommand("");
-                bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("悬赏令刷新"));
+                try {
+                    TimeUnit.SECONDS.sleep(2);
+                    bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("悬赏令刷新"));
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+
             }
             if ("开始自动秘境".equals(botConfig.getCommand())) {
                 botConfig.setCommand("");
-                bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("探索秘境"));
+                try {
+                    TimeUnit.SECONDS.sleep(2);
+                    bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("探索秘境"));
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+
             }
         }
     }
