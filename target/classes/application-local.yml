@@ -47,6 +47,8 @@ bot:
     lingShiQQ: 679831529
     shuangXuNumber: 3
     enableAutomaticReply: true
+    #0:不转发 1转发部分消息
+    forwardMode: 0
 
 spring:
   datasource:
