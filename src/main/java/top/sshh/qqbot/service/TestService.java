@@ -1857,6 +1857,23 @@ public class TestService {
 
     }
 
+    private void forSendMessage2(Bot bot, Group group, MessageChain messageChain, int count, int time) {
+        for (int i = 0; i < count; ++i) {
+            BotConfig botConfig = bot.getBotConfig();
+            if (botConfig.isStop()) {
+                botConfig.setStop(false);
+                return;
+            }
+
+            try {
+                group.sendMessage(messageChain);
+                Thread.sleep((long) time * 1000L);
+
+            } catch (Exception var9) {
+            }
+        }
+    }
+
     private void forSendMessage(Bot bot, Group group, MessageChain messageChain, int count, int time) {
         customPool.submit(new Runnable() {
             public void run() {
@@ -1881,22 +1898,22 @@ public class TestService {
     }
 
     private void executeSendAllMessage(final Group group, final MessageChain messageChain, final int count, final int time) {
-//        customPool.submit(new Runnable() {
-//            public void run() {
-//
-//
-//            }
-//        });
-        Iterator var1 = BotFactory.getBots().values().iterator();
+        customPool.submit(new Runnable() {
+            public void run() {
+                Iterator var1 = BotFactory.getBots().values().iterator();
 
-        while (var1.hasNext()) {
-            try {
-                Bot bot1 = (Bot) var1.next();
-                Group bot1Group = bot1.getGroup(group.getGroupId());
-                forSendMessage(bot1, bot1Group, messageChain, count, time);
-            } catch (Exception var4) {
+                while (var1.hasNext()) {
+                    try {
+                        Bot bot1 = (Bot) var1.next();
+                        Group bot1Group = bot1.getGroup(group.getGroupId());
+                        forSendMessage2(bot1, bot1Group, messageChain, count, time);
+                    } catch (Exception var4) {
+                    }
+                }
+
             }
-        }
+        });
+
     }
 
     @GroupMessageHandler(

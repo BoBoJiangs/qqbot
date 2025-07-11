@@ -330,13 +330,17 @@ public class AutoAlchemyTask {
     )
     public void 统计群聊发言次数(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
 
-//        if (group != null && group.getGroupId() > 0) {
-//            MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
-//            if ((danCalculator != null && danCalculator.config != null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
-//                    (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0)) {
-//                bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName() + "(发言次数:" + messageNumber.getNumber() + ")");
-//            }
-//        }
+        try {
+            if (group != null && group.getGroupId() > 0 && groupManager != null && groupManager.MESSAGE_NUMBER_MAP != null) {
+                MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
+                if ((danCalculator != null && danCalculator.config != null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
+                        (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0)) {
+                    bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName() + "(发言次数:" + messageNumber.getNumber() + ")");
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
 
 
     }
