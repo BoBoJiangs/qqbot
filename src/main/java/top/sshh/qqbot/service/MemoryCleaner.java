@@ -48,9 +48,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import sun.misc.Unsafe;
-import sun.nio.ch.DirectBuffer;
-import top.sshh.qqbot.data.RemindTime;
 
 @Component
 public class MemoryCleaner {
@@ -460,19 +457,19 @@ public class MemoryCleaner {
     }
 
     private void cleanDirectBuffersModern() {
-        try {
-            MemoryCleaner.BufferTracker.references.forEach((ref) -> {
-                Object buffer = ref.get();
-                if (buffer instanceof DirectBuffer) {
-                    ((DirectBuffer)buffer).cleaner().clean();
-                }
-
-            });
-            MemoryCleaner.BufferTracker.references.clear();
-        } catch (Exception var2) {
-            Exception e = var2;
-            logger.warn("现代内存清理失败", e);
-        }
+//        try {
+//            MemoryCleaner.BufferTracker.references.forEach((ref) -> {
+//                Object buffer = ref.get();
+//                if (buffer instanceof DirectBuffer) {
+//                    ((DirectBuffer)buffer).cleaner().clean();
+//                }
+//
+//            });
+//            MemoryCleaner.BufferTracker.references.clear();
+//        } catch (Exception var2) {
+//            Exception e = var2;
+//            logger.warn("现代内存清理失败", e);
+//        }
 
     }
 
@@ -538,11 +535,9 @@ public class MemoryCleaner {
             logger.warn("处理软/弱引用失败。", e);
         }
 
-        Unsafe unsafe;
         if (aggressive) {
             try {
                 ByteBuffer buffer = ByteBuffer.allocateDirect(1048576);
-                unsafe = null;
                 logger.debug("已分配并释放{}字节的直接内存。", 1048576);
             } catch (Exception var7) {
                 e = var7;
@@ -550,19 +545,7 @@ public class MemoryCleaner {
             }
         }
 
-        if (aggressive) {
-            try {
-                Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
-                theUnsafe.setAccessible(true);
-                unsafe = (Unsafe)theUnsafe.get((Object)null);
-                long address = unsafe.allocateMemory(1024L);
-                unsafe.freeMemory(address);
-                logger.debug("已使用Unsafe释放1024字节。");
-            } catch (Exception var6) {
-                e = var6;
-                logger.warn("使用Unsafe清理内存失败。", e);
-            }
-        }
+
 
         System.gc();
         logger.debug("最终垃圾回收完成。");

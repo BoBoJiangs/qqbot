@@ -48,7 +48,7 @@ public class GroupManager {
     Map<String, RemindTime> mjXslmap = new ConcurrentHashMap();
     Map<String, RemindTime> ltmap = new ConcurrentHashMap();
 
-    private static final ForkJoinPool customPool = new ForkJoinPool(20);
+    public static final ForkJoinPool customPool = new ForkJoinPool(20);
     private static final List<String> MJ_TEXT_LIST = Arrays.asList(" 【秘境结算提醒】秘境试炼已结束！此番奇遇定让您感悟大道，快查看收获，或许有突破境界的机缘！",
             "【秘境结算提醒】叮！秘境探索结算中，本次收获：四库全书 1 本，戏书 1 本，以及队友的嫌弃三连～",
             "【秘境结算提醒】秘境探索时间已到！您在秘境中历经磨砺，珍贵法宝与上古传承正等待您开启！",
@@ -551,7 +551,7 @@ public class GroupManager {
                 record.put("userId", userId);
                 record.put("timestamp", System.currentTimeMillis());
                 this.taskRecords.put(key, record);
-                logger.info("记录任务：group={}, user={}, mode={}", new Object[]{groupId, userId, mode});
+                logger.info("记录任务：group={}, user={}, mode={}", groupId, userId, mode);
             }
         }
 
@@ -781,7 +781,7 @@ public class GroupManager {
         if (StringUtils.isNotBlank(qq) && StringUtils.isNotBlank(time)) {
             RemindTime remindTime = new RemindTime();
             remindTime.setQq(Long.parseLong(qq));
-            long expireTime = (long) (Double.parseDouble(time) * 60.0 * 1000.0 + (double) System.currentTimeMillis());
+            long expireTime = (long) (Math.ceil(Double.parseDouble(time)) * 60.0 * 1000.0 + (double) System.currentTimeMillis());
             remindTime.setExpireTime(expireTime);
             remindTime.setText(type);
             remindTime.setGroupId(group.getGroupId());

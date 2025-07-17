@@ -5,11 +5,7 @@
 
 package top.sshh.qqbot.service;
 
-import com.volcengine.ark.runtime.model.completion.chat.ChatCompletionContentPart;
-import com.volcengine.ark.runtime.model.completion.chat.ChatCompletionRequest;
-import com.volcengine.ark.runtime.model.completion.chat.ChatMessage;
-import com.volcengine.ark.runtime.model.completion.chat.ChatMessageRole;
-import com.volcengine.ark.runtime.service.ArkService;
+
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.*;

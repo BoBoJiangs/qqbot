@@ -292,6 +292,7 @@ public class GuessIdiom {
         EMOJI_MAP.put("葡萄", "\ud83c\udf47");
         EMOJI_MAP.put("图钉", "\ud83d\udccc");
         EMOJI_MAP.put("鸡", "\ud83d\udc14");
+        EMOJI_MAP.put("鸡头", "\ud83d\udc14");
         EMOJI_MAP.put("西瓜", "\ud83c\udf49");
         EMOJI_MAP.put("电脑", "\ud83d\udcbb");
         EMOJI_MAP.put("汽车", "\ud83d\ude97");
