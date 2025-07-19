@@ -3,9 +3,11 @@ top/sshh/qqbot/data/BountyInfo.class
 top/sshh/qqbot/data/RecipeResult.class
 top/sshh/qqbot/data/TaskStatus.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$7.class
+top/sshh/qqbot/verifycode/AutoVerifyCode.class
 top/sshh/qqbot/service/MemoryCleaner$BufferTracker.class
 top/sshh/qqbot/service/AutoSellGoods.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$3.class
+top/sshh/qqbot/service/GroupManager$9.class
 top/sshh/qqbot/data/MessageNumber.class
 top/sshh/qqbot/service/PriceTask$1.class
 top/sshh/qqbot/service/GroupManager$1.class
@@ -25,10 +27,14 @@ top/sshh/qqbot/service/liandan/AutoAlchemyTask$1.class
 top/sshh/qqbot/service/liandan/DanCalculator.class
 top/sshh/qqbot/data/Dan.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$4.class
+top/sshh/qqbot/verifycode/YoloCaptchaRecognizer$RecognitionResult.class
+top/sshh/qqbot/service/GroupManager$10.class
 top/sshh/qqbot/service/ProductPriceResponse.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$5.class
+top/sshh/qqbot/data/VerifyCount.class
 top/sshh/qqbot/service/impl/HttpsTrustManager.class
 top/sshh/qqbot/verifycode/YoloCaptchaRecognizer.class
+top/sshh/qqbot/verifycode/AutoVerifyCode$2.class
 top/sshh/qqbot/service/GroupManager$7.class
 top/sshh/qqbot/data/ProductPrice.class
 top/sshh/qqbot/constant/Constant.class
@@ -49,6 +55,7 @@ top/sshh/qqbot/service/utils/Utils.class
 top/sshh/qqbot/service/TestService$2.class
 top/sshh/qqbot/service/GroupManager$2.class
 top/sshh/qqbot/service/GroupManager$8.class
+top/sshh/qqbot/verifycode/AutoVerifyCode$1.class
 top/sshh/qqbot/data/Config.class
 top/sshh/qqbot/service/liandan/DanCalculator$1.class
 top/sshh/qqbot/QqBotApplication.class

@@ -1,8 +1,13 @@
 xbGroupId: 993970673
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
 xxGroupId: 690933736
-#apiKey: 0b6a32d4-204d-4c84-a30d-cdeaf5c26252
-#model: ep-20250707095454-cr7xj
+captcha:
+  #主模型
+  detection-config: models/yolov.cfg
+  detection-weights: models/yolov.weights
+  #子模型
+  classification-config: models/darknet.cfg
+  classification-weights: models/darknet.weights
 
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
@@ -31,24 +36,25 @@ bot:
     #宗门任务1：邪修和查抄（默认） 2：所有任务
     sectMode: 2
     #自动灵田结算（默认 true）
-    enableAutoField: true
+    enableAutoField: false
     #自动秘境结算 （默认 true）
-    enableAutoSecret: true
+    enableAutoSecret: false
     #无偿双修
-    enableAutoRepair: true
+    enableAutoRepair: false
     #群管提醒
-    enableGroupManager: true
+    enableGroupManager: false
     #悬赏令价格限制（超过这个价格会优先接取）
     xslPriceLimit: 1000
     botNumber: 5
-    enableSelfTitle: true
+    enableSelfTitle: false
     enableXiaoBei: false
     lingShiNum: 100
     lingShiQQ: 679831529
     shuangXuNumber: 3
-    enableAutomaticReply: true
+    enableAutomaticReply: false
     #0:不转发 1转发部分消息
     forwardMode: 0
+    enableAutoVerify: true
 
 spring:
   datasource:

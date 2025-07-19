@@ -86,11 +86,11 @@
 <!--            <artifactId>volcengine-java-sdk-ark-runtime</artifactId>-->
 <!--            <version>0.2.20</version>-->
 <!--        </dependency>-->
-        <dependency>
-            <groupId>org.openpnp</groupId>
-            <artifactId>opencv</artifactId>
-            <version>4.7.0-0</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.openpnp</groupId>-->
+<!--            <artifactId>opencv</artifactId>-->
+<!--            <version>4.7.0-0</version>-->
+<!--        </dependency>-->
     </dependencies>
 
     <build>
@@ -119,5 +119,36 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <!-- Profile 1：包含验证码识别模块 -->
+        <profile>
+            <id>with-captcha</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <dependencies>
+                <dependency>
+                    <groupId>org.openpnp</groupId>
+                    <artifactId>opencv</artifactId>
+                    <version>4.7.0-0</version>
+                </dependency>
+            </dependencies>
+            <properties>
+                <spring.profiles.active>with-captcha</spring.profiles.active>
+            </properties>
+        </profile>
 
+        <!-- Profile 2：不包含验证码识别模块 -->
+        <profile>
+            <id>no-captcha</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+            </activation>
+            <!-- 不引入 opencv -->
+            <properties>
+                <spring.profiles.active>no-captcha</spring.profiles.active>
+            </properties>
+        </profile>
+    </profiles>
 </project>
+

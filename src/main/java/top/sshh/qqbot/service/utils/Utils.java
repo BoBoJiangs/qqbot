@@ -2,11 +2,17 @@ package top.sshh.qqbot.service.utils;
 
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
+import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
 
 public class Utils {
-    public static boolean isAtSelf( Bot bot, Group group) {
-        return  group.getGroupId() == bot.getBotConfig().getGroupId();
+    public static boolean isAtSelf(Bot bot, Group group) {
+
+        return  group.getGroupId() == bot.getBotConfig().getGroupId() ;
+    }
+    public static boolean isAtSelf(Bot bot, Group group, String message) {
+
+        return  group.getGroupId() == bot.getBotConfig().getGroupId() || message.contains(""+bot.getBotId()) ;
     }
     public static Group getRemindGroup(Bot bot,long xxGroupId) {
         long groupId = bot.getBotConfig().getGroupId();

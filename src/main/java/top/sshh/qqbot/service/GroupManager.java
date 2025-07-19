@@ -24,10 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-import top.sshh.qqbot.data.MessageNumber;
-import top.sshh.qqbot.data.ProductPrice;
-import top.sshh.qqbot.data.RemindTime;
-import top.sshh.qqbot.data.TaskStatus;
+import top.sshh.qqbot.data.*;
 
 import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
@@ -85,8 +82,10 @@ public class GroupManager {
     public Map<String, Map<String, ProductPrice>> autoBuyProductMap = new ConcurrentHashMap();
     public Map<String, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
     public Map<String, TaskStatus> taskStateMap = new ConcurrentHashMap();
+    public VerifyCount verifyCount = new VerifyCount();
     public volatile boolean taskReminder = true;
     private final Map<String, Map<String, Long>> taskRecords = new ConcurrentHashMap();
+    public  Map<String, String> autoVerifyQQ= new ConcurrentHashMap();
 
     public GroupManager() {
 
@@ -117,6 +116,12 @@ public class GroupManager {
             group.sendMessage((new MessageChain()).reply(messageId).text(sb.toString()));
         }else if (message.equals("重置任务统计")) {
             clearTaskSate();
+        }else if (message.startsWith("添加自动验证") || message.startsWith("移除自动验证")) {
+            addRemoveVerifyQQ(bot, group, message, messageId);
+            saveTasksToFile();
+        }else if (message.startsWith("清空验证统计")) {
+            verifyCount = new VerifyCount();
+            saveTasksToFile();
         }
 
 
@@ -178,6 +183,29 @@ public class GroupManager {
             group.sendMessage((new MessageChain()).reply(messageId).text("当前炼金排除物品：\n" + typeString));
         }
 
+    }
+
+    private void addRemoveVerifyQQ(Bot bot, Group group, String message, Integer messageId) {
+        try {
+            Pattern pattern = Pattern.compile("(添加自动验证|移除自动验证)[@]?(\\d{5,12})");
+            Matcher matcher = pattern.matcher(message);
+
+            while (matcher.find()) {
+                String type = matcher.group(1);
+                String qqNumber = matcher.group(2); // QQ号
+                if("添加自动验证".equals(type)){
+                    autoVerifyQQ.put(qqNumber, qqNumber);
+                    group.sendMessage((new MessageChain()).reply(messageId).text("添加成功"));
+                }
+                if("移除自动验证".equals(type)){
+                    autoVerifyQQ.remove(qqNumber);
+                    group.sendMessage((new MessageChain()).reply(messageId).text("移除成功"));
+                }
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private StringBuilder getStringBuilder(TaskStatus taskStatus) {
@@ -308,6 +336,8 @@ public class GroupManager {
             data.put("炼金排除", this.excludeAlchemyMap);
             data.put("上架排除", this.excludeSellMap);
             data.put("taskReminder", this.taskReminder);
+            data.put("自动验证", this.autoVerifyQQ);
+            data.put("验证统计", this.verifyCount);
             // 直接写入JSON字节（UTF-8编码）
             Files.write(Paths.get(FILE_PATH),
                     JSON.toJSONString(data).getBytes(StandardCharsets.UTF_8));
@@ -337,6 +367,21 @@ public class GroupManager {
             this.MESSAGE_NUMBER_MAP = data.getObject("发言统计",
                     new TypeReference<Map<String, MessageNumber>>() {
                     });
+
+            //添加自动验证QQ
+            this.autoVerifyQQ = data.getObject("自动验证",
+                    new TypeReference<Map<String, String>>() {
+                    });
+            if(this.autoVerifyQQ == null){
+                this.autoVerifyQQ = new ConcurrentHashMap<>();
+            }
+
+            this.verifyCount = data.getObject("验证统计",
+                    new TypeReference<VerifyCount>() {
+                    });
+            if(this.verifyCount == null){
+                this.verifyCount = new VerifyCount();
+            }
 
             // 3. 处理自动购买（嵌套Map）
             this.autoBuyProductMap = data.getObject("自动购买",
@@ -378,6 +423,8 @@ public class GroupManager {
         this.excludeAlchemyMap = new ConcurrentHashMap<>();
         this.excludeSellMap = new ConcurrentHashMap<>();
         this.taskStateMap = new ConcurrentHashMap<>();
+        this.autoVerifyQQ = new ConcurrentHashMap<>();
+        this.verifyCount = new VerifyCount();
     }
 
     public String getExcludeAlchemyList(Long botId) {
