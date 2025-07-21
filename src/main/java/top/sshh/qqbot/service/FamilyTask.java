@@ -17,8 +17,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import top.sshh.qqbot.data.QQBotConfig;
 import top.sshh.qqbot.data.RemindTime;
 
 import javax.annotation.PostConstruct;
@@ -376,33 +378,91 @@ public class FamilyTask {
 
     }
 
-    @Scheduled(
-            cron = "15 10 4,8,18 * * *"
-    )
+    @Scheduled(cron = "0 30 7 * * *")
     public void 签到() throws InterruptedException {
+        Iterator var1 = BotFactory.getBots().values().iterator();
+
+        while (var1.hasNext()) {
+            Bot bot = (Bot) var1.next();
+            if (bot.getBotConfig().isEnableAutoTask()) {
+                try {
+                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).text("修仙签到"));
+                } catch (Exception e) {
+                    logger.error("定时发送消息失败", e);
+                }
+            }
+
+        }
     }
 
-    @Scheduled(
-            cron = "0 38,39 12 * * *"
-    )
+    @Scheduled(cron = "0 35 7 * * *")
+    public void 宗门丹药领取() throws InterruptedException {
+        Iterator var1 = BotFactory.getBots().values().iterator();
+
+        while (var1.hasNext()) {
+            Bot bot = (Bot) var1.next();
+            if (bot.getBotConfig().isEnableAutoTask()) {
+                try {
+                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain().at("3889001741")).text("宗门丹药领取"));
+                } catch (Exception e) {
+                    logger.error("定时发送消息失败", e);
+                }
+            }
+
+        }
+    }
+
+    @Scheduled(cron = "0 35 12 * * *")
     public void 准备秘境() throws InterruptedException {
+        Iterator var1 = BotFactory.getBots().values().iterator();
+
+        while (var1.hasNext()) {
+            Bot bot = (Bot) var1.next();
+            if (bot.getBotConfig().isEnableAutoTask()) {
+                try {
+                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).text("开始自动秘境"));
+                } catch (Exception e) {
+                    logger.error("定时发送消息失败", e);
+                }
+            }
+
+        }
     }
 
-    @Scheduled(
-            cron = "50 40,41 12 * * *"
-    )
-    public void 进入秘境() throws InterruptedException {
-    }
 
-    @Scheduled(
-            cron = "0 0 0,1,2,3 * * *"
-    )
+    @Scheduled(cron = "0 10 8 * * *")
     public void 开始宗门任务() throws InterruptedException {
+        Iterator var1 = BotFactory.getBots().values().iterator();
+
+        while (var1.hasNext()) {
+            Bot bot = (Bot) var1.next();
+            if (bot.getBotConfig().isEnableAutoTask()) {
+                try {
+                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain().at("3889001741")).text("宗门任务接取"));
+                } catch (Exception e) {
+                    logger.error("开始宗门任务失败", e);
+                }
+            }
+
+        }
     }
 
-    @Scheduled(
-            cron = "0 55 */2 * * *"
-    )
-    public void 定时闭关() throws InterruptedException {
+    @Scheduled(cron = "0 5 8 * * *")
+    public void 开始悬赏任务() throws InterruptedException {
+        Iterator var1 = BotFactory.getBots().values().iterator();
+
+        while (var1.hasNext()) {
+            Bot bot = (Bot) var1.next();
+            if (bot.getBotConfig().isEnableAutoTask()) {
+                try {
+                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).text("开始自动悬赏"));
+                } catch (Exception e) {
+                    logger.info("开始悬赏任务失败", e);
+                }
+            }
+
+        }
     }
+
+
 }

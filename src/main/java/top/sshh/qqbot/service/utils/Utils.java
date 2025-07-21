@@ -5,6 +5,14 @@ import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
 public class Utils {
     public static boolean isAtSelf(Bot bot, Group group) {
 
@@ -35,5 +43,34 @@ public class Utils {
     public static String cleanMessage(String message) {
         String cleaned = message.replaceAll("content\\[\\[.*?\\][\\s\\S]*?](?=\\s|$)", "");
         return cleaned.replaceAll("(\\n\\s*)+$", "").trim();
+    }
+
+    public static void downLoadImage(String url) {
+
+        // 目标文件夹
+        File imagesDir = new File("images");
+        if (!imagesDir.exists()) {
+            imagesDir.mkdirs();  // 创建images目录
+        }
+
+        // 生成时间戳文件名
+        String timestamp = new SimpleDateFormat("yyyyMMddHHmmssSSS").format(new Date());
+        String fileName = timestamp + ".jpg";
+
+        File destinationFile = new File(imagesDir, fileName);
+
+        try {
+            URL imageUrl = new URL(url);
+            BufferedImage image = ImageIO.read(imageUrl);
+
+            if (image != null) {
+                ImageIO.write(image, "jpg", destinationFile);
+            } else {
+                System.out.println("读取图片失败");
+            }
+        } catch (IOException e) {
+            System.out.println("下载保存图片时发生错误");
+            e.printStackTrace();
+        }
     }
 }

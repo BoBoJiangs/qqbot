@@ -54,7 +54,12 @@ bot:
     enableAutomaticReply: false
     #0:不转发 1转发部分消息
     forwardMode: 0
+    #验证指定QQ号的验证码（辅助验证）
     enableAutoVerify: true
+    #保存图片到本地
+    enableSavePic: false
+    #自动验证模式 0：不验证 1：自动验证（不显示识别文字） 2:自动验证（显示识别文字）
+    autoVerifyModel: 2
 
 spring:
   datasource:

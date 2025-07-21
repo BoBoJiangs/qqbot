@@ -29,6 +29,12 @@ import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.utils.Utils;
 
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.io.IOException;
+import java.net.URL;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.*;
@@ -1136,7 +1142,7 @@ public class TestService {
         return groupId;
     }
 
-    private void showButtonMsg(Bot bot, Group group, Integer messageId, String message, Buttons buttons, MessageChain messageChain) {
+    public void showButtonMsg(Bot bot, Group group, Integer messageId, String message, Buttons buttons, MessageChain messageChain) {
         long groupId = getRemindGroupId(bot);
         Bot remindBot = getRemindAtQQ(bot);
         if (remindBot == null) {
@@ -1212,6 +1218,18 @@ public class TestService {
     )
     public void 验证码判断(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId, Buttons buttons) {
 
+        if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13 ) {
+            if(bot.getBotConfig().isEnableSavePic()){
+                String regex = "https?://[^\\s\\)]+";
+                Pattern pattern = Pattern.compile(regex);
+                Matcher matcher = pattern.matcher(message);
+                while (matcher.find()) {
+                    Utils.downLoadImage(matcher.group());
+                }
+
+            }
+        }
+
         if (message.contains("解除限制") && bot.getBotConfig().getGroupId() == group.getGroupId()) {
             bot.getBotConfig().setStop(true);
             bot.getBotConfig().setLastRefreshTime(System.currentTimeMillis() + 300000L);
@@ -1237,10 +1255,14 @@ public class TestService {
             botConfig.setStartScheduledHerbs(false);
 
 
-            if (buttons != null && !buttons.getButtonList().isEmpty()) {
-                botButtonMap.put(bot.getBotId(), buttons);
-                buttons.setGroupId(group.getGroupId());
-                showButtonMsg(bot, group, messageId, message, buttons, messageChain);
+            if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13 ) {
+                if(bot.getBotConfig().getAutoVerifyModel() == 0){
+                    botButtonMap.put(bot.getBotId(), buttons);
+                    buttons.setGroupId(group.getGroupId());
+                    showButtonMsg(bot, group, messageId, message, buttons, messageChain);
+                }
+
+
             }
 
 
@@ -1270,6 +1292,8 @@ public class TestService {
         }
 
     }
+
+
 
 
     private Bot getRemindAtQQ(Bot bot) {
