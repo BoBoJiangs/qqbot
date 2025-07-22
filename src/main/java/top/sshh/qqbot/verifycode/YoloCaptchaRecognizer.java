@@ -120,6 +120,7 @@ public class YoloCaptchaRecognizer {
             resultText = resultText.replaceAll("情点击", "请点击");
             resultText = resultText.replaceAll("乘情", "表情");
             resultText = resultText.replaceAll("电鲸", "电脑");
+            resultText = resultText.replaceAll("乘击", "点击");
 
             if (StringUtils.isNotBlank(title) && StringUtils.isNotBlank(resultText)) {
                 if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
