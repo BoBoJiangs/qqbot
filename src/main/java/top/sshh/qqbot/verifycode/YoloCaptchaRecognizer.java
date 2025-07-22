@@ -175,7 +175,7 @@ public class YoloCaptchaRecognizer {
                             answer = resultText.substring("请点击".length()).trim();
                             if (answer.equals("漏萄")) answer = "葡萄";
                         }
-                    }else if (resultText.contains("表情")) {
+                    }else if (resultText.contains("表") && resultText.contains("情")) {
                         int idx = 0;
                         Matcher matcher = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(resultText);
                         if (recognitionResult.emojiList.isEmpty()) {
