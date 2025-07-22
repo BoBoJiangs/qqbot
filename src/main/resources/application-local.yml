@@ -30,7 +30,7 @@ bot:
     #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
     enableXslPriceQuery: false
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-    cultivationMode: 3
+    cultivationMode: 0
     #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认） 4时长最短 5修为最高
     rewardMode: 5
     #宗门任务1：邪修和查抄（默认） 2：所有任务
@@ -49,7 +49,7 @@ bot:
     enableSelfTitle: false
     enableXiaoBei: false
     lingShiNum: 100
-    lingShiQQ: 679831529
+    lingShiQQ: 1011466037
     shuangXuNumber: 3
     enableAutomaticReply: false
     #0:不转发 1转发部分消息

@@ -386,7 +386,7 @@ public class FamilyTask {
             Bot bot = (Bot) var1.next();
             if (bot.getBotConfig().isEnableAutoTask()) {
                 try {
-                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).text("修仙签到"));
+                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain().at("3889001741")).text("修仙签到"));
                 } catch (Exception e) {
                     logger.error("定时发送消息失败", e);
                 }

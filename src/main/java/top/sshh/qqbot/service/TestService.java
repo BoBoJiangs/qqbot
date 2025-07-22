@@ -1256,9 +1256,10 @@ public class TestService {
 
 
             if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13 ) {
+                botButtonMap.put(bot.getBotId(), buttons);
+                buttons.setGroupId(group.getGroupId());
+
                 if(bot.getBotConfig().getAutoVerifyModel() == 0){
-                    botButtonMap.put(bot.getBotId(), buttons);
-                    buttons.setGroupId(group.getGroupId());
                     showButtonMsg(bot, group, messageId, message, buttons, messageChain);
                 }
 
