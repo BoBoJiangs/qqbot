@@ -317,7 +317,7 @@ public class AutoBuyHerbs {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         boolean isAtSelf = isAtSelf(group,bot);
-        if (isGroup && isAtSelf && botConfig.isStartAutoBuyHerbs() && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") ||
+        if (isGroup && isAtSelf && botConfig.isStartAutoBuyHerbs() && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
                 message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             if (message.contains("道友成功购买")) {
                 if(!this.autoBuyList.isEmpty()){
@@ -337,6 +337,11 @@ public class AutoBuyHerbs {
                     }
                 }
 
+            }
+
+            if(message.contains("今天已经很努力了")){
+                botConfig.setStartAuto(false);
+                botConfig.setStartAutoBuyHerbs(false);
             }
 
             if(message.contains("未查询")){
@@ -500,18 +505,7 @@ public class AutoBuyHerbs {
 
                     if (botConfig.getTaskStatusHerbs() < 8) {
                         try {
-                            int messageId = bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
 
-//                            if (messageId == 0){
-//                                logger.info("发送查询消息失败，暂停查看坊市药材，messageId=={}", messageId);
-//                                botConfig.setStartAutoBuyHerbs(false);
-//                            }
-                            MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
-                            //超过10分钟没有更新消息时间，暂停循环任务
-//                            if(messageNumber.getTime() < System.currentTimeMillis() - 600000){
-//                                logger.info("发送查询消息失败，暂停查看坊市药材");
-//                                botConfig.setStop(true);
-//                            }
                             botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
                             noQueriedCount = 0;
                         } catch (Exception var6) {

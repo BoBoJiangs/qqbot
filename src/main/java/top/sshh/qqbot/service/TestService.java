@@ -1730,7 +1730,7 @@ public class TestService {
             int count;
             if (timeMessage instanceof TextMessage && message.contains("循环执行")) {
                 String s = ((TextMessage) timeMessage).getText().trim();
-                if (message.contains("坊市查看") || message.contains("坊市购买")) {
+                if (message.contains("坊市查看")) {
                     bot.getBotConfig().setCommand(s);
                 }
 

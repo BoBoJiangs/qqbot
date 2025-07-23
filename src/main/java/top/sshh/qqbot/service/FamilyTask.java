@@ -430,7 +430,7 @@ public class FamilyTask {
     }
 
 
-    @Scheduled(cron = "0 10 8 * * *")
+    @Scheduled(cron = "0 36 7 * * *")
     public void 开始宗门任务() throws InterruptedException {
         Iterator var1 = BotFactory.getBots().values().iterator();
 

@@ -121,7 +121,8 @@ public class YoloCaptchaRecognizer {
             resultText = resultText.replaceAll("乘情", "表情");
             resultText = resultText.replaceAll("电鲸", "电脑");
             resultText = resultText.replaceAll("乘击", "点击");
-
+            resultText = resultText.replaceAll("图4", "图中");
+            resultText = resultText.replaceAll("第14", "第1个");
             if (StringUtils.isNotBlank(title) && StringUtils.isNotBlank(resultText)) {
                 if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
                     Character targetChar = extractTargetChar(title);
@@ -163,7 +164,7 @@ public class YoloCaptchaRecognizer {
                             } else if (resultText.length() == 5 && "池".equals(lastStr)) {
                                 answer = "电池";
                             } else if (resultText.length() == 5 && "电".equals(secondLastStr) && "沙".equals(lastStr)) {
-                                answer = "电池"; // 注意: 这个逻辑可能有问题，"电沙"不是电池
+                                answer = "电池";
                             } else if (resultText.length() == 5 && ("苇".equals(secondLastStr) || "果".equals(lastStr))) {
                                 answer = "苹果";
                             } else if (resultText.length() == 4) {
@@ -187,12 +188,19 @@ public class YoloCaptchaRecognizer {
                                     idx = CHINESE_NUMBERS.get(match); // 中文转数字
                                 }
                             }
-                            resultText = resultText.replaceAll("请点击请", "请点击第");
+                            if(idx == 7){
+                                idx = 1;
+                            }
 //                            answer = resultText.split("[第个]")[1];
                             answer = "序号" + idx;
-                        } else if (recognitionResult.emojiList.size() >= 3) {
+                        } else if (recognitionResult.emojiList.size() == 3) {
                             if (matcher.find()) {
-                                idx = Integer.parseInt(matcher.group()) - 1;
+                                if(Integer.parseInt(matcher.group()) < 4){
+                                    idx = Integer.parseInt(matcher.group()) - 1;
+                                }
+                                if(Integer.parseInt(matcher.group()) == 4 || Integer.parseInt(matcher.group()) == 7){
+                                    idx = 0;
+                                }
                             }
                             if (idx < recognitionResult.emojiList.size()) {
                                answer = recognitionResult.emojiList.get(idx);
@@ -200,6 +208,8 @@ public class YoloCaptchaRecognizer {
                         }
                     }else if (resultText.contains("加") || resultText.contains("减") || resultText.contains("乘")) {
                         resultText = resultText.replaceAll("加点", "加七");
+                        resultText = resultText.replaceAll("结乘", "结果");
+                        resultText = resultText.replaceAll("乘点击", "请点击");
                         answer = String.valueOf(calculate(resultText));
                     }
                 } else if (title.contains("请问图中深色文字中包含几个字符")) {
