@@ -117,7 +117,7 @@ public class YoloCaptchaRecognizer {
             RecognitionResult recognitionResult = recognizeCaptcha(mat);
             resultText = recognitionResult.result;
             resultText = resultText.replaceAll("请点点", "请点击");
-            resultText = resultText.replaceAll("情点击", "请点击");
+            resultText = resultText.replaceAll("情点", "请点");
             resultText = resultText.replaceAll("乘情", "表情");
             resultText = resultText.replaceAll("电鲸", "电脑");
             resultText = resultText.replaceAll("乘击", "点击");
@@ -134,7 +134,7 @@ public class YoloCaptchaRecognizer {
                     }
                 } else if (title.contains("请按照深色文字的题目点击对应的答案")) {
 
-                    if (resultText.startsWith("请点击") && resultText.length() < 7) {
+                    if (resultText.startsWith("请点") && resultText.length() < 7) {
 
                         if (resultText.length() == 4 || resultText.length() == 5) {
                             char secondLastChar = resultText.charAt(resultText.length() - 2);
