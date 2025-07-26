@@ -211,24 +211,24 @@ public class GroupManager {
     private StringBuilder getStringBuilder(TaskStatus taskStatus) {
         StringBuilder sb = new StringBuilder();
         if (taskStatus.isDanyaoFinished()) {
-            sb.append("宗门丹药：已领取\n");
+            sb.append("宗门丹药：✅\n");
         } else {
-            sb.append("宗门丹药：未领取\n");
+            sb.append("宗门丹药：❌\n");
         }
         if (taskStatus.isZongMenFinished()) {
-            sb.append("宗门任务：已完成\n");
+            sb.append("宗门任务：✅\n");
         } else {
-            sb.append("宗门任务：未完成\n");
+            sb.append("宗门任务：❌\n");
         }
         if (taskStatus.isXslFinished()) {
-            sb.append("悬赏任务：已完成\n");
+            sb.append("悬赏任务：✅\n");
         }else {
-            sb.append("悬赏任务：未完成\n");
+            sb.append("悬赏任务：❌\n");
         }
         if (taskStatus.isMjFinished()) {
-            sb.append("秘境任务：已完成\n");
+            sb.append("秘境任务：✅\n");
         } else {
-            sb.append("秘境任务：未完成\n");
+            sb.append("秘境任务：❌\n");
         }
         return sb;
     }

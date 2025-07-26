@@ -49,6 +49,8 @@ public class YoloCaptchaRecognizer {
     private String classificationModelWeights;
     @Value("${captcha.classification-config}")
     private String classificationModelConfig;
+    @Value("${captcha.label}")
+    private static String labelPath;
 
     private static final String[] DETECTION_CLASSES = {"文字", "表情"};
     public static String[] CLASSIFICATION_CLASSES;
@@ -56,7 +58,7 @@ public class YoloCaptchaRecognizer {
     static {
         try {
             List<String> lines = Files.readAllLines(
-                    Paths.get("models/labels.txt"), StandardCharsets.UTF_8);
+                    Paths.get("models/labels2.txt"), StandardCharsets.UTF_8);
             CLASSIFICATION_CLASSES = lines.stream()
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())

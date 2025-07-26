@@ -45,10 +45,10 @@ public class Utils {
         return cleaned.replaceAll("(\\n\\s*)+$", "").trim();
     }
 
-    public static void downLoadImage(String url) {
+    public static void downLoadImage(String url,String path) {
 
         // 目标文件夹
-        File imagesDir = new File("images");
+        File imagesDir = new File(path);
         if (!imagesDir.exists()) {
             imagesDir.mkdirs();  // 创建images目录
         }
