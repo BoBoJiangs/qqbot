@@ -9,6 +9,7 @@ import org.opencv.imgproc.Imgproc;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.PostConstruct;
 import java.io.*;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -49,7 +50,7 @@ public class YoloCaptchaRecognizer {
     private String classificationModelWeights;
     @Value("${captcha.classification-config}")
     private String classificationModelConfig;
-    @Value("${captcha.label}")
+    @Value("${captcha.labelPath}")
     private static String labelPath;
 
     private static final String[] DETECTION_CLASSES = {"文字", "表情"};
@@ -58,7 +59,7 @@ public class YoloCaptchaRecognizer {
     static {
         try {
             List<String> lines = Files.readAllLines(
-                    Paths.get("models/labels2.txt"), StandardCharsets.UTF_8);
+                    Paths.get("models/labels.txt"), StandardCharsets.UTF_8);
             CLASSIFICATION_CLASSES = lines.stream()
                     .map(String::trim)
                     .filter(s -> !s.isEmpty())
@@ -84,6 +85,8 @@ public class YoloCaptchaRecognizer {
 
     private Net detectionNet;
     private Net classificationNet;
+
+
 
     // 同步初始化
     public synchronized void init() {
@@ -123,6 +126,8 @@ public class YoloCaptchaRecognizer {
             resultText = resultText.replaceAll("乘情", "表情");
             resultText = resultText.replaceAll("电鲸", "电脑");
             resultText = resultText.replaceAll("乘击", "点击");
+            resultText = resultText.replaceAll("请击", "点击");
+            resultText = resultText.replaceAll("点请", "点击");
             resultText = resultText.replaceAll("图4", "图中");
             resultText = resultText.replaceAll("第14", "第1个");
             if (StringUtils.isNotBlank(title) && StringUtils.isNotBlank(resultText)) {
@@ -167,7 +172,7 @@ public class YoloCaptchaRecognizer {
                                 answer = "电池";
                             } else if (resultText.length() == 5 && "电".equals(secondLastStr) && "沙".equals(lastStr)) {
                                 answer = "电池";
-                            } else if (resultText.length() == 5 && ("苇".equals(secondLastStr) || "果".equals(lastStr))) {
+                            } else if (resultText.length() == 5 && ("苹".equals(secondLastStr) || "果".equals(lastStr))) {
                                 answer = "苹果";
                             } else if (resultText.length() == 4) {
                                 answer = lastStr;

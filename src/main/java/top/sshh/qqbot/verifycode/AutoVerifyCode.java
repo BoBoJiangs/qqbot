@@ -180,37 +180,44 @@ public class AutoVerifyCode {
                 }
                 if (text.contains("序号")) {
                     text = text.replaceAll("序号", "");
-                    if(StringUtils.isEmpty(verifyQQ)){
-                        if (StringUtils.isNumeric(text)) {
-                            if (!buttons.getButtonList().isEmpty()) {
-                                if (Integer.parseInt(text) <= buttons.getButtonList().size()) {
-                                    Button button = buttons.getButtonList().get(Integer.parseInt(text) - 1);
-                                    isSuccess = true;
+
+                    if (StringUtils.isNumeric(text)) {
+                        if (!buttons.getButtonList().isEmpty()) {
+                            if (Integer.parseInt(text) <= buttons.getButtonList().size()) {
+                                Button button = buttons.getButtonList().get(Integer.parseInt(text) - 1);
+                                isSuccess = true;
+                                if(StringUtils.isEmpty(verifyQQ)){
                                     bot.clickKeyboardButton(group.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
+                                }else{
+                                    bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("点击序号"+text));
                                 }
+
                             }
                         }
-                    }else{
+                    }
+                } else {
+                    String emojiText = GuessIdiom.getEmoji(text);
+                    String matchText = StringUtils.isNotBlank(emojiText) ? emojiText : text;
+
+                    for (Button button : buttons.getButtonList()) {
+                        if (!matchText.equals(button.getLabel())) continue;
+
                         isSuccess = true;
-                        bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("点击序号"+text));
+                        if (StringUtils.isEmpty(verifyQQ)) {
+                            bot.clickKeyboardButton(
+                                    group.getGroupId(),
+                                    buttons.getBotAppid(),
+                                    button.getId(),
+                                    button.getData(),
+                                    buttons.getMsgSeq()
+                            );
+                        } else {
+                            bot.getGroup(group.getGroupId())
+                                    .sendMessage(new MessageChain().at(verifyQQ).text("点击" + text));
+                        }
+                        break;
                     }
 
-                } else {
-                    if(StringUtils.isEmpty(verifyQQ)){
-                        if (GuessIdiom.getEmoji(text) != null) {
-                            text = GuessIdiom.getEmoji(text);
-                        }
-                        for (Button button : buttons.getButtonList()) {
-                            if (text.equals(button.getLabel())) {
-                                isSuccess = true;
-                                bot.clickKeyboardButton(group.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
-                                break;
-                            }
-                        }
-                    }else{
-                        isSuccess = true;
-                        bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("点击"+text));
-                    }
 
                 }
 

@@ -3,12 +3,12 @@ xbGroupId: 993970673
 xxGroupId: 690933736
 captcha:
   #主模型
-  detection-config: models/yolov2.cfg
-  detection-weights: models/yolov2.weights
+  detection-config: models/yolov4-tiny-dota2.cfg
+  detection-weights: models/yolov4-tiny-dota2_last.weights
   #子模型
-  classification-config: models/darknet2.cfg
-  classification-weights: models/darknet2.weights
-  label: models/labels2.txt
+  classification-config: models/darknet.cfg
+  classification-weights: models/darknet_last.weights
+  labelPath: models/labels.txt
 
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，

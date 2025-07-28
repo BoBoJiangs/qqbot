@@ -524,9 +524,8 @@ public class TestService {
                         }
 
                         this.isFirst = true;
-                    } catch (InterruptedException var4) {
-                        Thread.currentThread().interrupt();
                     } catch (Exception var5) {
+                        this.isFirst = true;
                         log.error("处理bot时出错", var5);
                     }
 
@@ -1089,7 +1088,7 @@ public class TestService {
         }
     }
 
-    private void showButtonMsg(Bot bot, Group group, Integer messageId, String message, Buttons buttons, MessageChain messageChain) {
+    public void showButtonMsg(Bot bot, Group group, Integer messageId, String message, Buttons buttons, MessageChain messageChain) {
         long groupId = this.getRemindGroupId(bot);
         Bot remindBot = this.getRemindAtQQ(bot);
         if (remindBot != null) {
