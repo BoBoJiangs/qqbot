@@ -14,7 +14,7 @@ public class MessageNumber implements Serializable {
     private long userId;
     private int number;
     private long time;
-    private static final LocalTime RESET_TIME = LocalTime.of(7, 55); // 7:55
+    private static final LocalTime RESET_TIME = LocalTime.of(23, 59); // 7:55
     private static final LocalTime RESET_TASK_TIME = LocalTime.of(4, 10); // 7:55
 
     public boolean isCrossResetTime() {

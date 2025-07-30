@@ -234,7 +234,7 @@ public class GroupManager {
     }
 
     // cron 表达式：0 55 7 * * * 表示每天早上 7 点 55 分执行
-    @Scheduled(cron = "0 58 7 * * *")
+    @Scheduled(cron = "0 59 23 * * *")
     public void executeMessageTask() {
         logger.info("定时清空发言统计");
         BotFactory.getBots().values().forEach((bot) -> {

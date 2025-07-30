@@ -123,13 +123,17 @@ public class YoloCaptchaRecognizer {
             resultText = recognitionResult.result;
             resultText = resultText.replaceAll("请点点", "请点击");
             resultText = resultText.replaceAll("情点", "请点");
+            resultText = resultText.replaceAll("漏点", "请点");
             resultText = resultText.replaceAll("乘情", "表情");
             resultText = resultText.replaceAll("电鲸", "电脑");
             resultText = resultText.replaceAll("乘击", "点击");
             resultText = resultText.replaceAll("请击", "点击");
             resultText = resultText.replaceAll("点请", "点击");
             resultText = resultText.replaceAll("图4", "图中");
-            resultText = resultText.replaceAll("第14", "第1个");
+            resultText = resultText.replaceAll("表蟹", "表情");
+            resultText = resultText.replaceAll("表鲸", "表情");
+            resultText = resultText.replaceAll("点表", "点击");
+            resultText = resultText.replaceAll("鲸击", "点击");
             if (StringUtils.isNotBlank(title) && StringUtils.isNotBlank(resultText)) {
                 if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
                     Character targetChar = extractTargetChar(title);
@@ -141,7 +145,7 @@ public class YoloCaptchaRecognizer {
                     }
                 } else if (title.contains("请按照深色文字的题目点击对应的答案")) {
 
-                    if (resultText.startsWith("请点") && resultText.length() < 7) {
+                    if (resultText.contains("点击") && resultText.length() < 7) {
 
                         if (resultText.length() == 4 || resultText.length() == 5) {
                             char secondLastChar = resultText.charAt(resultText.length() - 2);
@@ -183,7 +187,22 @@ public class YoloCaptchaRecognizer {
                             answer = resultText.substring("请点击".length()).trim();
                             if (answer.equals("漏萄")) answer = "葡萄";
                         }
-                    }else if (resultText.contains("表") && resultText.contains("情")) {
+                    }else if (recognitionResult.emojiList.size() == 3) {
+                        int idx = 0;
+                        Matcher matcher = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(resultText);
+                        if (matcher.find()) {
+                            if(Integer.parseInt(matcher.group()) < 4){
+                                idx = Integer.parseInt(matcher.group()) - 1;
+                            }
+                            if(Integer.parseInt(matcher.group()) == 4 || Integer.parseInt(matcher.group()) == 7){
+                                idx = 0;
+                            }
+                        }
+                        if (idx < recognitionResult.emojiList.size()) {
+                            answer = recognitionResult.emojiList.get(idx);
+                        }
+                    }
+                    else if (resultText.contains("表") && resultText.contains("情")) {
                         int idx = 0;
                         Matcher matcher = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(resultText);
                         if (recognitionResult.emojiList.isEmpty()) {
@@ -213,11 +232,15 @@ public class YoloCaptchaRecognizer {
                                answer = recognitionResult.emojiList.get(idx);
                             }
                         }
-                    }else if (resultText.contains("加") || resultText.contains("减") || resultText.contains("乘")) {
-                        resultText = resultText.replaceAll("加点", "加七");
+                    } else if (resultText.contains("加") && (resultText.length() == 11 || resultText.length() == 10)) {
+//                        resultText = resultText.replaceAll("点", "加");
+                        answer = String.valueOf(calculate(resultText,"加"));
+                    } else if (resultText.contains("减")) {
+                        answer = String.valueOf(calculate(resultText,"减"));
+                    }else if (resultText.contains("乘")) {
                         resultText = resultText.replaceAll("结乘", "结果");
                         resultText = resultText.replaceAll("乘点击", "请点击");
-                        answer = String.valueOf(calculate(resultText));
+                        answer = String.valueOf(calculate(resultText,"乘"));
                     }
                 } else if (title.contains("请问图中深色文字中包含几个字符")) {
                     answer = String.valueOf(resultText.length());
@@ -406,8 +429,9 @@ public class YoloCaptchaRecognizer {
         return cnt;
     }
 
-    public static int calculate(String expr) {
-        Pattern tokenPattern = Pattern.compile("(\\d+|[" + String.join("", CHINESE_NUMBERS.keySet()) + "]+|加|减|乘)");
+    public static int calculate(String expr,String op) {
+//        Pattern tokenPattern = Pattern.compile("(\\d+|[" + String.join("", CHINESE_NUMBERS.keySet()) + "]+|加|减|乘)");
+        Pattern tokenPattern = Pattern.compile("(\\d+|[" + String.join("", CHINESE_NUMBERS.keySet()) + "])");
         Matcher matcher = tokenPattern.matcher(expr);
 
         List<String> tokens = new ArrayList<>();
@@ -427,9 +451,14 @@ public class YoloCaptchaRecognizer {
         }
         if (numbers.isEmpty()) return -1;
 
+//        int result = numbers.get(0);
+//        for (int i = 0; i < ops.size(); i++) {
+////            result = compute(result, ops.get(i), numbers.get(i + 1));
+//            result = compute(result, op, numbers.get(i + 1));
+//        }
         int result = numbers.get(0);
-        for (int i = 0; i < ops.size(); i++) {
-            result = compute(result, ops.get(i), numbers.get(i + 1));
+        for (int i = 0; i < numbers.size()-1; i++) {
+            result = compute(result, op, numbers.get(i+1));
         }
         return result;
     }

@@ -33,6 +33,7 @@ top/sshh/qqbot/service/ProductPriceResponse.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$5.class
 top/sshh/qqbot/data/VerifyCount.class
 top/sshh/qqbot/service/impl/HttpsTrustManager.class
+top/sshh/qqbot/service/TestService$4.class
 top/sshh/qqbot/verifycode/YoloCaptchaRecognizer.class
 top/sshh/qqbot/service/GroupManager$7.class
 top/sshh/qqbot/data/ProductPrice.class
