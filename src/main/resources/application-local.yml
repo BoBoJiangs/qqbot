@@ -8,7 +8,7 @@ captcha:
   #子模型
   classification-config: models/darknet.cfg
   classification-weights: models/darknet_last.weights
-#  shitu-api-url: http://1.94.139.227:8848/shitu
+  shitu-api-url: http://116.205.232.32:8848/shitu
 
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，

@@ -897,18 +897,16 @@ public class PriceTask {
                             if (group.getGroupId() == groupId) {
                                 group.sendMessage((new MessageChain()).at("3889001741").text(" 坊市购买 " + code));
                             }
+
                         }
 
-                        if (botConfig.isEnableAutoBuyLowPrice() && price < (double)ProductLowPrice.getLowPrice(itemName)) {
-                            if (botConfig.isStop()) {
-                                botConfig.setStop(false);
-                                return;
-                            }
-
-                            if (group.getGroupId() == groupId) {
-                                group.sendMessage((new MessageChain()).at("3889001741").text(" 坊市购买 " + code));
-                            }
-                        }
+//                        if (botConfig.isEnableAutoBuyLowPrice() && price < (double)ProductLowPrice.getLowPrice(itemName)) {
+//                            if (botConfig.isStop()) {
+//                                botConfig.setStop(false);
+//                                return;
+//                            }
+//                            group.sendMessage((new MessageChain()).at("3889001741").text(" 坊市购买 " + code));
+//                        }
                     }
                 }
 

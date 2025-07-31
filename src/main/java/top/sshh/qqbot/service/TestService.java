@@ -187,15 +187,7 @@ public class TestService {
                 group.sendMessage((new MessageChain()).reply(messageId).text("关闭无偿双修成功"));
             }
 
-            if ("开始捡漏".equals(message)) {
-                botConfig.setEnableAutoBuyLowPrice(true);
-                group.sendMessage((new MessageChain()).reply(messageId).text("开始捡漏成功"));
-            }
 
-            if ("停止捡漏".equals(message)) {
-                botConfig.setEnableAutoBuyLowPrice(false);
-                group.sendMessage((new MessageChain()).reply(messageId).text("停止捡漏成功"));
-            }
 
             if ("确认一键丹药炼金".equals(message)) {
                 botConfig.setCommand("确认一键丹药炼金");

@@ -26,6 +26,15 @@ public class GuessIdiom {
         return (String)CACHE.get(emoji);
     }
 
+    public static String replaceEmojis(String text) {
+        if (text == null || text.isEmpty())
+            return text;
+        for (Map.Entry<String, String> entry : EMOJI_MAP.entrySet())
+            text = text.replace(entry.getKey(), entry.getValue());
+        return text;
+    }
+
+
     public static String getRiddle(String text) {
         Iterator var1 = riddleMap.entrySet().iterator();
 

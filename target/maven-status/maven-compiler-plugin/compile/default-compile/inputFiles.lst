@@ -6,12 +6,14 @@
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/Herb.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/XiaoBeiService.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/liandan/DanCalculator.java
+/Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/VerifyCodeData.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/impl/HttpsTrustManager.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/MessageNumber.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/TestService.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/ProductPriceResponse.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/GuessIdiom.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/verifycode/YoloCaptchaRecognizer.java
+/Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/AutoBuyGoods.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/ProductPrice.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/MemoryCleaner.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/AutoSellGoods.java
