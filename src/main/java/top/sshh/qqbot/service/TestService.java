@@ -73,7 +73,9 @@ public class TestService {
     private GroupManager groupManager;
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
-    @Value("${captcha.shitu-api-url:#{null}}")
+//    @Value("${captcha.shitu-url:#{null}}")
+//    private String shituApiUrl;
+    @Value("${custom.shitu-api-url:#{null}}")
     private String shituApiUrl;
     private boolean isFirst = true;
     private static final List<String> KEYWORDS = Arrays.asList("烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后", "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困", "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得", "从腐朽道袍中滑落");
@@ -1160,14 +1162,13 @@ public class TestService {
 
     }
 
-    private String[] callShituAPI(String imageUrl, String titleText, String annu) {
+    public  String[] callShituAPI(String shituApiUrl,String imageUrl, String titleText, String annu,String mode) {
         HttpURLConnection conn = null;
-
-        String[] var13;
+        annu = GuessIdiom.replaceEmojis(annu);
         try {
             String params = "URL=" + URLEncoder.encode(imageUrl, "UTF-8") + "&TEXT=" + URLEncoder.encode(titleText, "UTF-8") + "&Button=" + URLEncoder.encode(annu, "UTF-8");
-            URL url = new URL(this.shituApiUrl);
-            conn = (HttpURLConnection) url.openConnection();
+            URL url = new URL(shituApiUrl);
+            conn = (HttpURLConnection)url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.87 Safari/537.36");
@@ -1228,7 +1229,7 @@ public class TestService {
             JSONObject jsonResponse = JSONObject.parseObject(var33);
             String message = jsonResponse.getString("message");
             String data = jsonResponse.getString("data");
-            var13 = new String[]{message, data};
+            return new String[] { message, data };
         } catch (SocketTimeoutException ste) {
             log.warn("API读取超时: {}", ste.getMessage());
             String[] var29 = new String[]{"请求超时", "0"};
@@ -1244,7 +1245,7 @@ public class TestService {
 
         }
 
-        return var13;
+//        return var13;
     }
 
     @GroupMessageHandler(
@@ -1314,8 +1315,11 @@ public class TestService {
             bot.getBotConfig().setStop(false);
             if (message.contains("奖励") && message.contains("灵石") && StringUtils.isNotBlank(bot.getBotConfig().getCommand())) {
                 bot.getBotConfig().setVerificationStatus("");
-                if (!"批量上架药材".equals(bot.getBotConfig().getCommand()) && !"一键使用追捕令".equals(bot.getBotConfig().getCommand()) && !"一键使用次元之钥".equals(bot.getBotConfig().getCommand())) {
-                    group.sendMessage((new MessageChain()).text(bot.getBotConfig().getCommand()));
+                if (!"批量上架药材".equals(bot.getBotConfig().getCommand())
+                        && !"一键使用追捕令".equals(bot.getBotConfig().getCommand()) && !"一键使用次元之钥".equals(bot.getBotConfig().getCommand())) {
+                    if(!bot.getBotConfig().isEnableAutoBuyLowPrice()){
+                        group.sendMessage((new MessageChain()).text(bot.getBotConfig().getCommand()));
+                    }
                 }
             } else if (StringUtils.isNotBlank(bot.getBotConfig().getCommand())) {
                 bot.getBotConfig().setCommand("");
@@ -1341,7 +1345,7 @@ public class TestService {
         }
 
         String buttontext = buttontextBuilder.length() > 0 ? buttontextBuilder.substring(0, buttontextBuilder.length() - 1) : "";
-        String[] shituResult = this.callShituAPI(buttons.getImageUrl(), buttons.getImageText(), buttontext);
+        String[] shituResult = this.callShituAPI(shituApiUrl,buttons.getImageUrl(), buttons.getImageText(), buttontext,"2");
         String resultText = shituResult[0];
         String statusCode = shituResult[1];
         System.out.println("结果1：" + resultText + "\n结果2：" + statusCode);
@@ -2315,13 +2319,15 @@ public class TestService {
             Stream<String> stream = forwardWords.stream();
             Objects.requireNonNull(message);
             if (stream.anyMatch(message::contains)) {
-                Utils.forwardMessage(bot, this.xxGroupId, message);
+//                Utils.forwardMessage(bot, this.xxGroupId, message);
+                Utils.forwardMessage(bot, this.xxGroupId, messageChain);
             }
 
             stream = KEYWORDS.stream();
             Objects.requireNonNull(message);
             if (stream.anyMatch(message::contains) && !message.contains("时间：")) {
-                Utils.forwardMessage(bot, this.xxGroupId, message);
+//                Utils.forwardMessage(bot, this.xxGroupId, message);
+                Utils.forwardMessage(bot, this.xxGroupId, messageChain);
             }
 
             if (message.contains("道友成功领取到丹药") || message.contains("道友已经领取过了")) {
@@ -2329,7 +2335,8 @@ public class TestService {
             }
 
             if (message.contains("奖励") && message.contains("灵石")) {
-                Utils.forwardMessage(bot, this.xxGroupId, message);
+//                Utils.forwardMessage(bot, this.xxGroupId, message);
+                Utils.forwardMessage(bot, this.xxGroupId, messageChain);
             }
         }
 

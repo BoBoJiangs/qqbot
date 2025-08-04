@@ -888,17 +888,17 @@ public class PriceTask {
                         }
 
                         this.productPriceResponse.save(first);
-                        if (existingProduct != null && price <= (double)existingProduct.getPrice()) {
-                            if (botConfig.isStop()) {
-                                botConfig.setStop(false);
-                                return;
-                            }
-
-                            if (group.getGroupId() == groupId) {
-                                group.sendMessage((new MessageChain()).at("3889001741").text(" 坊市购买 " + code));
-                            }
-
-                        }
+//                        if (existingProduct != null && price <= (double)existingProduct.getPrice()) {
+//                            if (botConfig.isStop()) {
+//                                botConfig.setStop(false);
+//                                return;
+//                            }
+//
+//                            if (group.getGroupId() == groupId) {
+//                                group.sendMessage((new MessageChain()).at("3889001741").text(" 坊市购买 " + code));
+//                            }
+//
+//                        }
 
 //                        if (botConfig.isEnableAutoBuyLowPrice() && price < (double)ProductLowPrice.getLowPrice(itemName)) {
 //                            if (botConfig.isStop()) {

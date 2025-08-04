@@ -4,6 +4,7 @@ import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
+import org.apache.commons.lang3.StringUtils;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -16,7 +17,7 @@ import java.util.Date;
 public class Utils {
     public static boolean isAtSelf(Bot bot, Group group) {
 
-        return  group.getGroupId() == bot.getBotConfig().getGroupId() ;
+        return  group.getGroupId() == bot.getBotConfig().getGroupId();
     }
     public static boolean isAtSelf(Bot bot, Group group, String message) {
 
@@ -34,11 +35,21 @@ public class Utils {
         return bot.getGroup(groupId);
     }
 
-    public static void forwardMessage(Bot bot,long xxGroupId, String message){
+//    public static void forwardMessage(Bot bot,long xxGroupId, String message){
+//        if(bot.getBotConfig().isEnableForwardMessage()){
+//            getRemindGroup(bot,xxGroupId).sendMessage(new MessageChain().text(cleanMessage(message)));
+//        }
+//    }
+    public static void forwardMessage(Bot bot,long xxGroupId,  MessageChain messageChain){
         if(bot.getBotConfig().isEnableForwardMessage()){
-            getRemindGroup(bot,xxGroupId).sendMessage(new MessageChain().text(cleanMessage(message)));
+            String message = String.valueOf(messageChain.get(messageChain.size()-1));
+            if(StringUtils.isNotBlank(message)){
+                getRemindGroup(bot,xxGroupId).sendMessage(new MessageChain().text(message));
+            }
+
         }
     }
+
 
     public static String cleanMessage(String message) {
         String cleaned = message.replaceAll("content\\[\\[.*?\\][\\s\\S]*?](?=\\s|$)", "");

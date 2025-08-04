@@ -1,6 +1,8 @@
 xbGroupId: 993970673
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
 xxGroupId: 690933736
+#custom:
+#  shitu-api-url: http://1.94.139.227:8848/shitu
 captcha:
   #主模型
   detection-config: models/yolov4-tiny-dota2.cfg
@@ -8,7 +10,7 @@ captcha:
   #子模型
   classification-config: models/darknet.cfg
   classification-weights: models/darknet_last.weights
-  shitu-api-url: http://116.205.232.32:8848/shitu
+#  shitu-api-url: http://116.205.232.32:8848/shitu
 
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
@@ -54,7 +56,7 @@ bot:
     shuangXuNumber: 3
     enableAutomaticReply: false
     #0:不转发 1转发部分消息
-    forwardMode: 0
+    forwardMode: 1
     #验证指定QQ号的验证码（辅助验证）
     enableAutoVerify: true
     #保存图片到本地
