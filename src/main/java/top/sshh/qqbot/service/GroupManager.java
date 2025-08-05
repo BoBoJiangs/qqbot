@@ -787,20 +787,24 @@ public class GroupManager {
 
     // 处理回复消息
     private String processReplyMessage(MessageChain messageChain) {
-        String text = messageChain.get(messageChain.size()-1).toString().trim();
-        if(StringUtils.isEmpty(text) || text.contains("提醒")){
-            List<ReplyMessage> replyMessageList =  messageChain.getMessageByType(ReplyMessage.class);
-            if(!replyMessageList.isEmpty()){
-                ReplyMessage replyMessage = messageChain.getMessageByType(ReplyMessage.class).get(0);
-                MessageChain replyMessageChain = replyMessage.getChain();
+        try {
+            String text = messageChain.get(messageChain.size()-1).toString().trim();
+            if(StringUtils.isEmpty(text) || text.contains("提醒")){
+                List<ReplyMessage> replyMessageList =  messageChain.getMessageByType(ReplyMessage.class);
+                if(!replyMessageList.isEmpty()){
+                    ReplyMessage replyMessage = messageChain.getMessageByType(ReplyMessage.class).get(0);
+                    MessageChain replyMessageChain = replyMessage.getChain();
 
-                if (replyMessageChain != null) {
-                    List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
-                    if (textMessageList != null && !textMessageList.isEmpty()) {
-                        return textMessageList.get(textMessageList.size() - 1).getText();
+                    if (replyMessageChain != null) {
+                        List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
+                        if (textMessageList != null && !textMessageList.isEmpty()) {
+                            return textMessageList.get(textMessageList.size() - 1).getText();
+                        }
                     }
                 }
             }
+        } catch (Exception e) {
+            logger.info("处理回复消息异常", e);
         }
 
 

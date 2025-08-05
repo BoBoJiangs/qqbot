@@ -36,9 +36,9 @@
 //    private Long xxGroupId;
 //    @Autowired
 //    public YoloCaptchaRecognizer yoloCaptchaRecognizer;
-//    public Map<Long, String> codeUrlMap = new ConcurrentHashMap();
+////    public Map<Long, String> codeUrlMap = new ConcurrentHashMap();
 //    //用来判断其他QQ是否出现相同验证码，用来判断是否验证失败
-//    public Map<Long, VerifyCodeData> codeUrlMap2 = new ConcurrentHashMap();
+//    public Map<Long, VerifyCodeData> codeUrlMap = new ConcurrentHashMap();
 //    @Autowired
 //    private GroupManager groupManager;
 //    @Autowired
@@ -58,43 +58,35 @@
 //        boolean isSelfGroup = Utils.isAtSelf(bot, group, message);
 //
 //        if (bot.getBotConfig().getAutoVerifyModel() !=0 && isSelfGroup && buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13) {
-//            String regex = "https?://[^\\s\\)]+";
-//            Pattern pattern = Pattern.compile(regex);
-//            Matcher matcher = pattern.matcher(message);
-//            while (matcher.find()) {
-//                buttons.setImageUrl(matcher.group());
-//                buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
-//            }
-//            if (codeUrlMap.get(bot.getBotId()) != null) {
-//                String codeUrl = codeUrlMap.get(bot.getBotId());
-//                if (buttons.getImageUrl().equals(codeUrl)) {
-//                    yoloCaptchaRecognizer.saveErrorImage(codeUrl);
-////                    sendFailMessage(bot, message, buttons, messageChain,result);
-//                    bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
-//                    return;
+//            String verifyQQ = message.split("at_tinyid=")[1].split("\\)")[0];
+//            if(bot.getBotId() == Long.parseLong(verifyQQ)){
+//                String regex = "https?://[^\\s\\)]+";
+//                Pattern pattern = Pattern.compile(regex);
+//                Matcher matcher = pattern.matcher(message);
+//                while (matcher.find()) {
+//                    buttons.setImageUrl(matcher.group());
+//                    buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
 //                }
-//            }
-//
-//            codeUrlMap.put(bot.getBotId(), buttons.getImageUrl());
-//            List<Button> buttonList = buttons.getButtonList();
-//            StringBuilder buttonBuilder = new StringBuilder();
-//            for (int i = 0; i < buttonList.size(); i++) {
-//                Button button = buttonList.get(i);
-//                if (GuessIdiom.getEmoji(button.getLabel()) != null) {
-//                    buttonBuilder.append(" ").append(GuessIdiom.getEmoji(button.getLabel())).append(" ");
-//                } else {
-//                    buttonBuilder.append(" ").append(button.getLabel()).append(" ");
+//                if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
+//                    VerifyCodeData codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
+//                    if (buttons.getImageUrl().equals(codeData.getUrl())) {
+//                        verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, "",codeData.getPicText());
+//                        return;
+//                    }
 //                }
+//                List<Button> buttonList = buttons.getButtonList();
+//                StringBuilder buttonBuilder = new StringBuilder();
+//                for (int i = 0; i < buttonList.size(); i++) {
+//                    Button button = buttonList.get(i);
+//                    if (GuessIdiom.getEmoji(button.getLabel()) != null) {
+//                        buttonBuilder.append(" ").append(GuessIdiom.getEmoji(button.getLabel())).append(" ");
+//                    } else {
+//                        buttonBuilder.append(" ").append(button.getLabel()).append(" ");
+//                    }
 //
+//                }
+//                autoVerifyCode(bot, group,messageChain,message, messageId, buttons,"");
 //            }
-////            autoVerifyCode(bot, group, messageId, buttons,"");
-//            autoVerifyCode(bot, group,messageChain,message, messageId, buttons,"");
-////            customPool.submit(new Runnable() {
-////                public void run() {
-////                    autoVerifyCode(bot, group, messageId, buttons,"");
-////
-////                }
-////            });
 //
 //
 //        }
@@ -117,18 +109,14 @@
 //                    buttons.setImageUrl(matcher.group());
 //                    buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
 //                }
-//                if (codeUrlMap2.get(Long.parseLong(verifyQQ)) != null) {
-//                    VerifyCodeData codeData = codeUrlMap2.get(Long.parseLong(verifyQQ));
+//                if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
+//                    VerifyCodeData codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
 //                    if (buttons.getImageUrl().equals(codeData.getUrl())) {
-//                        groupManager.verifyCount.errorCount++;
-//                        yoloCaptchaRecognizer.saveErrorImage(codeData.getUrl());
-//                        sendFailMessage(bot, message, buttons, messageChain,codeData.getPicText());
-//                        bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("自动验证失败，请手动验证"));
+//                        verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, verifyQQ,codeData.getPicText());
 //                        return;
 //                    }
 //                }
 //
-////                codeUrlMap2.put(Long.parseLong(verifyQQ), buttons.getImageUrl());
 //                List<Button> buttonList = buttons.getButtonList();
 //                StringBuilder buttonBuilder = new StringBuilder();
 //                for (int i = 0; i < buttonList.size(); i++) {
@@ -141,11 +129,6 @@
 //
 //                }
 //                autoVerifyCode(bot, group,messageChain,message, messageId, buttons,verifyQQ);
-////                customPool.submit(new Runnable() {
-////                    public void run() {
-////
-////                    }
-////                });
 //            }
 //
 //
@@ -160,7 +143,9 @@
 //            result = "识别结果: " + result;
 //            result = "识别成功率：" + groupManager.verifyCount.getAccuracy() + "%"+ "\n" + result ;
 //            if (StringUtils.isNotBlank(verifyQQ)){
-//                codeUrlMap2.put(Long.parseLong(verifyQQ), new VerifyCodeData(buttons.getImageText(), result, buttons.getImageUrl()));
+//                codeUrlMap.put(Long.parseLong(verifyQQ), new VerifyCodeData(buttons.getImageText(), result, buttons.getImageUrl()));
+//            }else{
+//                codeUrlMap.put(bot.getBotId(), new VerifyCodeData(buttons.getImageText(), result, buttons.getImageUrl()));
 //            }
 //            if(bot.getBotConfig().getAutoVerifyModel() == 2){
 //                group.sendMessage((new MessageChain()).text( result));
@@ -242,9 +227,9 @@
 //            testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
 //            bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
 //        }else{
-//            sendFailMessage(bot, message, buttons, messageChain,result);
 //            bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("自动验证失败，请手动验证"));
 //        }
+//        sendFailMessage(bot, message, buttons, messageChain,result);
 //    }
 //
 //    public void sendFailMessage(Bot bot,  String message, Buttons buttons, MessageChain messageChain,String result) {

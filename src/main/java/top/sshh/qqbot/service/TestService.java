@@ -1291,7 +1291,7 @@ public class TestService {
                 if (StringUtils.isNotBlank(shituApiUrl)) {
                     customPool.submit(new Runnable() {
                         public void run() {
-                            getPictureText(bot, botConfig, buttons);
+                            getPictureText(bot, botConfig, buttons,message,messageChain);
                         }
                     });
 
@@ -1329,13 +1329,13 @@ public class TestService {
 
     }
 
-    private void getPictureText(Bot bot, BotConfig botConfig, Buttons buttons) {
-        if (buttons.getImageUrl().equals(botConfig.getLastVerificationContent()) || "失败".equals(botConfig.getVerificationStatus())) {
-            bot.getGroup(xxGroupId).sendMessage((new MessageChain()).text("检测到上次验证失败 本次请手动点击！"));
-            Utils.downLoadImage(buttons.getImageUrl(), "errorPic");
-            return;
-        }
-
+    private void getPictureText(Bot bot, BotConfig botConfig, Buttons buttons,String message,MessageChain messageChain) {
+//        if (buttons.getImageUrl().equals(botConfig.getLastVerificationContent()) || "失败".equals(botConfig.getVerificationStatus())) {
+//            bot.getGroup(xxGroupId).sendMessage((new MessageChain()).text("检测到上次验证失败 本次请手动点击！"));
+//            Utils.downLoadImage(buttons.getImageUrl(), "errorPic");
+//            showButtonMsg(bot, bot.getGroup(xxGroupId), 0, message, buttons, messageChain);
+//            return;
+//        }
         botConfig.setLastVerificationContent(buttons.getImageUrl());
         List<Button> buttonList = buttons.getButtonList();
         StringBuilder buttontextBuilder = new StringBuilder();
@@ -1380,6 +1380,7 @@ public class TestService {
         } else if ("无".equals(resultText)) {
             Utils.downLoadImage(buttons.getImageUrl(), "errorPic");
             bot.getGroup(xxGroupId).sendMessage((new MessageChain()).text("识别失败请手动点击！"));
+            showButtonMsg(bot, bot.getGroup(xxGroupId), 0, message, buttons, messageChain);
         }
     }
 

@@ -42,11 +42,8 @@ public class RemoteVerifyCode {
     private static final Logger logger = LoggerFactory.getLogger(TestService.class);
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
-    //    @Autowired
-//    public YoloCaptchaRecognizer yoloCaptchaRecognizer;
-    public Map<Long, String> codeUrlMap = new ConcurrentHashMap();
     //用来判断其他QQ是否出现相同验证码，用来判断是否验证失败
-    public Map<Long, VerifyCodeData> codeUrlMap2 = new ConcurrentHashMap();
+    public Map<Long, VerifyCodeData> codeUrlMap = new ConcurrentHashMap();
     @Autowired
     private GroupManager groupManager;
     @Autowired
@@ -84,49 +81,45 @@ public class RemoteVerifyCode {
         boolean isSelfGroup = Utils.isAtSelf(bot, group, message);
 
         if (bot.getBotConfig().getAutoVerifyModel() != 0 && isSelfGroup && buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13) {
-            String regex = "https?://[^\\s\\)]+";
-            Pattern pattern = Pattern.compile(regex);
-            Matcher matcher = pattern.matcher(message);
-            while (matcher.find()) {
-                buttons.setImageUrl(matcher.group());
-                buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
-            }
-            botButtonMap.put(bot.getBotId(), buttons);
-            if (codeUrlMap.get(bot.getBotId()) != null) {
-                String codeUrl = codeUrlMap.get(bot.getBotId());
-                if (buttons.getImageUrl().equals(codeUrl)) {
-                    verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, "", "");
-//                    saveErrorImage(codeUrl);
-//                    testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
-//                    bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
-                    return;
+            String verifyQQ = message.split("at_tinyid=")[1].split("\\)")[0];
+            if(bot.getBotId() == Long.parseLong(verifyQQ)){
+                String regex = "https?://[^\\s\\)]+";
+                Pattern pattern = Pattern.compile(regex);
+                Matcher matcher = pattern.matcher(message);
+                while (matcher.find()) {
+                    buttons.setImageUrl(matcher.group());
+                    buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
                 }
-            }
-
-            codeUrlMap.put(bot.getBotId(), buttons.getImageUrl());
-            List<Button> buttonList = buttons.getButtonList();
-            StringBuilder buttonBuilder = new StringBuilder();
-            for (int i = 0; i < buttonList.size(); i++) {
-                Button button = buttonList.get(i);
-                if (GuessIdiom.getEmoji(button.getLabel()) != null) {
-                    buttonBuilder.append(" ").append(GuessIdiom.getEmoji(button.getLabel())).append(" ");
-                } else {
-                    buttonBuilder.append(" ").append(button.getLabel()).append(" ");
+                botButtonMap.put(bot.getBotId(), buttons);
+                if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
+                    VerifyCodeData codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
+                    if (buttons.getImageUrl().equals(codeData.getUrl())) {
+                        verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, "",codeData.getPicText());
+                        return;
+                    }
                 }
 
-            }
-//            autoVerifyCode(bot, group, messageId, buttons,"");
-
-            customPool.submit(new Runnable() {
-                public void run() {
-//                    autoVerifyCode(bot, group, messageId, buttons,"");
-                    if(StringUtils.isNotBlank(shituApiUrl)){
-                        autoVerifyCode(bot, group, messageChain, message, messageId, buttons, "");
+                List<Button> buttonList = buttons.getButtonList();
+                StringBuilder buttonBuilder = new StringBuilder();
+                for (int i = 0; i < buttonList.size(); i++) {
+                    Button button = buttonList.get(i);
+                    if (GuessIdiom.getEmoji(button.getLabel()) != null) {
+                        buttonBuilder.append(" ").append(GuessIdiom.getEmoji(button.getLabel())).append(" ");
+                    } else {
+                        buttonBuilder.append(" ").append(button.getLabel()).append(" ");
                     }
 
-//                    getPictureText(bot, bot.getBotConfig(), buttons);
                 }
-            });
+
+                customPool.submit(new Runnable() {
+                    public void run() {
+                        if(StringUtils.isNotBlank(shituApiUrl)){
+                            autoVerifyCode(bot, group, messageChain, message, messageId, buttons, "");
+                        }
+                    }
+                });
+            }
+
 
 
         }
@@ -150,8 +143,8 @@ public class RemoteVerifyCode {
                     buttons.setImageUrl(matcher.group());
                     buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
                 }
-                if (codeUrlMap2.get(Long.parseLong(verifyQQ)) != null) {
-                    VerifyCodeData codeData = codeUrlMap2.get(Long.parseLong(verifyQQ));
+                if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
+                    VerifyCodeData codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
                     if (buttons.getImageUrl().equals(codeData.getUrl())) {
                         groupManager.verifyCount.errorCount++;
                         saveErrorImage(codeData.getUrl());
@@ -161,7 +154,6 @@ public class RemoteVerifyCode {
                     }
                 }
 
-//                codeUrlMap2.put(Long.parseLong(verifyQQ), buttons.getImageUrl());
                 List<Button> buttonList = buttons.getButtonList();
                 StringBuilder buttonBuilder = new StringBuilder();
                 for (int i = 0; i < buttonList.size(); i++) {
@@ -203,8 +195,10 @@ public class RemoteVerifyCode {
 //            String result = testService.callShituAPI(shituApiUrl, buttons.getImageUrl(), buttons.getImageText(), buttontext, "1")[0];
             result = "识别结果: " + result;
             result = "识别成功率：" + groupManager.verifyCount.getAccuracy() + "%" + "\n" + result;
-            if (StringUtils.isNotBlank(verifyQQ)) {
-                codeUrlMap2.put(Long.parseLong(verifyQQ), new VerifyCodeData(buttons.getImageText(), result, buttons.getImageUrl()));
+            if (StringUtils.isNotBlank(verifyQQ)){
+                codeUrlMap.put(Long.parseLong(verifyQQ), new VerifyCodeData(buttons.getImageText(), result, buttons.getImageUrl()));
+            }else{
+                codeUrlMap.put(bot.getBotId(), new VerifyCodeData(buttons.getImageText(), result, buttons.getImageUrl()));
             }
             if (bot.getBotConfig().getAutoVerifyModel() == 2) {
                 group.sendMessage((new MessageChain()).text(result));
@@ -294,6 +288,7 @@ public class RemoteVerifyCode {
             resultText = resultText.replaceAll("漏点", "请点");
             resultText = resultText.replaceAll("乘情", "表情");
             resultText = resultText.replaceAll("电鲸", "电脑");
+            resultText = resultText.replaceAll("电减", "电脑");
             resultText = resultText.replaceAll("乘击", "点击");
             resultText = resultText.replaceAll("请击", "点击");
             resultText = resultText.replaceAll("点请", "点击");
@@ -384,7 +379,6 @@ public class RemoteVerifyCode {
                             if (idx == 7) {
                                 idx = 1;
                             }
-                            answer = resultText.split("[第个]")[1];
                             answer = "序号" + idx;
                         } else if (recognitionResult.emojiList.size() == 3) {
                             if (matcher.find()) {
@@ -640,6 +634,7 @@ public class RemoteVerifyCode {
 //            return new String[] { message, data };
             List<String> emojiList = new ArrayList();
             if (data != null && !data.equals("空")) {
+                data = data.replaceAll("鸡","鸡头");
                 if (data.length() == 6) {
                     String segment1 = data.substring(0, 2);
                     String segment2 = data.substring(2, 4);

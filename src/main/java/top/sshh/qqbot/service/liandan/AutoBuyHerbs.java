@@ -298,7 +298,6 @@ public class AutoBuyHerbs {
             senderIds = {3889001741L}
     )
     public void 验证码判断(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-
         if (message.contains("https") && message.contains("qqbot")  && message.contains("" + bot.getBotId())) {
             BotConfig botConfig = bot.getBotConfig();
             boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
@@ -319,6 +318,7 @@ public class AutoBuyHerbs {
         boolean isAtSelf = isAtSelf(group,bot);
         if (isGroup && isAtSelf && botConfig.isStartAutoBuyHerbs() && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
                 message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
+            botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             if (message.contains("道友成功购买")) {
                 if(!this.autoBuyList.isEmpty()){
                     ProductPrice price = (ProductPrice)this.herbPackMap.get(((ProductPrice)this.autoBuyList.get(0)).getName());
@@ -375,6 +375,7 @@ public class AutoBuyHerbs {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
         if (isGroup && message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架")) {
+            botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             this.customPool.submit(() -> {
                 this.processMarketMessage(bot, group, message);
             });
@@ -487,12 +488,16 @@ public class AutoBuyHerbs {
     public void 定时查询坊市() {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
+//            if(botConfig.isStartAutoBuyHerbs()){
+//                if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L){
+//                    this.autoBuyList.clear();
+//                    botConfig.setStop(false);
+//                }
+//            }
             if (!botConfig.isStop() && this.autoBuyList.isEmpty() && botConfig.isStartAutoBuyHerbs()) {
                 long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
-
                 if(!makeDrugIndexList.isEmpty()){
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + makeDrugIndexList.get(drugIndex)));
-
                     if(drugIndex == makeDrugIndexList.size() - 1){
                         drugIndex = 0;
                     }else{
@@ -505,6 +510,7 @@ public class AutoBuyHerbs {
 
                     if (botConfig.getTaskStatusHerbs() < 8) {
                         try {
+                            bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
 
                             botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
                             noQueriedCount = 0;

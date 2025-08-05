@@ -125,6 +125,7 @@
 //            resultText = resultText.replaceAll("情点", "请点");
 //            resultText = resultText.replaceAll("漏点", "请点");
 //            resultText = resultText.replaceAll("乘情", "表情");
+//            resultText = resultText.replaceAll("表请", "表情");
 //            resultText = resultText.replaceAll("电鲸", "电脑");
 //            resultText = resultText.replaceAll("乘击", "点击");
 //            resultText = resultText.replaceAll("请击", "点击");
@@ -134,6 +135,7 @@
 //            resultText = resultText.replaceAll("表鲸", "表情");
 //            resultText = resultText.replaceAll("点表", "点击");
 //            resultText = resultText.replaceAll("鲸击", "点击");
+//            resultText = resultText.replaceAll("点五", "点击");
 //            if (StringUtils.isNotBlank(title) && StringUtils.isNotBlank(resultText)) {
 //                if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
 //                    Character targetChar = extractTargetChar(title);
