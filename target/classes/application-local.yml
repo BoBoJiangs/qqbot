@@ -5,12 +5,12 @@ xxGroupId: 690933736
 #  shitu-api-url: http://1.94.139.227:8848/shitu
 captcha:
   #主模型
-  detection-config: models/yolov4-tiny-dota2.cfg
-  detection-weights: models/yolov4-tiny-dota2_last.weights
-  #子模型
-  classification-config: models/darknet.cfg
-  classification-weights: models/darknet_last.weights
-#  shitu-api-url: http://116.205.232.32:8848/shitu
+#  detection-config: models/yolov4-tiny-dota2.cfg
+#  detection-weights: models/yolov4-tiny-dota2_last.weights
+#  #子模型
+#  classification-config: models/darknet.cfg
+#  classification-weights: models/darknet_last.weights
+#  shitu-api-url: http://113.45.9.127:8000/recognize
 
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
@@ -61,7 +61,7 @@ bot:
     enableAutoVerify: true
     #保存图片到本地
     enableSavePic: false
-    #自动验证模式 0：不验证 1：自动验证（不显示识别文字） 2:自动验证（显示识别文字）
+    #自动验证模式 0：不验证 1：自动验证(失败停止验证) 2:自动验证（不停止验证）
     autoVerifyModel: 2
     enableAutoTask: true
 

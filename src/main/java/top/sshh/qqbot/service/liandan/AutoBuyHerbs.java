@@ -74,12 +74,19 @@ public class AutoBuyHerbs {
                     resetPram();
                     botConfig.setStop(true);
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
-                    botConfig.setStartAutoBuyHerbs(true);
+                    botConfig.setAutoBuyHerbsMode(1);
+                    botConfig.setStartAuto(false);
+                    break;
+                case "开始全自动采购药材":
+                    resetPram();
+                    botConfig.setStop(true);
+                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+                    botConfig.setAutoBuyHerbsMode(2);
                     botConfig.setStartAuto(false);
                     break;
                 case "停止采购药材":
                     resetPram();
-                    botConfig.setStartAutoBuyHerbs(false);
+                    botConfig.setAutoBuyHerbsMode(0);
                     group.sendMessage((new MessageChain()).reply(messageId).text("停止采购"));
                     break;
 
@@ -118,7 +125,7 @@ public class AutoBuyHerbs {
     public void 药材背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        if (isGroup && message.contains("拥有数量") && message.contains("坊市数据") && botConfig.isStartAutoBuyHerbs()) {
+        if (isGroup && message.contains("拥有数量") && message.contains("坊市数据") && botConfig.getAutoBuyHerbsMode()!=0) {
             List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
             boolean hasNextPage = false;
             TextMessage textMessage = null;
@@ -302,7 +309,7 @@ public class AutoBuyHerbs {
             BotConfig botConfig = bot.getBotConfig();
             boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
             //出验证码跳过本页购买
-            if(botConfig.isStartAutoBuyHerbs() && isGroup){
+            if(botConfig.getAutoBuyHerbsMode()!=0 && isGroup){
                 this.autoBuyList.clear();
             }
 
@@ -316,7 +323,7 @@ public class AutoBuyHerbs {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         boolean isAtSelf = isAtSelf(group,bot);
-        if (isGroup && isAtSelf && botConfig.isStartAutoBuyHerbs() && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
+        if (isGroup && isAtSelf && botConfig.getAutoBuyHerbsMode()!=0 && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
                 message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             if (message.contains("道友成功购买")) {
@@ -339,9 +346,9 @@ public class AutoBuyHerbs {
 
             }
 
-            if(message.contains("今天已经很努力了")){
+            if(message.contains("今天已经很努力了") || message.contains("没钱还来买东西")){
                 botConfig.setStartAuto(false);
-                botConfig.setStartAutoBuyHerbs(false);
+                botConfig.setAutoBuyHerbsMode(0);
             }
 
             if(message.contains("未查询")){
@@ -469,7 +476,7 @@ public class AutoBuyHerbs {
             ProductPrice productPrice = (ProductPrice)var3.next();
 
             try {
-                if (botConfig.isStartAutoBuyHerbs()) {
+                if (botConfig.getAutoBuyHerbsMode()!=0) {
                     group.sendMessage((new MessageChain()).at("3889001741").text("坊市购买 " + productPrice.getCode()));
                 }
                 break;
@@ -488,13 +495,13 @@ public class AutoBuyHerbs {
     public void 定时查询坊市() {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
-//            if(botConfig.isStartAutoBuyHerbs()){
-//                if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L){
-//                    this.autoBuyList.clear();
-//                    botConfig.setStop(false);
-//                }
-//            }
-            if (!botConfig.isStop() && this.autoBuyList.isEmpty() && botConfig.isStartAutoBuyHerbs()) {
+            if(botConfig.getAutoBuyHerbsMode() == 2 || bot.getBotConfig().getAutoVerifyModel() == 2){
+                if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L){
+                    this.autoBuyList.clear();
+                    botConfig.setStop(false);
+                }
+            }
+            if (!botConfig.isStop() && this.autoBuyList.isEmpty() && botConfig.getAutoBuyHerbsMode()!=0) {
                 long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
                 if(!makeDrugIndexList.isEmpty()){
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + makeDrugIndexList.get(drugIndex)));

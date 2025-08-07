@@ -121,6 +121,7 @@
 //            mat = downloadImageToMat(imageUrl);
 //            RecognitionResult recognitionResult = recognizeCaptcha(mat);
 //            resultText = recognitionResult.result;
+//
 //            resultText = resultText.replaceAll("请点点", "请点击");
 //            resultText = resultText.replaceAll("情点", "请点");
 //            resultText = resultText.replaceAll("漏点", "请点");
@@ -136,6 +137,8 @@
 //            resultText = resultText.replaceAll("点表", "点击");
 //            resultText = resultText.replaceAll("鲸击", "点击");
 //            resultText = resultText.replaceAll("点五", "点击");
+//            resultText = resultText.replaceAll("击", "七");
+//            resultText = resultText.replaceAll("点七", "点击");
 //            if (StringUtils.isNotBlank(title) && StringUtils.isNotBlank(resultText)) {
 //                if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
 //                    Character targetChar = extractTargetChar(title);

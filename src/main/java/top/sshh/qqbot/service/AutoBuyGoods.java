@@ -258,7 +258,7 @@ public class AutoBuyGoods {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             if (botConfig.isEnableAutoBuyLowPrice() && StringUtils.isNotBlank(botConfig.getCommand())) {
-                if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 310000L){
+                if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L && bot.getBotConfig().getAutoVerifyModel() == 2){
                     this.autoBuyMap.put(bot.getBotId(), new CopyOnWriteArrayList<>());
                     bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text(bot.getBotConfig().getCommand()));
                 }
