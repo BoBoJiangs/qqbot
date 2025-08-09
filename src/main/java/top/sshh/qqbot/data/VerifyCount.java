@@ -21,4 +21,8 @@ public class VerifyCount implements Serializable {
         return Math.round(accuracy * 100.0);  // 保留两位
     }
 
+    public String getVerifyCountString(){
+        return "验证统计：" + errorCount + "/" + correctCount + " \n正确率：" + getAccuracy() + "%";
+    }
+
 }

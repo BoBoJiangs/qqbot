@@ -119,9 +119,15 @@ public class GroupManager {
         }else if (message.startsWith("添加自动验证") || message.startsWith("移除自动验证")) {
             addRemoveVerifyQQ(bot, group, message, messageId);
             saveTasksToFile();
-        }else if (message.startsWith("清空验证统计")) {
+        }else if (message.startsWith("重置验证统计")) {
             verifyCount = new VerifyCount();
             saveTasksToFile();
+            group.sendMessage((new MessageChain()).reply(messageId).text("重置成功"));
+        }else if (message.equals("验证统计")) {
+            if(verifyCount!=null){
+                group.sendMessage((new MessageChain()).reply(messageId).text(verifyCount.getVerifyCountString()));
+            }
+
         }
 
 

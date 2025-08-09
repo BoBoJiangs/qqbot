@@ -85,6 +85,7 @@ public class AutoBuyGoods {
 
             if ("停止捡漏".equals(message)) {
                 botConfig.setCommand("");
+                bot.getBotConfig().setAutoVerifyModel(1);
                 autoBuyMap.put(bot.getBotId(),new CopyOnWriteArrayList<>());
                 bot.getBotConfig().setEnableAutoBuyLowPrice(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止捡漏成功"));
@@ -94,8 +95,6 @@ public class AutoBuyGoods {
 
 
     }
-
-
 
 
 
@@ -251,7 +250,7 @@ public class AutoBuyGoods {
     }
 
     @Scheduled(
-            fixedDelay = 60000L,
+            fixedDelay = 10000L,
             initialDelay = 30000L
     )
     public void 超时执行刷新任务() {

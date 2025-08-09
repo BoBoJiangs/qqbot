@@ -5,7 +5,6 @@ import com.alibaba.fastjson2.annotation.JSONField;
 import java.io.Serializable;
 
 public class QQBotConfig implements Serializable {
-
     private int FamilyTaskStatus = 0;
     private String controlQQ;
     @JSONField(serialize = false)
@@ -31,6 +30,15 @@ public class QQBotConfig implements Serializable {
     private boolean enableMj = true;
 
     private boolean enableXsl = true;
+    private int recoveryPillType = 1;
+
+    public int getRecoveryPillType() {
+        return recoveryPillType;
+    }
+
+    public void setRecoveryPillType(int recoveryPillType) {
+        this.recoveryPillType = recoveryPillType;
+    }
 
     public boolean isEnableFamilyTask() {
         return enableFamilyTask;

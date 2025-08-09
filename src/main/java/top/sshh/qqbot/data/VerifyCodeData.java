@@ -6,11 +6,20 @@ public class VerifyCodeData implements Serializable {
     private String title;
     private String picText;
     private String url;
+    private String result;
 
     public VerifyCodeData(String title, String picText, String url) {
         this.title = title;
         this.picText = picText;
         this.url = url;
+    }
+
+    public String getResult() {
+        return result;
+    }
+
+    public void setResult(String result) {
+        this.result = result;
     }
 
     public String getTitle() {
