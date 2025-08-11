@@ -45,6 +45,7 @@ bot:
     xslPriceLimit: 1000
     botNumber: 5
     enableSelfTitle: false
+    #开启小北脚本
     enableXiaoBei: false
     #赠送灵石的数量 或者自己发送我要灵石**
     lingShiNum: 100
@@ -57,9 +58,11 @@ bot:
     enableSavePic: false
     enableAutoVerify: true
     #自动验证模式 0：不验证 1：自动验证(失败停止验证) 2:自动验证（不停止验证）
-    autoVerifyModel: 1
+    autoVerifyModel: 2
     #定时自动任务 7:30 修仙签到 宗门丹药领取 宗门任务 8：05 悬赏令 12:35 秘境
     enableAutoTask: true
+    #挑战模式 0:不自动执行 1：一口气打完9层 2：3，7，8层打完回血
+    challengeMode: 1
 
 spring:
   datasource:

@@ -77,6 +77,7 @@ public class AutoBuyGoods {
                     botConfig.setFrequency(frequency);
                     bot.getBotConfig().setEnableAutoBuyLowPrice(true);
                     autoBuyMap.put(bot.getBotId(),new CopyOnWriteArrayList<>());
+                    botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
                     bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text(action));
                 } catch (Exception e) {
                     group.sendMessage((new MessageChain()).text("格式不正确\n命令格式: 开始捡漏 频率2 坊市查看装备"));
@@ -85,7 +86,6 @@ public class AutoBuyGoods {
 
             if ("停止捡漏".equals(message)) {
                 botConfig.setCommand("");
-                bot.getBotConfig().setAutoVerifyModel(1);
                 autoBuyMap.put(bot.getBotId(),new CopyOnWriteArrayList<>());
                 bot.getBotConfig().setEnableAutoBuyLowPrice(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止捡漏成功"));

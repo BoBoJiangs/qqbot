@@ -73,6 +73,7 @@ public class AutoBuyHerbs {
                 case "开始采购药材":
                     resetPram();
                     botConfig.setStop(true);
+                    botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     botConfig.setAutoBuyHerbsMode(1);
                     botConfig.setStartAuto(false);
@@ -495,7 +496,7 @@ public class AutoBuyHerbs {
     public void 定时查询坊市() {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
-            if(botConfig.getAutoBuyHerbsMode() == 2 || bot.getBotConfig().getAutoVerifyModel() == 2){
+            if(botConfig.getAutoBuyHerbsMode() == 2 ){
                 if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L){
                     this.autoBuyList.clear();
                     botConfig.setStop(false);
@@ -518,7 +519,6 @@ public class AutoBuyHerbs {
                     if (botConfig.getTaskStatusHerbs() < 8) {
                         try {
                             bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
-
                             botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
                             noQueriedCount = 0;
                         } catch (Exception var6) {

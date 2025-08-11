@@ -73,7 +73,7 @@ public class TestService {
     private GroupManager groupManager;
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
-//    @Value("${captcha.shitu-url:#{null}}")
+    //    @Value("${captcha.shitu-url:#{null}}")
 //    private String shituApiUrl;
     @Value("${custom.shitu-api-url:#{null}}")
     private String shituApiUrl;
@@ -190,7 +190,6 @@ public class TestService {
             }
 
 
-
             if ("确认一键丹药炼金".equals(message)) {
                 botConfig.setCommand("确认一键丹药炼金");
                 bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("丹药背包"));
@@ -304,6 +303,23 @@ public class TestService {
                 botConfig.setEnableAutomaticReply(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
             }
+            if ("开启妖塔挑战".equals(message) && (
+                    botConfig.getChallengeMode() == 1 || botConfig.getChallengeMode() == 2)) {
+                bot.sendGroupMessage(botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("我的状态"));
+                if (botConfig.getChallengeMode() == 1) {
+                    botConfig.setChallengeMode(11);
+                } else {
+                    botConfig.setChallengeMode(21);
+                }
+            }
+            if ("停止妖塔挑战".equals(message)) {
+                if (botConfig.getChallengeMode() == 11 || botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 13) {
+                    botConfig.setChallengeMode(1);
+                } else if (botConfig.getChallengeMode() == 21 || botConfig.getChallengeMode() == 22 || botConfig.getChallengeMode() == 23) {
+                    botConfig.setChallengeMode(2);
+                }
+            }
+
 
             if ("关闭群管提醒".equals(message)) {
                 botConfig.setEnableAutomaticReply(false);
@@ -1162,13 +1178,13 @@ public class TestService {
 
     }
 
-    public  String[] callShituAPI(String shituApiUrl,String imageUrl, String titleText, String annu,String mode) {
+    public String[] callShituAPI(String shituApiUrl, String imageUrl, String titleText, String annu, String mode) {
         HttpURLConnection conn = null;
         annu = GuessIdiom.replaceEmojis(annu);
         try {
             String params = "URL=" + URLEncoder.encode(imageUrl, "UTF-8") + "&TEXT=" + URLEncoder.encode(titleText, "UTF-8") + "&Button=" + URLEncoder.encode(annu, "UTF-8");
             URL url = new URL(shituApiUrl);
-            conn = (HttpURLConnection)url.openConnection();
+            conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.87 Safari/537.36");
@@ -1229,7 +1245,7 @@ public class TestService {
             JSONObject jsonResponse = JSONObject.parseObject(var33);
             String message = jsonResponse.getString("message");
             String data = jsonResponse.getString("data");
-            return new String[] { message, data };
+            return new String[]{message, data};
         } catch (SocketTimeoutException ste) {
             log.warn("API读取超时: {}", ste.getMessage());
             String[] var29 = new String[]{"请求超时", "0"};
@@ -1263,6 +1279,8 @@ public class TestService {
             bot.getBotConfig().setStartScheduledHerbs(false);
             bot.getBotConfig().setLastExecuteTime(9223372036854175807L);
             bot.getBotConfig().setVerificationStatus("失败");
+            bot.getBotConfig().setEnableAutoBuyLowPrice(false);
+            bot.getBotConfig().setAutoBuyHerbsMode(0);
         }
 
         if (message.contains("https") && message.contains("qqbot") && (!message.contains("修仙信息") || !message.contains("统计信息") || !message.contains("道号")) && message.contains("" + bot.getBotId()) && (!message.contains("方向要求") || !message.contains("随机事件"))) {
@@ -1291,7 +1309,7 @@ public class TestService {
                 if (StringUtils.isNotBlank(shituApiUrl)) {
                     customPool.submit(new Runnable() {
                         public void run() {
-                            getPictureText(bot, botConfig, buttons,message,messageChain);
+                            getPictureText(bot, botConfig, buttons, message, messageChain);
                         }
                     });
 
@@ -1317,25 +1335,22 @@ public class TestService {
                 bot.getBotConfig().setVerificationStatus("");
                 if (!"批量上架药材".equals(bot.getBotConfig().getCommand())
                         && !"一键使用追捕令".equals(bot.getBotConfig().getCommand()) && !"一键使用次元之钥".equals(bot.getBotConfig().getCommand())) {
-                    if(!bot.getBotConfig().isEnableAutoBuyLowPrice()){
+                    if (!bot.getBotConfig().isEnableAutoBuyLowPrice()) {
                         group.sendMessage((new MessageChain()).text(bot.getBotConfig().getCommand()));
                     }
                 }
             } else if (StringUtils.isNotBlank(bot.getBotConfig().getCommand())) {
-                bot.getBotConfig().setCommand("");
+                if (!bot.getBotConfig().isEnableAutoBuyLowPrice()) {
+                    bot.getBotConfig().setCommand("");
+                }
                 bot.getBotConfig().setVerificationStatus("失败");
             }
         }
 
     }
 
-    private void getPictureText(Bot bot, BotConfig botConfig, Buttons buttons,String message,MessageChain messageChain) {
-//        if (buttons.getImageUrl().equals(botConfig.getLastVerificationContent()) || "失败".equals(botConfig.getVerificationStatus())) {
-//            bot.getGroup(xxGroupId).sendMessage((new MessageChain()).text("检测到上次验证失败 本次请手动点击！"));
-//            Utils.downLoadImage(buttons.getImageUrl(), "errorPic");
-//            showButtonMsg(bot, bot.getGroup(xxGroupId), 0, message, buttons, messageChain);
-//            return;
-//        }
+    private void getPictureText(Bot bot, BotConfig botConfig, Buttons buttons, String message, MessageChain messageChain) {
+
         botConfig.setLastVerificationContent(buttons.getImageUrl());
         List<Button> buttonList = buttons.getButtonList();
         StringBuilder buttontextBuilder = new StringBuilder();
@@ -1345,7 +1360,7 @@ public class TestService {
         }
 
         String buttontext = buttontextBuilder.length() > 0 ? buttontextBuilder.substring(0, buttontextBuilder.length() - 1) : "";
-        String[] shituResult = this.callShituAPI(shituApiUrl,buttons.getImageUrl(), buttons.getImageText(), buttontext,"2");
+        String[] shituResult = this.callShituAPI(shituApiUrl, buttons.getImageUrl(), buttons.getImageText(), buttontext, "2");
         String resultText = shituResult[0];
         String statusCode = shituResult[1];
         System.out.println("结果1：" + resultText + "\n结果2：" + statusCode);

@@ -910,89 +910,8 @@ public class XiaoBeiService {
 
     }
 
-    @Scheduled(
-            cron = "0 0 12 * * ?"
-    )
-    public void endAutoExploreTask() {
-        if (this.xbGroupId > 0L) {
-            BotFactory.getBots().values().forEach((bot) -> {
-                try {
-                    Group group = bot.getGroup(this.xbGroupId);
-                    if (group != null) {
-                        group.sendMessage((new MessageChain()).at("3889000417").text("结束自动探索"));
-                        log.info("已向群{}发送结束自动探索指令", this.xbGroupId);
-                    }
-                } catch (Exception var3) {
-                    log.error("发送结束自动探索指令失败", var3);
-                }
 
-            });
-        }
 
-    }
-
-    @Scheduled(
-            cron = "0 3 12 * * ?"
-    )
-    public void startAutoExploreTask() {
-        if (this.xbGroupId > 0L) {
-            BotFactory.getBots().values().forEach((bot) -> {
-                try {
-                    Group group = bot.getGroup(this.xbGroupId);
-                    if (group != null) {
-                        group.sendMessage((new MessageChain()).at("3889000417").text("开启自动探索"));
-                        log.info("已向群{}发送开启自动探索指令", this.xbGroupId);
-                    }
-                } catch (Exception var3) {
-                    log.error("发送开启自动探索指令失败", var3);
-                }
-
-            });
-        }
-
-    }
-
-    @Scheduled(
-            cron = "0 5 12 * * ?"
-    )
-    public void dailyCheckinTask() {
-        if (this.xbGroupId > 0L) {
-            BotFactory.getBots().values().forEach((bot) -> {
-                try {
-                    Group group = bot.getGroup(this.xbGroupId);
-                    if (group != null) {
-                        group.sendMessage((new MessageChain()).at("3889000417").text("打工"));
-                        log.info("已向群{}发送打卡指令", this.xbGroupId);
-                    }
-                } catch (Exception var3) {
-                    log.error("发送打卡指令失败", var3);
-                }
-
-            });
-        }
-
-    }
-
-    @Scheduled(
-            cron = "0 7 12 * * ?"
-    )
-    public void sendGiftTask() {
-        if (this.xbGroupId > 0L) {
-            BotFactory.getBots().values().forEach((bot) -> {
-                try {
-                    Group group = bot.getGroup(this.xbGroupId);
-                    if (group != null) {
-                        group.sendMessage((new MessageChain()).at("3889000417").text("赠送物品 金钱 2600000 KK1"));
-                        log.info("已向群{}发送赠送物品指令", this.xbGroupId);
-                    }
-                } catch (Exception var3) {
-                    log.error("发送赠送物品指令失败", var3);
-                }
-
-            });
-        }
-
-    }
 
     @Scheduled(
             cron = "0 31 12 * * *"

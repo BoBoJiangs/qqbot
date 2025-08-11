@@ -30,7 +30,11 @@ import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import static top.sshh.qqbot.service.utils.Utils.isAtSelf;
 
 @Component
 public class FamilyTask {
@@ -42,6 +46,7 @@ public class FamilyTask {
     };
     private static final String FILE_PATH = "./cache/field_remind_data.ser";
     Map<Long, Long> remindMap = new ConcurrentHashMap();
+    private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     @Value("${xxGroupId:0}")
     private long xxGroupId;
     @Autowired
@@ -194,12 +199,14 @@ public class FamilyTask {
         });
     }
 
+
+
     @GroupMessageHandler(
             senderIds = {3889001741L}
     )
     public void 宗门任务状态管理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isAtSelf = isAtSelf(message,bot,group);
+        boolean isAtSelf = isAtSelf(bot,group, message);
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         if (isAtSelf && isGroup) {
             if (message.contains("道友目前还没有宗门任务")) {
@@ -268,14 +275,164 @@ public class FamilyTask {
 
 
     }
-    private boolean isAtSelf(String message, Bot bot,Group group) {
-//        String botName = bot.getBotName();
-//        String cardName = group.getMember(bot.getBotId()).getCard();
-//        if(StringUtils.isNotBlank(cardName)){
-//            botName = cardName;
-//        }
-//        return message.contains("@" + bot.getBotId()) || message.contains("@" + botName);
-        return true;
+
+    @GroupMessageHandler(
+            senderIds = {3889001741L}
+    )
+    public void 妖塔状态(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
+        BotConfig botConfig = bot.getBotConfig();
+        if (group.getGroupId() == botConfig.getGroupId()) {
+            if (msg.contains("气血") && msg.contains("真元") && msg.contains("道号") && (botConfig.getChallengeMode() == 11 || botConfig.getChallengeMode() == 21)) {
+                String[] lines = msg.split("\\n");
+                String daoHao = "";
+                double currentHP = (double)0.0F;
+                double maxHP = (double)0.0F;
+                double zhenYuan = (double)0.0F;
+                boolean hpFound = false;
+                Pattern daoHaoPattern = Pattern.compile("道号\\s*：\\s*(\\S+)");
+                Pattern hpPattern = Pattern.compile("气血\\s*:\\s*([\\d\\.]+)(?:亿)?\\s*/\\s*([\\d\\.]+)(?:亿)?");
+                Pattern zyPattern = Pattern.compile("真元\\s*:\\s*([\\d\\.]+)%");
+
+                for(String line : lines) {
+                    Matcher daoHaoMatcher = daoHaoPattern.matcher(line);
+                    if (daoHaoMatcher.find()) {
+                        daoHao = daoHaoMatcher.group(1);
+                    }
+
+                    Matcher hpMatcher = hpPattern.matcher(line);
+                    if (hpMatcher.find()) {
+                        currentHP = this.parseValue(hpMatcher.group(1));
+                        maxHP = this.parseValue(hpMatcher.group(2));
+                        hpFound = true;
+                    }
+
+                    Matcher zyMatcher = zyPattern.matcher(line);
+                    if (zyMatcher.find()) {
+                        zhenYuan = Double.parseDouble(zyMatcher.group(1));
+                    }
+                }
+
+                if (!hpFound) {
+                    System.out.println("未找到气血数据");
+                    return;
+                }
+
+                double hpPercentage = maxHP > (double)0.0F ? currentHP / maxHP * (double)100.0F : (double)0.0F;
+                if (hpPercentage > 0.8 && zhenYuan > (double)300.0F) {
+                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                    if (botConfig.getChallengeMode() == 11) {
+                        botConfig.setChallengeMode(12);
+                    } else {
+                        botConfig.setChallengeMode(22);
+                    }
+                } else {
+                    xiuXi(bot, group);
+                }
+            }
+
+            if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22) && msg.contains("第") && msg.contains("层")) {
+                if (msg.contains("第2层")) {
+                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔强行挑战"));
+                } else if (!msg.contains("第3层") && !msg.contains("第7层") && !msg.contains("第8层")) {
+                    if (!msg.contains("第9层") && !msg.contains("已经没有道友可以和无上仙尊匹敌")) {
+                        if (!msg.contains("第1层") && !msg.contains("第4层") && !msg.contains("第5层") && !msg.contains("第6层")) {
+                            return;
+                        }
+
+                        group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                    } else {
+                        if (botConfig.getCultivationMode() == 2) {
+                            group.sendMessage((new MessageChain()).at("3889001741").text(" 闭关"));
+                        } else if (botConfig.getCultivationMode() == 3) {
+                            group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门闭关"));
+                        }
+
+                        if (botConfig.getChallengeMode() == 12) {
+                            botConfig.setChallengeMode(1);
+                        } else {
+                            botConfig.setChallengeMode(2);
+                        }
+
+                        botConfig.setCommand("");
+                    }
+                } else if (botConfig.getChallengeMode() == 22) {
+                    xiuXi(bot, group);
+                } else {
+                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                }
+            }
+
+            if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22) && msg.contains("大能对你提交的答案很满意，让你顺利的通过了")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+            }
+
+            if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22) && msg.contains("道友的上一条指令还没执行完，稍等一会！")) {
+                scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔")), 1L, TimeUnit.MINUTES);
+            }
+
+            if ((botConfig.getChallengeMode() == 13 || botConfig.getChallengeMode() == 23) && (msg.contains("闭关结束") || msg.contains("闭关结算") || msg.contains("出关捷报"))) {
+                if (botConfig.getCultivationMode() == 2) {
+                    group.sendMessage((new MessageChain()).at("3889001741").text(" 闭关"));
+                } else if (botConfig.getCultivationMode() == 3) {
+                    group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门闭关"));
+                    botConfig.setCommand(" 宗门闭关");
+                }
+
+                try {
+                    Thread.sleep(3000L);
+                } catch (InterruptedException var27) {
+                }
+
+                group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                if (botConfig.getChallengeMode() == 13) {
+                    botConfig.setChallengeMode(12);
+                } else {
+                    botConfig.setChallengeMode(22);
+                }
+            }
+
+            if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22 || botConfig.getChallengeMode() == 13 || botConfig.getChallengeMode() == 23) && msg.contains("宗门系统繁忙，请稍后再试。")) {
+                long delaySeconds = ThreadLocalRandom.current().nextLong(5L, 60L);
+                String text = botConfig.getCommand();
+                scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(text)), delaySeconds, TimeUnit.SECONDS);
+            }
+
+            if ((botConfig.getChallengeMode() == 1 || botConfig.getChallengeMode() == 2) && msg.contains("宗门系统繁忙，请稍后再试。")) {
+                long delaySeconds = ThreadLocalRandom.current().nextLong(5L, 60L);
+                scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门闭关")), delaySeconds, TimeUnit.SECONDS);
+            }
+        }
+
+    }
+
+    private double parseValue(String valueStr) {
+        return valueStr.contains("亿") ? Double.parseDouble(valueStr.replace("亿", "")) * (double)1.0E8F : Double.parseDouble(valueStr);
+    }
+
+    private static void xiuXi(Bot bot, Group group) {
+        BotConfig botConfig = bot.getBotConfig();
+        if (botConfig.getCultivationMode() == 2) {
+            group.sendMessage((new MessageChain()).at("3889001741").text(" 闭关"));
+            if (botConfig.getChallengeMode() == 11) {
+                botConfig.setChallengeMode(13);
+            } else {
+                botConfig.setChallengeMode(23);
+            }
+
+            scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(" 出关")), 6L, TimeUnit.MINUTES);
+        } else if (botConfig.getCultivationMode() == 3) {
+            group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门闭关"));
+            botConfig.setCommand(" 宗门闭关");
+            if (botConfig.getChallengeMode() == 11) {
+                botConfig.setChallengeMode(13);
+            } else {
+                botConfig.setChallengeMode(23);
+            }
+
+            scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门出关")), 6L, TimeUnit.MINUTES);
+            botConfig.setCommand(" 宗门出关");
+        }
+
     }
 
     @GroupMessageHandler(
@@ -284,7 +441,7 @@ public class FamilyTask {
     public void 灵田领取结果(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
-        boolean isAtSelf = isAtSelf(message,bot,group);
+        boolean isAtSelf = isAtSelf(bot,group,message);
         if (isGroup && isAtSelf) {
             if (message.contains("灵田还不能收取") || message.contains("道友的灵田灵气未满，尚需孕育")) {
                 String[] parts = message.split("：|小时");
@@ -365,7 +522,7 @@ public class FamilyTask {
             if (message.contains("你的灵石还不够呢")) {
                 botConfig.setStartAutoLingG(false);
             } else {
-                boolean isAtSelf = isAtSelf(message,bot,group);
+                boolean isAtSelf = isAtSelf(bot,group,message);
                 if (isAtSelf && message.contains("逆天之行") && message.contains("新的灵根为")) {
                     if (!message.contains("异世界之力") && !message.contains("机械核心")) {
                         group.sendMessage((new MessageChain()).at("3889001741").text("重入仙途"));
@@ -427,6 +584,25 @@ public class FamilyTask {
             }
 
         }
+    }
+
+    @Scheduled(
+            cron = "0 10 20 ? * SUN",
+            zone = "Asia/Shanghai"
+    )
+    public void 挑战妖塔() throws InterruptedException {
+        for(Bot bot : BotFactory.getBots().values()) {
+            BotConfig config = bot.getBotConfig();
+            if (config.getChallengeMode() == 1 || config.getChallengeMode() == 2) {
+                bot.sendGroupMessage(config.getGroupId(), (new MessageChain()).at("3889001741").text(" 我的状态"));
+                if (config.getChallengeMode() == 1) {
+                    config.setChallengeMode(11);
+                } else {
+                    config.setChallengeMode(21);
+                }
+            }
+        }
+
     }
 
 

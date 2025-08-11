@@ -84,7 +84,7 @@ public class RemoteVerifyCode {
 
         if (bot.getBotConfig().getAutoVerifyModel() != 0 && isSelfGroup && buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13) {
             String verifyQQ = message.split("at_tinyid=")[1].split("\\)")[0];
-            if(bot.getBotId() == Long.parseLong(verifyQQ)){
+            if (bot.getBotId() == Long.parseLong(verifyQQ)) {
                 String regex = "https?://[^\\s\\)]+";
                 Pattern pattern = Pattern.compile(regex);
                 Matcher matcher = pattern.matcher(message);
@@ -96,8 +96,8 @@ public class RemoteVerifyCode {
                 if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
                     VerifyCodeData codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
                     if (buttons.getImageUrl().equals(codeData.getUrl())) {
-                        verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, "",codeData.getPicText());
-                        if(bot.getBotConfig().getAutoVerifyModel() == 1){
+                        if (bot.getBotConfig().getAutoVerifyModel() == 1) {
+                            verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, "", codeData.getPicText());
                             return;
                         }
 
@@ -118,13 +118,12 @@ public class RemoteVerifyCode {
 
                 customPool.submit(new Runnable() {
                     public void run() {
-                        if(StringUtils.isNotBlank(shituApiUrl)){
+                        if (StringUtils.isNotBlank(shituApiUrl)) {
                             autoVerifyCode(bot, group, messageChain, message, messageId, buttons, "");
                         }
                     }
                 });
             }
-
 
 
         }
@@ -151,7 +150,7 @@ public class RemoteVerifyCode {
                 if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
                     VerifyCodeData codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
                     if (buttons.getImageUrl().equals(codeData.getUrl())) {
-                        saveErrorImage(codeData.getUrl(),codeData.getTitle(),codeData.getPicText());
+                        saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getPicText());
                         sendFailMessage(bot, message, buttons, messageChain, codeData.getPicText());
                         bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("自动验证失败，请手动验证"));
                         return;
@@ -172,7 +171,7 @@ public class RemoteVerifyCode {
 
                 customPool.submit(new Runnable() {
                     public void run() {
-                        if(StringUtils.isNotBlank(shituApiUrl)){
+                        if (StringUtils.isNotBlank(shituApiUrl)) {
                             autoVerifyCode(bot, group, messageChain, message, messageId, buttons, verifyQQ);
                         }
 
@@ -197,14 +196,14 @@ public class RemoteVerifyCode {
             String result = recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText());
             result = "识别结果: " + result;
             result = "识别成功率：" + groupManager.verifyCount.getAccuracy() + "%" + "\n" + result;
-            if (StringUtils.isNotBlank(verifyQQ)){
+            if (StringUtils.isNotBlank(verifyQQ)) {
                 codeUrlMap.put(Long.parseLong(verifyQQ), new VerifyCodeData(buttons.getImageText(), result, buttons.getImageUrl()));
-            }else{
+            } else {
                 codeUrlMap.put(bot.getBotId(), new VerifyCodeData(buttons.getImageText(), result, buttons.getImageUrl()));
             }
-            if (StringUtils.isNotBlank(verifyQQ)) {
-                group.sendMessage((new MessageChain()).text(result));
-            }
+//            if (StringUtils.isNotBlank(verifyQQ)) {
+//                group.sendMessage((new MessageChain()).text(result));
+//            }
             if (result.contains("识别失败")) {
                 verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, verifyQQ, result);
                 return;
@@ -264,20 +263,20 @@ public class RemoteVerifyCode {
             if (!isSuccess) {
                 verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, verifyQQ, result);
             } else {
-                groupManager.verifyCount.correctCount++;
+                groupManager.verifyCount.addCorrect();
             }
         } catch (Exception e) {
             VerifyCodeData codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
-            saveErrorImage(codeData.getUrl(),codeData.getTitle(),codeData.getPicText());
+            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getPicText());
             testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
             e.printStackTrace();
         }
     }
 
     /**
-     * 识别错误后尝试点击按钮
+     * 识别错误后尝试随机点击一个按钮
      */
-    private void errorClickButton(Buttons buttons,Bot bot,Group group,String resultText){
+    private void errorClickButton(Buttons buttons, Bot bot, Group group, String resultText) {
         String key = "识别结果:";
         int index = resultText.indexOf(key);
         String result = "";
@@ -295,17 +294,17 @@ public class RemoteVerifyCode {
             Button maxNumberButton = null;
             for (Button button : buttons.getButtonList()) {
                 if (StringUtils.isNumeric(button.getLabel())) {
-                    if(maxNumberButton == null){
+                    if (maxNumberButton == null) {
                         maxNumberButton = button;
-                    }else{
-                        if(Integer.parseInt(button.getLabel()) > Integer.parseInt(maxNumberButton.getLabel())){
+                    } else {
+                        if (Integer.parseInt(button.getLabel()) > Integer.parseInt(maxNumberButton.getLabel())) {
                             maxNumberButton = button;
                         }
                     }
                 }
 
             }
-            if(maxNumberButton!=null){
+            if (maxNumberButton != null) {
                 logger.info("点击最大数字按钮：" + maxNumberButton.getLabel());
                 bot.clickKeyboardButton(
                         group.getGroupId(),
@@ -321,7 +320,6 @@ public class RemoteVerifyCode {
     }
 
 
-
     public String recognizeVerifyCode(String imageUrl, String title) {
         System.out.println("开始识别验证码: " + imageUrl);
 
@@ -329,9 +327,9 @@ public class RemoteVerifyCode {
         String resultText = "";
         try {
             RecognitionResult recognitionResult;
-            if("http://113.45.9.127:8000/".equals(shituApiUrl)){
+            if ("http://113.45.9.127:8000/".equals(shituApiUrl)) {
                 recognitionResult = callShituAPI(shituApiUrl, imageUrl);
-            }else{
+            } else {
                 recognitionResult = callShituAPI(shituApiUrl, imageUrl, title, "", "1");
             }
 
@@ -340,18 +338,15 @@ public class RemoteVerifyCode {
             resultText = resultText.replaceAll("情点", "请点");
             resultText = resultText.replaceAll("漏点", "请点");
             resultText = resultText.replaceAll("乘情", "表情");
-            resultText = resultText.replaceAll("电鲸", "电脑");
-            resultText = resultText.replaceAll("电减", "电脑");
             resultText = resultText.replaceAll("乘击", "点击");
             resultText = resultText.replaceAll("请击", "点击");
             resultText = resultText.replaceAll("点请", "点击");
             resultText = resultText.replaceAll("图4", "图中");
             resultText = resultText.replaceAll("表蟹", "表情");
             resultText = resultText.replaceAll("表鲸", "表情");
+            resultText = resultText.replaceAll("表请", "表情");
             resultText = resultText.replaceAll("点表", "点击");
             resultText = resultText.replaceAll("鲸击", "点击");
-            resultText = resultText.replaceAll("击", "七");
-            resultText = resultText.replaceAll("点七", "点击");
             if (StringUtils.isNotBlank(title) && StringUtils.isNotBlank(resultText)) {
                 if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
                     Character targetChar = extractTargetChar(title);
@@ -394,6 +389,8 @@ public class RemoteVerifyCode {
                                 answer = "电池";
                             } else if (resultText.length() == 5 && "电".equals(secondLastStr) && "沙".equals(lastStr)) {
                                 answer = "电池";
+                            } else if (resultText.length() == 5 && "电".equals(secondLastStr)) {
+                                answer = "电池";
                             } else if (resultText.length() == 5 && ("苹".equals(secondLastStr) || "果".equals(lastStr))) {
                                 answer = "苹果";
                             } else if (resultText.length() == 4) {
@@ -420,7 +417,7 @@ public class RemoteVerifyCode {
                             answer = recognitionResult.emojiList.get(idx);
                         }
                     } else if (resultText.contains("表") && resultText.contains("情")) {
-                        int idx = 0;
+                        int idx = 1;
                         Matcher matcher = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(resultText);
                         if (recognitionResult.emojiList.isEmpty()) {
                             if (matcher.find()) {
@@ -465,9 +462,9 @@ public class RemoteVerifyCode {
             if (StringUtils.isEmpty(answer)) {
                 answer = "识别失败，请手动点击验证码";
             }
-            if(recognitionResult.emojiList!=null && !recognitionResult.emojiList.isEmpty()){
+            if (recognitionResult.emojiList != null && !recognitionResult.emojiList.isEmpty()) {
                 StringBuilder emojis = new StringBuilder();
-                for (String emoji : recognitionResult.emojiList){
+                for (String emoji : recognitionResult.emojiList) {
                     emojis.append(emoji);
                 }
                 resultText = resultText + "\n识别表情：" + emojis;
@@ -480,22 +477,21 @@ public class RemoteVerifyCode {
     }
 
 
-
     private void verifyFailSendMessage(Bot bot, Group group, MessageChain messageChain, String message, Integer messageId, Buttons buttons, String verifyQQ, String result) {
 //        saveErrorImage(buttons.getImageUrl());
 
         if (StringUtils.isEmpty(verifyQQ)) {
-            if(bot.getBotConfig().getAutoVerifyModel() != 2){
+            if (bot.getBotConfig().getAutoVerifyModel() != 2) {
                 testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
                 bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
-            }else{
-                errorClickButton(buttons,bot,group,result);
+            } else {
+                errorClickButton(buttons, bot, group, result);
             }
             VerifyCodeData codeData = codeUrlMap.get(bot.getBotId());
-            saveErrorImage(codeData.getUrl(),codeData.getTitle(),codeData.getPicText());
+            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getPicText());
         } else {
             VerifyCodeData codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
-            saveErrorImage(codeData.getUrl(),codeData.getTitle(),codeData.getPicText());
+            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getPicText());
             bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("自动验证失败，请手动验证"));
         }
         sendFailMessage(bot, message, buttons, messageChain, result);
@@ -523,46 +519,52 @@ public class RemoteVerifyCode {
 
     }
 
-    public void saveErrorImage(String url,String question,String answer) {
-//        try {
-//            // 生成 URL 的 MD5 作为唯一文件名
-//            String hash = md5(url);
-//            // 确保目录存在
-//            File dir = new File("errorPic");
-//            if (!dir.exists()) {
-//                dir.mkdirs();
-//            }
-//
-//            // 如果已经存在同名文件，则直接返回
-//            File file = new File(dir, "error_" + hash + ".jpg");
-//            if (file.exists()) {
-//                return;
-//            }
-//
-//            // 下载图片
-//            BufferedImage img = downloadImage(url);
-//
-//            // 检查文件数量，超过 500 则删除最旧的文件
-//            File[] files = dir.listFiles();
-//            if (files != null && files.length > 500) {
-//                Arrays.sort(files, Comparator.comparingLong(File::lastModified));
-//                files[0].delete();
-//            }
-//
-//            // 保存图片
-//            ImageIO.write(img, "jpg", file);
-//            groupManager.verifyCount.errorCount++;
-//        } catch (Exception e) {
-//            e.printStackTrace();
-//        }
-        if("http://113.45.9.127:8000/".equals(shituApiUrl)){
+    public void saveErrorImage(String url, String question, String answer) {
+
+        if ("http://113.45.9.127:8000/".equals(shituApiUrl)) {
             // 下载网络图片
             byte[] imageBytes = null;
             try {
                 imageBytes = downloadImageBytes(url);
                 // 上传到服务器
                 String hash = md5(url);
-                uploadMultipart(shituApiUrl+"report_error", imageBytes, "error_" + hash + ".jpg", question, answer);
+                String returnMsg = uploadMultipart(shituApiUrl + "report_error", imageBytes, "error_" + hash + ".jpg", question, answer);
+                RecognitionResult result = JSON.parseObject(returnMsg, RecognitionResult.class);
+                if (result.msg.contains("已保存")) {
+                    groupManager.verifyCount.addError();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        } else {
+            try {
+                // 生成 URL 的 MD5 作为唯一文件名
+                String hash = md5(url);
+                // 确保目录存在
+                File dir = new File("errorPic");
+                if (!dir.exists()) {
+                    dir.mkdirs();
+                }
+
+                // 如果已经存在同名文件，则直接返回
+                File file = new File(dir, "error_" + hash + ".jpg");
+                if (file.exists()) {
+                    return;
+                }
+
+                // 下载图片
+                BufferedImage img = downloadImage(url);
+
+                // 检查文件数量，超过 500 则删除最旧的文件
+                File[] files = dir.listFiles();
+                if (files != null && files.length > 500) {
+                    Arrays.sort(files, Comparator.comparingLong(File::lastModified));
+                    files[0].delete();
+                }
+
+                // 保存图片
+                ImageIO.write(img, "jpg", file);
+                groupManager.verifyCount.addError();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -657,6 +659,7 @@ public class RemoteVerifyCode {
         public List<String> emojiList;
         public String result;
         public int code;
+        public String msg;
 
         public RecognitionResult(List<String> list, String r) {
             this.emojiList = list;
@@ -669,8 +672,8 @@ public class RemoteVerifyCode {
         annu = GuessIdiom.replaceEmojis(annu);
         try {
             String params = "URL=" + URLEncoder.encode(imageUrl, "UTF-8") + "&TEXT=" + URLEncoder.encode(titleText, "UTF-8") + "&Button=" + URLEncoder.encode(annu, "UTF-8") + "&Mode=" + URLEncoder.encode(mode, "UTF-8");
-            URL url = new URL(shituApiUrl+"shitu");
-            conn = (HttpURLConnection)url.openConnection();
+            URL url = new URL(shituApiUrl + "shitu");
+            conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
             conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.87 Safari/537.36");
@@ -704,7 +707,7 @@ public class RemoteVerifyCode {
             if (status != 200) {
                 logger.warn("API返回非200状态: {}", status);
                 String[] var32 = new String[]{"服务错误", String.valueOf(status)};
-                return new RecognitionResult(new ArrayList<>(),"服务错误");
+                return new RecognitionResult(new ArrayList<>(), "服务错误");
             }
 
             StringBuilder responseBuilder = new StringBuilder();
@@ -734,7 +737,7 @@ public class RemoteVerifyCode {
 //            return new String[] { message, data };
             List<String> emojiList = new ArrayList();
             if (data != null && !data.equals("空")) {
-                if (data.length() >=6) {
+                if (data.length() >= 6) {
                     String segment1 = data.substring(0, 2);
                     String segment2 = data.substring(2, 4);
                     String segment3 = data.substring(4, 6);
@@ -747,11 +750,11 @@ public class RemoteVerifyCode {
         } catch (SocketTimeoutException ste) {
             logger.warn("API读取超时: {}", ste.getMessage());
             String[] var29 = new String[]{"请求超时", "0"};
-            return new RemoteVerifyCode.RecognitionResult(new ArrayList<>(),"请求超时");
+            return new RemoteVerifyCode.RecognitionResult(new ArrayList<>(), "请求超时");
         } catch (Exception e) {
             logger.error("API调用异常: {}", e.getMessage());
             String[] url = new String[]{"请求异常", "0"};
-            return new RemoteVerifyCode.RecognitionResult(new ArrayList<>(),"请求异常");
+            return new RemoteVerifyCode.RecognitionResult(new ArrayList<>(), "请求异常");
         } finally {
             if (conn != null) {
                 conn.disconnect();
@@ -764,7 +767,7 @@ public class RemoteVerifyCode {
     public RecognitionResult callShituAPI(String shituApiUrl, String imageUrl) {
         HttpURLConnection conn = null;
         try {
-            URL url = new URL(shituApiUrl+"recognize");
+            URL url = new URL(shituApiUrl + "recognize");
             conn = (HttpURLConnection) url.openConnection();
 
             conn.setRequestMethod("POST");
@@ -790,16 +793,16 @@ public class RemoteVerifyCode {
                 }
             }
             logger.info("API响应: {}", response);
-            RecognitionResult result = JSON.parseObject(response.toString(),RecognitionResult.class);
+            RecognitionResult result = JSON.parseObject(response.toString(), RecognitionResult.class);
             return result;
         } catch (SocketTimeoutException ste) {
             logger.warn("API读取超时: {}", ste.getMessage());
             String[] var29 = new String[]{"请求超时", "0"};
-            return new RemoteVerifyCode.RecognitionResult(new ArrayList<>(),"请求超时");
+            return new RemoteVerifyCode.RecognitionResult(new ArrayList<>(), "请求超时");
         } catch (Exception e) {
             logger.error("API调用异常: {}", e.getMessage());
             String[] url = new String[]{"请求异常", "0"};
-            return new RemoteVerifyCode.RecognitionResult(new ArrayList<>(),"请求异常");
+            return new RemoteVerifyCode.RecognitionResult(new ArrayList<>(), "请求异常");
         } finally {
             if (conn != null) {
                 conn.disconnect();
@@ -823,7 +826,7 @@ public class RemoteVerifyCode {
     }
 
     // 发送 multipart/form-data 请求
-    private static void uploadMultipart(String serverUrl, byte[] imageBytes, String fileName, String question, String answer) throws IOException {
+    private static String uploadMultipart(String serverUrl, byte[] imageBytes, String fileName, String question, String answer) throws IOException {
         String boundary = "----JavaFormBoundary" + System.currentTimeMillis();
         String lineEnd = "\r\n";
         String twoHyphens = "--";
@@ -871,7 +874,9 @@ public class RemoteVerifyCode {
         InputStream is = (responseCode == 200) ? conn.getInputStream() : conn.getErrorStream();
         String response = readStream(is);
         System.out.println("服务器响应: " + response);
+        return response;
     }
+
     private static String readStream(InputStream is) throws IOException {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         byte[] buffer = new byte[4096];
