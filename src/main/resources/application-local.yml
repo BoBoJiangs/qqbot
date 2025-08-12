@@ -1,6 +1,6 @@
 xbGroupId: 993970673
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
-xxGroupId: 690933736
+#xxGroupId: 690933736
 captcha:
    shitu-api-url: http://113.45.9.127:8000/
 #   shitu-api-url: http://116:205:232:32:8848/shitu
@@ -13,7 +13,7 @@ bot:
 #  - type: ws-reverse
 #    url: ws://0.0.0.0:8080
     #修炼+任务群
-    groupId: 1011466037
+    groupId: 690933736
     accessToken: 1024*1024*1024
     #    大号qq
     controlQQ: 819463350
@@ -28,15 +28,15 @@ bot:
     #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
     enableXslPriceQuery: false
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-    cultivationMode: 0
+    cultivationMode: 3
     #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认） 4时长最短 5修为最高
     rewardMode: 5
     #宗门任务1：邪修和查抄（默认） 2：所有任务
     sectMode: 2
     #自动灵田结算（默认 true）
-    enableAutoField: false
+    enableAutoField: true
     #自动秘境结算 （默认 true）
-    enableAutoSecret: false
+    enableAutoSecret: true
     #无偿双修
     enableAutoRepair: false
     #群管提醒
@@ -56,13 +56,14 @@ bot:
     forwardMode: 1
     #保存图片到本地
     enableSavePic: false
-    enableAutoVerify: true
+    enableAutoVerify: false
     #自动验证模式 0：不验证 1：自动验证(失败停止验证) 2:自动验证（不停止验证）
     autoVerifyModel: 2
     #定时自动任务 7:30 修仙签到 宗门丹药领取 宗门任务 8：05 悬赏令 12:35 秘境
     enableAutoTask: true
     #挑战模式 0:不自动执行 1：一口气打完9层 2：3，7，8层打完回血
     challengeMode: 1
+    enableXyHerbClass: true
 
 spring:
   datasource:

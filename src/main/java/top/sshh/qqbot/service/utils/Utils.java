@@ -15,13 +15,15 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 
 public class Utils {
-    public static boolean isAtSelf(Bot bot, Group group) {
-
-        return  group.getGroupId() == bot.getBotConfig().getGroupId();
-    }
-    public static boolean isAtSelf(Bot bot, Group group, String message) {
-
-        return  group.getGroupId() == bot.getBotConfig().getGroupId() || message.contains(""+bot.getBotId()) ;
+//    public static boolean isAtSelf(Bot bot, Group group) {
+//
+//        return  group.getGroupId() == bot.getBotConfig().getGroupId();
+//    }
+    public static boolean isAtSelf(Bot bot, Group group, String message,long xxGroupId) {
+        if(xxGroupId == 0){
+            return message.contains(""+bot.getBotId()) || message.contains("@"+bot.getBotName()) ;
+        }
+        return group.getGroupId() == bot.getBotConfig().getGroupId() || message.contains(""+bot.getBotId()) ;
     }
     public static Group getRemindGroup(Bot bot,long xxGroupId) {
         long groupId = bot.getBotConfig().getGroupId();
@@ -41,7 +43,7 @@ public class Utils {
 //        }
 //    }
     public static void forwardMessage(Bot bot,long xxGroupId,  MessageChain messageChain){
-        if(bot.getBotConfig().isEnableForwardMessage()){
+        if(bot.getBotConfig().isEnableForwardMessage() && xxGroupId>0){
             String message = String.valueOf(messageChain.get(messageChain.size()-1));
             if(StringUtils.isNotBlank(message)){
                 getRemindGroup(bot,xxGroupId).sendMessage(new MessageChain().text(message));

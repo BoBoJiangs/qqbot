@@ -22,8 +22,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.ProductPrice;
-import top.sshh.qqbot.service.liandan.AutoAlchemyTask;
-import top.sshh.qqbot.service.liandan.DanCalculator;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -105,7 +103,7 @@ public class AutoBuyGoods {
     public void 成功购买物品(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
-        boolean isAtSelf = isAtSelf(bot,group);
+        boolean isAtSelf = isAtSelf(bot,group,message,xxGroupId);
         if (isGroup && isAtSelf && botConfig.isEnableAutoBuyLowPrice() && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
                 message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());

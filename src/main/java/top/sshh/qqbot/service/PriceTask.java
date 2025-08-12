@@ -21,6 +21,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.BountyInfo;
 import top.sshh.qqbot.data.GuessIdiom;
@@ -49,6 +50,7 @@ public class PriceTask {
     public static  String targetDir = "./";
     @Autowired
     private GroupManager groupManager;
+
     public PriceTask() {
 
     }
@@ -58,6 +60,15 @@ public class PriceTask {
         this.readPrice();
     }
 
+    @Scheduled(
+            initialDelay = 60 * 1000,  // 首次延迟1分钟
+            fixedRate = 2 * 60 * 60 * 1000   // 后续每6小时执行一次（21,600,000毫秒）
+    )
+    public void autoSaveTasks() {
+        this.savePrice();
+        logger.debug("同步坊市价格成功");
+    }
+
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
     )
@@ -65,7 +76,8 @@ public class PriceTask {
         BotConfig botConfig = bot.getBotConfig();
         message = message.trim();
         if (message.equals("同步坊市价格") || message.equals("同步数据") ||message.equals("同步坊市数据")) {
-            this.savePrice(group);
+            this.savePrice();
+            group.sendMessage((new MessageChain()).text("同步坊市价格成功"));
         }
 
     }
@@ -99,7 +111,7 @@ public class PriceTask {
 
     }
 
-    public void savePrice(Group group) {
+    public void savePrice() {
         try {
             BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(targetDir+"properties/坊市价格.txt"), StandardCharsets.UTF_8));
 
@@ -109,9 +121,6 @@ public class PriceTask {
                     String jsonStr = JSON.toJSONString(personList);
                     writer.write(jsonStr);
                     writer.flush();
-                    if (group != null) {
-                        group.sendMessage((new MessageChain()).text("同步坊市价格成功"));
-                    }
 
                     System.out.println("同步坊市价格成功！");
                 }
