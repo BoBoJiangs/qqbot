@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import com.zhuangxv.bot.core.Group;
 
 import javax.annotation.PostConstruct;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -44,8 +45,12 @@ public class XiaoYueHerbClass {
     @PostConstruct
     public void init() throws IOException {
         // 1. 读取文件
-        loadMedicines("xiaoyue/medicines.txt");
-        loadSpecialMedicines("xiaoyue/special.txt");
+        File file = new File("xiaoyue/medicines.txt");
+        if(file.exists()){
+            loadMedicines("xiaoyue/medicines.txt");
+            loadSpecialMedicines("xiaoyue/special.txt");
+        }
+
     }
 
     public void showHerbalClass(String[] records,Group group,Integer messageId) throws IOException {

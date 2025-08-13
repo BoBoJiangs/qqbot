@@ -28,7 +28,6 @@ top/sshh/qqbot/data/Dan.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$4.class
 top/sshh/qqbot/service/GroupManager$10.class
 top/sshh/qqbot/service/ProductPriceResponse.class
-top/sshh/qqbot/verifycode/RemoteVerifyCode$RecognitionResult.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$5.class
 top/sshh/qqbot/data/VerifyCount.class
 top/sshh/qqbot/service/impl/HttpsTrustManager.class
@@ -36,6 +35,7 @@ top/sshh/qqbot/service/TestService$4.class
 top/sshh/qqbot/service/GroupManager$7.class
 top/sshh/qqbot/data/ProductPrice.class
 top/sshh/qqbot/constant/Constant.class
+top/sshh/qqbot/service/XiaoYueHerbClass.class
 top/sshh/qqbot/service/FamilyTask.class
 top/sshh/qqbot/service/GroupManager$3.class
 top/sshh/qqbot/service/TestService$1.class
@@ -46,9 +46,9 @@ top/sshh/qqbot/service/GroupManager$PendingLingTianRecord.class
 top/sshh/qqbot/verifycode/RemoteVerifyCode$1.class
 top/sshh/qqbot/data/QQBotConfig.class
 top/sshh/qqbot/verifycode/RemoteVerifyCode.class
-top/sshh/qqbot/data/VerifyCodeData.class
 top/sshh/qqbot/service/XiaoBeiService$EndlessState.class
 top/sshh/qqbot/service/XiaoBeiService$1.class
+top/sshh/qqbot/data/RecognitionResult.class
 top/sshh/qqbot/data/RemindTime.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$6.class
 top/sshh/qqbot/service/XiaoBeiService.class

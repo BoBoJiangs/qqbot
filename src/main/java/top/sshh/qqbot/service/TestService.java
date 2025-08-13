@@ -562,7 +562,7 @@ public class TestService {
     )
     public void 开始自动秘境悬赏(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isBiGuan = message.contains("闭关时长") && message.contains("修为提升") || message.contains("闭关结束") && message.contains("增加修为");
+        boolean isBiGuan = message.contains("闭关时长") && (message.contains("修为提升") || message.contains("修为突破")) || message.contains("闭关结束") && message.contains("增加修为");
         boolean isXiuLian = message.contains("本次修炼增加");
         if (Utils.isAtSelf(bot, group, message,xxGroupId) && (message.contains("道友现在什么都没干呢") || isBiGuan || isXiuLian) && StringUtils.isNotBlank(botConfig.getCommand())) {
             if ("开始自动悬赏".equals(botConfig.getCommand())) {
@@ -2442,7 +2442,7 @@ public class TestService {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             if (botConfig.isEnableAutoSecret() && botConfig.getMjTime() > 0L && botConfig.getMjTime() < System.currentTimeMillis()) {
-                if (botConfig.isStop()) {
+                if (botConfig.isStop() && botConfig.getAutoVerifyModel() == 0) {
                     botConfig.setStop(false);
                     botConfig.setMjTime(-1L);
                     Bot remindBot = this.getRemindAtQQ(bot);

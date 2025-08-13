@@ -363,7 +363,7 @@ public class RemoteVerifyCode {
 
                     if (resultText.contains("点击") && resultText.length() < 7) {
 
-                        if (resultText.length() == 4 || resultText.length() == 5) {
+                        if (resultText.length() == 4 || resultText.length() == 5 ) {
                             char secondLastChar = resultText.charAt(resultText.length() - 2);
                             char lastChar = resultText.charAt(resultText.length() - 1);
                             String secondLastStr = String.valueOf(secondLastChar);
@@ -388,7 +388,7 @@ public class RemoteVerifyCode {
                                 answer = "鸡";
                             } else if (resultText.length() == 5 && "脑".equals(lastStr)) {
                                 answer = "电脑";
-                            } else if (resultText.length() == 5 && "池".equals(lastStr)) {
+                            } else if (resultText.length() == 5 && ("池".equals(lastStr)||"减".equals(lastStr))) {
                                 answer = "电池";
                             } else if (resultText.length() == 5 && "电".equals(secondLastStr) && "沙".equals(lastStr)) {
                                 answer = "电池";

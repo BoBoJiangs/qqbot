@@ -13,7 +13,7 @@ bot:
 #  - type: ws-reverse
 #    url: ws://0.0.0.0:8080
     #修炼+任务群
-    groupId: 690933736
+    groupId: 1011466037
     accessToken: 1024*1024*1024
     #    大号qq
     controlQQ: 819463350

@@ -7,12 +7,12 @@
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/XiaoBeiService.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/liandan/DanCalculator.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/verifycode/RemoteVerifyCode.java
-/Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/VerifyCodeData.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/impl/HttpsTrustManager.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/MessageNumber.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/TestService.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/ProductPriceResponse.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/GuessIdiom.java
+/Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/XiaoYueHerbClass.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/verifycode/YoloCaptchaRecognizer.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/AutoBuyGoods.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/ProductPrice.java
@@ -27,6 +27,7 @@
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/FamilyTask.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/GroupManager.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/liandan/AutoAlchemyTask.java
+/Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/RecognitionResult.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/data/RemindTime.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/QqBotApplication.java
 /Volumes/Work 1/java/workspace/qqbot/src/main/java/top/sshh/qqbot/service/liandan/AutoBuyHerbs.java

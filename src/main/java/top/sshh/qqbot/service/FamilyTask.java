@@ -22,6 +22,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.QQBotConfig;
 import top.sshh.qqbot.data.RemindTime;
+import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PostConstruct;
 import java.io.*;
@@ -280,7 +281,7 @@ public class FamilyTask {
     )
     public void 妖塔状态(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
         BotConfig botConfig = bot.getBotConfig();
-        if (group.getGroupId() == botConfig.getGroupId()) {
+        if (Utils.isAtSelf(bot,group, msg,xxGroupId)) {
             if (msg.contains("气血") && msg.contains("真元") && msg.contains("道号") && (botConfig.getChallengeMode() == 11 || botConfig.getChallengeMode() == 21)) {
                 String[] lines = msg.split("\\n");
                 String daoHao = "";
