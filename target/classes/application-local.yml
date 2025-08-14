@@ -1,6 +1,6 @@
 xbGroupId: 993970673
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
-#xxGroupId: 690933736
+xxGroupId: 690933736
 captcha:
    shitu-api-url: http://113.45.9.127:8000/
 #   shitu-api-url: http://116:205:232:32:8848/shitu
@@ -8,8 +8,8 @@ captcha:
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
   - type: ws
-    url: ws://117.72.213.211:8900
-#    url: ws://113.45.9.127:3000
+#    url: ws://117.72.213.211:8900
+    url: ws://113.45.9.127:3000
 #  - type: ws-reverse
 #    url: ws://0.0.0.0:8080
     #修炼+任务群
