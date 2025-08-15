@@ -319,7 +319,12 @@ public class FamilyTask {
 
                 double hpPercentage = maxHP > (double)0.0F ? currentHP / maxHP * (double)100.0F : (double)0.0F;
                 if (hpPercentage > 0.8 && zhenYuan > (double)300.0F) {
-                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                    try {
+                        Thread.sleep(2000L);
+                        group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                     if (botConfig.getChallengeMode() == 11) {
                         botConfig.setChallengeMode(12);
                     } else {
@@ -332,14 +337,25 @@ public class FamilyTask {
 
             if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22) && msg.contains("第") && msg.contains("层")) {
                 if (msg.contains("第2层")) {
-                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔强行挑战"));
+                    try {
+                        Thread.sleep(2000L);
+                        group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔强行挑战"));
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
+
                 } else if (!msg.contains("第3层") && !msg.contains("第7层") && !msg.contains("第8层")) {
                     if (!msg.contains("第9层") && !msg.contains("已经没有道友可以和无上仙尊匹敌")) {
                         if (!msg.contains("第1层") && !msg.contains("第4层") && !msg.contains("第5层") && !msg.contains("第6层")) {
                             return;
                         }
+                        try {
+                            Thread.sleep(2000L);
+                            group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                        } catch (InterruptedException e) {
+                            throw new RuntimeException(e);
+                        }
 
-                        group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
                     } else {
                         if (botConfig.getCultivationMode() == 2) {
                             group.sendMessage((new MessageChain()).at("3889001741").text(" 闭关"));
@@ -358,12 +374,22 @@ public class FamilyTask {
                 } else if (botConfig.getChallengeMode() == 22) {
                     xiuXi(bot, group);
                 } else {
-                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                    try {
+                        Thread.sleep(2000L);
+                        group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             }
 
             if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22) && msg.contains("大能对你提交的答案很满意，让你顺利的通过了")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                try {
+                    Thread.sleep(2000L);
+                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
             }
 
             if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22) && msg.contains("道友的上一条指令还没执行完，稍等一会！")) {
@@ -383,7 +409,12 @@ public class FamilyTask {
                 } catch (InterruptedException var27) {
                 }
 
-                group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                try {
+                    Thread.sleep(2000L);
+                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
                 if (botConfig.getChallengeMode() == 13) {
                     botConfig.setChallengeMode(12);
                 } else {
@@ -534,7 +565,7 @@ public class FamilyTask {
 
     }
 
-    @Scheduled(cron = "0 30 7 * * *")
+    @Scheduled(cron = "0 34 4 * * *")
     public void 签到() throws InterruptedException {
         Iterator var1 = BotFactory.getBots().values().iterator();
 
@@ -551,7 +582,7 @@ public class FamilyTask {
         }
     }
 
-    @Scheduled(cron = "0 35 7 * * *")
+    @Scheduled(cron = "0 35 4 * * *")
     public void 宗门丹药领取() throws InterruptedException {
         Iterator var1 = BotFactory.getBots().values().iterator();
 
@@ -568,7 +599,7 @@ public class FamilyTask {
         }
     }
 
-    @Scheduled(cron = "0 35 12 * * *")
+    @Scheduled(cron = "0 35 12 * * *" ,zone = "Asia/Shanghai")
     public void 准备秘境() throws InterruptedException {
         Iterator var1 = BotFactory.getBots().values().iterator();
 
@@ -605,7 +636,7 @@ public class FamilyTask {
     }
 
 
-    @Scheduled(cron = "0 36 7 * * *")
+    @Scheduled(cron = "0 36 4 * * *")
     public void 开始宗门任务() throws InterruptedException {
         Iterator var1 = BotFactory.getBots().values().iterator();
 

@@ -562,7 +562,7 @@ public class TestService {
     )
     public void 开始自动秘境悬赏(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isBiGuan = message.contains("闭关时长") && (message.contains("修为提升") || message.contains("修为突破")) || message.contains("闭关结束") && message.contains("增加修为");
+        boolean isBiGuan = message.contains("闭关时长") && (message.contains("修为提升") || message.contains("修为突破")) || message.contains("闭关结束");
         boolean isXiuLian = message.contains("本次修炼增加");
         if (Utils.isAtSelf(bot, group, message, xxGroupId) && (message.contains("道友现在什么都没干呢") || isBiGuan || isXiuLian) && StringUtils.isNotBlank(botConfig.getCommand())) {
             if ("开始自动悬赏".equals(botConfig.getCommand())) {
@@ -820,7 +820,7 @@ public class TestService {
                 botConfig.setXslTime(-1L);
                 botConfig.setMjTime(-1L);
                 botConfig.setLastSendTime(System.currentTimeMillis());
-                group.sendMessage((new MessageChain()).at("3889001741").text("修炼"));
+                bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("修炼"));
             } else if (message.contains("本次修炼增加")) {
                 LocalTime now = LocalTime.now();
                 if ((now.getHour() != 12 || now.getMinute() != 30 && now.getMinute() != 31 && now.getMinute() != 32) && botConfig.getCultivationMode() != 1) {
@@ -1169,11 +1169,12 @@ public class TestService {
                             }
                         }
                     }
+                    MessageChain messageChain1 = new MessageChain();
+                    messageChain1.at(remindBot.getBotConfig().getMasterQQ() + "").text("\n").image(buttons.getImageUrl()).text(buttonBuilder.toString());
+                    bot.getGroup(groupId).sendMessage(messageChain1);
                 }
 
-                MessageChain messageChain1 = new MessageChain();
-                messageChain1.at(remindBot.getBotConfig().getMasterQQ() + "").text("\n").image(buttons.getImageUrl()).text(buttonBuilder.toString());
-                bot.getGroup(groupId).sendMessage(messageChain1);
+
             } else {
                 remindBot.getGroup(groupId).sendMessage((new MessageChain()).at(String.valueOf(remindBot.getBotConfig().getMasterQQ())).text(bot.getBotName() + "的" + group.getGroupName() + "出现验证码！！！！"));
             }

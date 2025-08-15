@@ -22,6 +22,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.ProductPrice;
+import top.sshh.qqbot.service.utils.Utils;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -113,6 +114,10 @@ public class AutoBuyGoods {
                     getRemindGroup(bot,xxGroupId).sendMessage((new MessageChain()).text(buyMessage));
                 }
 
+            }
+
+            if(message.contains("未查询到该物品")){
+                Utils.forwardMessage(bot, this.xxGroupId, messageChain);
             }
 
             if(message.contains("今天已经很努力了")){

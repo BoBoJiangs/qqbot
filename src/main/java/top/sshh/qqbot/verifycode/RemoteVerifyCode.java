@@ -494,6 +494,7 @@ public class RemoteVerifyCode {
             for (String emoji : recognitionResult.emojiList) {
                 stringBuilder.append(emoji);
             }
+            stringBuilder.append("识别表情：");
         }
         stringBuilder.append("正确答案："+recognitionResult.answer);
         if (StringUtils.isEmpty(verifyQQ)) {
