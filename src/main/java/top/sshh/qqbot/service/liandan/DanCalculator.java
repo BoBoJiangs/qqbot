@@ -1,8 +1,3 @@
-//
-// Source code recreated from a .class file by IntelliJ IDEA
-// (powered by FernFlower decompiler)
-//
-
 package top.sshh.qqbot.service.liandan;
 
 import com.alibaba.fastjson2.JSON;
@@ -36,495 +31,334 @@ import static top.sshh.qqbot.constant.Constant.targetDir;
 @Component
 public class DanCalculator {
     private static final Logger logger = LoggerFactory.getLogger(DanCalculator.class);
-    static List<Herb> herbs = new ArrayList<>();
-    static List<Dan> sortedDans = new ArrayList<>();
-    public static Map<String, Integer> herbPrices = new LinkedHashMap();
-    public static Map<String, Integer> danMarketValues = new LinkedHashMap();
-    public static Map<String, Integer> danAlchemyValues = new LinkedHashMap();
-    public Config config = new Config();
-
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
 
-    public DanCalculator() {
+    private List<Herb> herbs = new ArrayList<>();
+    private List<Dan> sortedDans = new ArrayList<>();
+    private Map<String, Integer> herbPrices = new LinkedHashMap<>();
+    private Map<String, Integer> danMarketValues = new LinkedHashMap<>();
+    private Map<String, Integer> danAlchemyValues = new LinkedHashMap<>();
+    public Config config = new Config();
 
-    }
-
-    public void addAutoBuyHerbs(Long botId) {
-        if (config != null && config.getAlchemyQQ() != null) {
-            List<String> lines = new ArrayList();
-            Map productMap = (Map) AutoBuyHerbs.AUTO_BUY_HERBS.computeIfAbsent(config.getAlchemyQQ(), (k) -> {
-                return new ConcurrentHashMap();
-            });
-
-            try {
-                BufferedReader reader = new BufferedReader(new FileReader(botId+"/药材价格.txt"));
-
-                try {
-                    int i = 0;
-
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        if (!line.trim().isEmpty()) {
-                            lines.add(line);
-                            String[] parts = line.split("\\s+", 2);
-                            if (parts.length == 2) {
-                                ProductPrice productPrice = new ProductPrice();
-                                productPrice.setName(parts[1].trim());
-                                productPrice.setPrice(Integer.parseInt(parts[0].trim()));
-                                productPrice.setTime(LocalDateTime.now());
-                                productPrice.setId((long) (i++));
-                                productMap.put(productPrice.getName(), productPrice);
-                            }
-                        }
-                    }
-                    logger.info("自动添加到药材采购列表={}", productMap.size());
-                } catch (Throwable var8) {
-                }
-
-                reader.close();
-            } catch (Exception var9) {
-            }
-        }
-
-    }
-
-    public Config getConfig() {
-
-        return config;
-    }
-
+    // ======================= 事件入口 =======================
     @OnQQConnected
     public void onConnected(Bot bot) {
         BotConfig botConfig = bot.getBotConfig();
-        if(botConfig.isEnableAlchemy()){
-            customPool.submit(new Runnable() {
-                public void run() {
-                    DanCalculator.this.loadOrCreateConfig(bot.getBotId());
-                    DanCalculator.this.loadData(bot.getBotId());
-                    DanCalculator.this.calculateAllDans(bot.getBotId());
-                    DanCalculator.this.addAutoBuyHerbs(bot.getBotId());
-                }
-            });
-        }
+        if (!botConfig.isEnableAlchemy()) return;
 
+        customPool.submit(() -> {
+            loadOrCreateConfig(bot.getBotId());
+            loadData(bot.getBotId());
+            calculateAllDans(bot.getBotId());
+            addAutoBuyHerbs(bot.getBotId());
+        });
     }
 
-
-
+    // ======================= 配置文件 =======================
     public void loadOrCreateConfig(Long botId) {
-        Path configFile = Paths.get(botId+"/炼丹配置.txt");
-
+        Path configFile = Paths.get(String.valueOf(botId), "炼丹配置.txt");
         try {
-            if (Files.exists(configFile, new LinkOption[0])) {
+            if (Files.exists(configFile)) {
                 logger.info("配置文件存在，正在读取...");
-                this.readConfig(botId);
+                readConfig(botId);
             } else {
-                logger.info("配置文件不存在，创建并写入默认配置...");
+                logger.info("配置文件不存在，创建默认配置...");
                 config = new Config();
-                this.saveConfig(config,botId);
+                saveConfig(config, botId);
             }
         } catch (Exception e) {
-            logger.info("配置文件操作失败{}", e.getMessage());
+            logger.error("配置文件操作失败: {}", e.getMessage(), e);
         }
-
     }
 
     private void readConfig(Long botId) {
-        try {
-            BufferedReader reader = new BufferedReader(new FileReader(botId+"/炼丹配置.txt"));
-
-            try {
-                StringBuilder jsonStr = new StringBuilder();
-
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    jsonStr.append(line);
-                }
-
-                if(StringUtils.isNotBlank(jsonStr)){
-                    config = (Config) JSON.parseObject(jsonStr.toString(), Config.class);
-                    logger.info("配置读取成功！{}", JSON.toJSONString(config));
-                }
-
-
-
-            } catch (Throwable var4) {
-            }
-
-            reader.close();
-        } catch (Exception var5) {
-            config = new Config();
-            logger.info("读取配置文件失败!");
-        }
-
-    }
-
-    public void saveConfig(Config config,Long botId) {
-        File dir = new File(String.valueOf(botId));
-        if (!dir.exists()) dir.mkdirs(); // 创建 botId 文件夹
-
-        File file = new File(dir, "炼丹配置.txt"); // 文件就在这个文件夹下面
-        try (BufferedWriter writer = new BufferedWriter(
-                new OutputStreamWriter(new FileOutputStream(botId + "/炼丹配置.txt"), StandardCharsets.UTF_8))) {
-
-            String jsonStr = JSON.toJSONString(config);
+        Path configFile = Paths.get(String.valueOf(botId), "炼丹配置.txt");
+        try (BufferedReader reader = Files.newBufferedReader(configFile, StandardCharsets.UTF_8)) {
+            String jsonStr = reader.lines().collect(Collectors.joining());
             if (StringUtils.isNotBlank(jsonStr)) {
-                writer.write(jsonStr);
-                writer.flush();
-                logger.info("配置保存成功!{}", jsonStr);
+                config = JSON.parseObject(jsonStr, Config.class);
+                logger.info("配置读取成功：{}", JSON.toJSONString(config));
             }
-
-        } catch (Exception e) {
-            logger.error("写入失败", e);
+        } catch (IOException e) {
+            logger.error("读取配置文件失败!", e);
+            config = new Config();
         }
-
     }
 
+    public void saveConfig(Config config, Long botId) {
+        Path filePath = Paths.get(String.valueOf(botId), "炼丹配置.txt");
+        try {
+            Files.createDirectories(filePath.getParent());
+            try (BufferedWriter writer = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8)) {
+                writer.write(JSON.toJSONString(config));
+                logger.info("配置保存成功！");
+            }
+        } catch (IOException e) {
+            logger.error("写入配置文件失败!", e);
+        }
+    }
+
+    public Config getConfig() {
+        return config;
+    }
+
+    // ======================= 自动购买药材 =======================
+    public void addAutoBuyHerbs(Long botId) {
+        if (config == null || config.getAlchemyQQ() == null) return;
+
+        Map<String, ProductPrice> productMap = AutoBuyHerbs.AUTO_BUY_HERBS
+                .computeIfAbsent(config.getAlchemyQQ(), k -> new ConcurrentHashMap<>());
+
+        Path filePath = Paths.get(String.valueOf(botId), "药材价格.txt");
+        if (!Files.exists(filePath)) return;
+
+        try (BufferedReader reader = Files.newBufferedReader(filePath, StandardCharsets.UTF_8)) {
+            String line;
+            int id = 0;
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+
+                String[] parts = line.split("\\s+", 2);
+                if (parts.length < 2) continue;
+
+                ProductPrice productPrice = new ProductPrice();
+                productPrice.setPrice(Integer.parseInt(parts[0].trim()));
+                productPrice.setName(parts[1].trim());
+                productPrice.setTime(LocalDateTime.now());
+                productPrice.setId((long) id++);
+                productMap.put(productPrice.getName(), productPrice);
+            }
+            logger.info("自动添加药材到购买列表，数量={}", productMap.size());
+        } catch (IOException e) {
+            logger.error("读取药材价格失败", e);
+        }
+    }
+
+    // ======================= 数据加载 =======================
     public void loadData(Long botId) {
         try {
-            this.loadElixirProperties();
-            this.loadDanMarketData();
-            this.loadDanAlchemyData();
-            this.loadHerbPricesData(botId);
-            this.bindAdditionalData();
+            loadElixirProperties();
+            loadDanMarketData();
+            loadDanAlchemyData();
+            loadHerbPricesData(botId);
+            bindAdditionalData();
         } catch (Exception e) {
             AutoAlchemyTask.isCreateDan = false;
+            logger.error("加载数据失败", e);
         }
     }
 
-    public void parseRecipes(String text, Group group, Bot bot) throws IOException {
+    private void loadElixirProperties() throws IOException {
+        Path resourcePath = Paths.get(targetDir, "properties", "elixirproperties.txt");
+        if (!Files.exists(resourcePath)) return;
 
+        herbs.clear();
+        List<Dan> dans = new ArrayList<>();
+        boolean isHerbSection = false;
+
+        try (BufferedReader br = Files.newBufferedReader(resourcePath)) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line.startsWith("-----药材列表-----")) {
+                    isHerbSection = true;
+                    continue;
+                } else if (line.startsWith("-----丹药列表-----")) {
+                    isHerbSection = false;
+                    continue;
+                }
+
+                if (line.trim().isEmpty()) continue;
+
+                if (isHerbSection) {
+                    herbs.add(new Herb(line.split("\t")));
+                } else {
+                    dans.add(new Dan(line.split("\t")));
+                }
+            }
+        }
+
+        sortedDans = dans.stream().sorted().collect(Collectors.toList());
+        logger.info("加载丹药数据，数量={}", sortedDans.size());
+    }
+
+    private void loadDanMarketData() throws IOException {
+        loadTxtFile(Paths.get(targetDir, "properties", "丹药坊市价值.txt"), parts -> {
+            danMarketValues.put(parts[1], Integer.parseInt(parts[0]));
+        });
+    }
+
+    private void loadDanAlchemyData() throws IOException {
+        loadTxtFile(Paths.get(targetDir, "properties", "丹药炼金价值.txt"), parts -> {
+            danAlchemyValues.put(parts[1], Integer.parseInt(parts[0]));
+        });
+    }
+
+    private void loadHerbPricesData(Long botId) throws IOException {
+        herbPrices.clear();
+        loadTxtFile(Paths.get(String.valueOf(botId), "药材价格.txt"), parts -> {
+            herbPrices.put(parts[1], Integer.parseInt(parts[0]));
+        });
+    }
+
+    private void loadTxtFile(Path filePath, Consumer<String[]> processor) throws IOException {
+        if (!Files.exists(filePath)) return;
+        try (BufferedReader br = Files.newBufferedReader(filePath)) {
+            br.lines()
+                    .map(line -> line.split("\\s+"))
+                    .filter(parts -> parts.length >= 2)
+                    .forEach(processor);
+        }
+    }
+
+    private void bindAdditionalData() {
+        // 丹药附加属性
+        sortedDans.forEach(dan -> {
+            dan.marketValue = danMarketValues.getOrDefault(dan.name, 0);
+            dan.alchemyValue = danAlchemyValues.getOrDefault(dan.name, 0);
+        });
+
+        // 药材价格
+        herbs.forEach(herb -> herb.price = herbPrices.getOrDefault(herb.name, 0));
+    }
+
+    // ======================= 配方解析 =======================
+    public void parseRecipes(String text, Group group, Bot bot) throws IOException {
         Pattern textPattern = Pattern.compile("[\\u4e00-\\u9fff]{2,}");
         Matcher textMatcher = textPattern.matcher(text);
-        String recipeName = "";
-        if (textMatcher.find()) {
-            recipeName = textMatcher.group().substring(3);
-        }
+        String recipeName = textMatcher.find() ? textMatcher.group().substring(3) : "";
 
         Pattern numberPattern = Pattern.compile("\\d+");
         Matcher numberMatcher = numberPattern.matcher(text);
-        int danNum = 6;
-        if (numberMatcher.find()) {
-            danNum = Integer.parseInt(numberMatcher.group());
-        }
+        int danNum = numberMatcher.find() ? Integer.parseInt(numberMatcher.group()) : 6;
 
-        String fileContent = this.readFileContent(targetDir+"properties/丹方查询.txt");
-        fileContent = fileContent.replaceFirst("\n", "");
-
-        // 解析丹方
+        String fileContent = readFileContent(targetDir + "properties/丹方查询.txt").replaceFirst("\n", "");
         Map<String, String> recipeMap = parseAlchemyRecipes(fileContent);
+        String recipes = recipeMap.getOrDefault(recipeName, "未找到对应的丹方记录");
 
-        String recipes = getRecipeByName(recipeName, recipeMap);
-
-        int marketValue;
-        if (MAKE_DAN_SET.contains(recipeName)) {
-            marketValue = danMarketValues.getOrDefault(recipeName, 0);
-            if (marketValue <= 500) {
-                marketValue = (int) (marketValue * 0.95 * danNum);
-            } else if (marketValue <= 1000) {
-                marketValue = (int) (marketValue * 0.90 * danNum);
-            } else if (marketValue <= 1500) {
-                marketValue = (int) (marketValue * 0.85 * danNum);
-            } else if (marketValue <= 2000) {
-                marketValue = (int) (marketValue * 0.80 * danNum);
-            } else {
-                marketValue = (int) (marketValue * 0.70 * danNum);
-            }
-        } else {
-            marketValue = danAlchemyValues.getOrDefault(recipeName, 0) * danNum;
-        }
-
-        if (!recipes.isEmpty()&&!recipes.contains("未找到对应的丹方记录")) {
-            String[] recipeArray = recipes.split("\n");
-//            List<String> result = recipeArray.size() > 30 ? recipeArray.subList(0, 30) : recipes;
+        if (!recipes.contains("未找到对应的丹方记录")) {
             StringBuilder sb = new StringBuilder();
-            for (String recipe : recipeArray) {
+            for (String recipe : recipes.split("\n")) {
                 if (recipe.endsWith("配方")) {
-                    if(MAKE_DAN_SET.contains(recipeName)){
-                        sb.append(recipeName).append(" 坊市价格："+danMarketValues.getOrDefault(recipeName, 0)+"万/个").append("\n\n");
-                    }else{
-                        sb.append(recipeName).append(" 炼金价格："+danAlchemyValues.getOrDefault(recipeName, 0)+"万/个").append("\n\n");
+                    if (MAKE_DAN_SET.contains(recipeName)) {
+                        sb.append(recipeName)
+                                .append(" 坊市价格：")
+                                .append(danMarketValues.getOrDefault(recipeName, 0))
+                                .append("万/个\n\n");
+                    } else {
+                        sb.append(recipeName)
+                                .append(" 炼金价格：")
+                                .append(danAlchemyValues.getOrDefault(recipeName, 0))
+                                .append("万/个\n\n");
                     }
                     continue;
                 }
+
                 recipe = recipe.replaceAll("-", "");
                 String[] parts = recipe.split(" ");
                 int price = 0;
                 for (String part : parts) {
-
                     if (part.startsWith("花费")) {
-                        String spendStr = part.substring(2); // 去掉 "花费" 前缀
-                        price = marketValue - Integer.parseInt(spendStr); // 转换为整数
+                        price = danMarketValues.getOrDefault(recipeName, 0) - Integer.parseInt(part.substring(2));
                     }
-
                 }
-                sb.append(recipe).append(" 收益").append(price).append(" ").append(danNum).append("丹").append("\n\n");
+                sb.append(recipe).append(" 收益").append(price).append(" ").append(danNum).append("丹\n\n");
             }
-            List<ForwardNodeMessage> forwardNodes = new ArrayList();
-            forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方查询助手", (new MessageChain()).text(sb.toString())));
-//            forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方小助手", (new MessageChain()).text(part1.toString())));
-            forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方查询助手", (new MessageChain()).text("ps：仅输出利润前20条！\n药材价格仅供参考，以实际坊市价格为准！")));
+
+            List<ForwardNodeMessage> forwardNodes = new ArrayList<>();
+            forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方查询助手",
+                    new MessageChain().text(sb.toString())));
+            forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方查询助手",
+                    new MessageChain().text("ps：仅输出利润前20条！\n药材价格仅供参考，以实际坊市价格为准！")));
             group.sendGroupForwardMessage(forwardNodes);
-//            group.sendMessage((new MessageChain()).text(sb.toString()));
-//            System.out.println(sb); // 输出每个丹方
         }
     }
 
-    public String getRecipeByName(String recipeName, Map<String, String> recipeMap) {
-        return (String) recipeMap.getOrDefault(recipeName, "未找到对应的丹方记录");
-    }
-
-    public String readFileContent(String filePath) throws IOException {
-        StringBuilder content = new StringBuilder();
-        BufferedReader reader = new BufferedReader(new FileReader(filePath));
-
-        String line;
-        try {
-            while ((line = reader.readLine()) != null) {
-                content.append(line).append("\n");
-            }
-        } catch (Throwable var8) {
-            try {
-                reader.close();
-            } catch (Throwable var7) {
-            }
+    private Map<String, String> parseAlchemyRecipes(String fileContent) {
+        Map<String, String> recipeMap = new HashMap<>();
+        for (String recipe : fileContent.split("\n\n")) {
+            if (recipe.trim().isEmpty()) continue;
+            String[] lines = recipe.split("\n");
+            recipeMap.put(lines[0].split(" ")[0], recipe);
         }
-
-        reader.close();
-        return content.toString();
-    }
-
-    public Map<String, String> parseAlchemyRecipes(String fileContent) {
-        Map<String, String> recipeMap = new HashMap();
-        String[] recipes = fileContent.split("\n\n");
-        String[] var3 = recipes;
-        int var4 = recipes.length;
-
-        for (int var5 = 0; var5 < var4; ++var5) {
-            String recipe = var3[var5];
-            if (!recipe.trim().isEmpty()) {
-                String[] lines = recipe.split("\n");
-                String recipeName = lines[0].split(" ")[0];
-                recipeMap.put(recipeName, recipe);
-            }
-        }
-
         return recipeMap;
     }
 
-    public void loadElixirProperties() throws Exception {
-        String resourcePath = targetDir+"properties/elixirproperties.txt";
+    private String readFileContent(String filePath) throws IOException {
+        Path path = Paths.get(filePath);
+        if (!Files.exists(path)) return "";
 
-        try {
-            BufferedReader br = new BufferedReader(new FileReader(resourcePath));
-
-            try {
-                List<Dan> dans = new ArrayList();
-                boolean isHerbSection = false;
-
-                while (true) {
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        if (line.startsWith("-----药材列表-----")) {
-                            isHerbSection = true;
-                        } else if (line.startsWith("-----丹药列表-----")) {
-                            isHerbSection = false;
-                        } else if (isHerbSection && !line.trim().isEmpty()) {
-                            herbs.add(new Herb(line.split("\t")));
-                        } else if (!line.trim().isEmpty()) {
-                            dans.add(new Dan(line.split("\t")));
-                        }
-                    }
-
-                    sortedDans = (List) dans.stream().sorted().collect(Collectors.toList());
-                    System.out.println("==========" + sortedDans.size());
-                    br.close();
-                    break;
-                }
-            } catch (Throwable var7) {
-                try {
-                    br.close();
-                } catch (Throwable var6) {
-                }
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader reader = Files.newBufferedReader(path, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                sb.append(line).append("\n");
             }
-
-            br.close();
-        } catch (Exception var8) {
         }
-
+        return sb.toString();
     }
 
-    public void loadDanMarketData() throws Exception {
-        this.loadTxtFile(targetDir+"properties/丹药坊市价值.txt", (parts) -> {
-            int value = Integer.parseInt(parts[0]);
-            danMarketValues.put(parts[1], value);
-        });
-    }
-
-    public void loadDanAlchemyData() throws Exception {
-        this.loadTxtFile(targetDir+"properties/丹药炼金价值.txt", (parts) -> {
-            int value = Integer.parseInt(parts[0]);
-            danAlchemyValues.put(parts[1], value);
-        });
-    }
-
-    public void loadHerbPricesData(Long qq) throws Exception {
-        herbPrices.clear();
-        this.loadTxtFile(qq+"/药材价格.txt", (parts) -> {
-            int value = Integer.parseInt(parts[0]);
-            herbPrices.put(parts[1], value + 0);
-        });
-    }
-
-    private void loadTxtFile(String filename, Consumer<String[]> processor) throws Exception {
-        BufferedReader br = new BufferedReader(new FileReader(filename));
-
-        String line;
-        try {
-            while ((line = br.readLine()) != null) {
-                String[] parts = line.split("\\s+");
-                if (parts.length >= 2) {
-                    processor.accept(parts);
-                }
-            }
-        } catch (Throwable var6) {
-            System.out.println("读取文件失败 ");
-        }
-
-        br.close();
-    }
-
-    public void bindAdditionalData() {
-        // 绑定丹药附加属性
-        for (Dan dan : sortedDans) {
-            dan.marketValue = danMarketValues.getOrDefault(dan.name, 0);
-            dan.alchemyValue = danAlchemyValues.getOrDefault(dan.name, 0);
-        }
-        // 绑定药材价格
-        for (Herb herb : herbs) {
-            herb.price = herbPrices.getOrDefault(herb.name, 0);
-        }
-
-    }
-
-
-
+    // ======================= 配方计算 =======================
     public void calculateAllDans(Long botId) {
         Map<Dan, Set<String>> danRecipes = new LinkedHashMap<>();
+        String targetFilePath = botId + "/炼丹配方.txt";
 
-        // 使用 try-with-resources 自动关闭资源
-        String targetFilePath = botId+"/炼丹配方.txt";
-        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(targetFilePath), StandardCharsets.UTF_8))) {
+        try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(targetFilePath), StandardCharsets.UTF_8)) {
+            // 三重循环遍历组合（可以考虑 parallelStream 提升性能）
+            herbs.parallelStream()
+                    .filter(main -> main.price > 0)
+                    .forEach(main -> {
+                        herbs.stream()
+                                .filter(lead -> lead.price > 0 && checkBalance(main, lead))
+                                .forEach(lead -> {
+                                    herbs.stream()
+                                            .filter(assist -> assist.price > 0)
+                                            .forEach(assist -> {
+                                                List<RecipeResult> resultList = findHighestDan(main, lead, assist);
+                                                for (RecipeResult result : resultList) {
+                                                    String recipe = formatRecipe(main, lead, assist,
+                                                            result.mainCount, result.leadCount, result.assistCount,
+                                                            result.spend, (result.alchemyValue - result.spend), (result.marketValue - result.spend), result.dan.name);
+                                                    danRecipes.computeIfAbsent(result.dan, k -> new HashSet<>()).add(recipe);
+                                                }
+                                            });
+                                });
+                    });
 
-            for (Herb main : herbs) {
-                if (main.price == 0) continue;
-
-                for (Herb lead : herbs) {
-                    if (lead.price == 0 || !this.checkBalance(main, lead)) continue;
-
-                    for (Herb assist : herbs) {
-                        if (assist.price == 0) continue;
-
-                        List<RecipeResult> resultList = this.findHighestDan(main, lead, assist);
-                        for (RecipeResult result : resultList) {
-                            String recipe = this.formatRecipe(main, lead, assist,
-                                    result.mainCount, result.leadCount, result.assistCount,
-                                    result.spend, (result.alchemyValue - result.spend), (result.marketValue - result.spend),result.dan.name);
-                            danRecipes.computeIfAbsent(result.dan, k -> new HashSet<>()).add(recipe);
-                        }
-                    }
-                }
-            }
-
-            // 写入结果
             List<String> sortedRecipes = new ArrayList<>();
-            writer.write(System.lineSeparator() +  (config.isAlchemy()?"炼金丹配方":"坊市丹配方") + System.lineSeparator());
             sortedDans.forEach(dan -> {
-                try {
-//                    writer.write(System.lineSeparator() + dan.name + " 配方" + System.lineSeparator());
-
-                    // 获取当前丹方的配方集合
-                    Set<String> recipes = danRecipes.getOrDefault(dan, Collections.emptySet());
-                    // 将 Set 转换为 List 并排序
-//                    List<String> sortedRecipes = new ArrayList<>(recipes);
-                    sortedRecipes.addAll(new ArrayList<>(recipes));
-
-
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                Set<String> recipes = danRecipes.getOrDefault(dan, Collections.emptySet());
+                sortedRecipes.addAll(recipes);
             });
 
-            // 自定义排序规则：按 "花费" 字段升序排序
-            Collections.sort(sortedRecipes, (r1, r2) -> {
-                int spend1 = extractSpendFromRecipe(r1); // 提取 r1 的花费
-                int spend2 = extractSpendFromRecipe(r2); // 提取 r2 的花费
-                return Integer.compare(spend2, spend1); // 升序排序
-            });
-
-
-            // 写入排序后的配方
+            sortedRecipes.sort((r1, r2) -> Integer.compare(extractValue(r2), extractValue(r1)));
             for (String recipe : sortedRecipes) {
-                if (!StringUtils.isBlank(recipe)) {
-                    writer.write(recipe + System.lineSeparator());
-                }
+                if (!StringUtils.isBlank(recipe)) writer.write(recipe + System.lineSeparator());
             }
-            writer.flush();
 
-            System.out.println("配方已成功生成至：" + new File(targetFilePath).getAbsolutePath());
-        } catch (Exception e) {
-            System.err.println("文件写入失败：" + e.getMessage());
+            logger.info("配方已生成至：{}", new File(targetFilePath).getAbsolutePath());
+        } catch (IOException e) {
+            logger.error("文件写入失败", e);
             AutoAlchemyTask.isCreateDan = true;
-            e.printStackTrace();
         }
     }
 
-
-
-
-    private int extractSpendFromRecipe(String recipe) {
-        //"主药尘磊岩麟果-20&1140 药引七彩月兰-1&570 辅药地龙干-20&440 花费32170 炼金收益2700 坊市收益33054 6丹"
-        String[] parts = recipe.split(" ");
-//        int price1 = 0;
-//        int price2 = 0;
-        for (String part : parts) {
-
-//            if (part.startsWith("花费")) {
-//                String spendStr = part.substring(2); // 去掉 "花费" 前缀
-//                price1 =  Integer.parseInt(spendStr); // 转换为整数
-//            }
-
-            if(part.startsWith("坊市收益")){
-                String spendStr = part.substring(4); // 去掉 "坊市收益" 前缀
-                return Integer.parseInt(spendStr); // 转换为整数
-            }
-
-            if (part.startsWith("炼金收益")) {
-                String spendStr = part.substring(4); // 去掉 "炼金收益" 前缀
-                return Integer.parseInt(spendStr); // 转换为整数
-            }
-
-        }
+    private int extractValue(String recipe) {
+        Pattern pattern = Pattern.compile("(坊市收益|炼金收益)(\\d+)");
+        Matcher matcher = pattern.matcher(recipe);
+        if (matcher.find()) return Integer.parseInt(matcher.group(2));
         return 0;
     }
 
-    boolean checkBalance(Herb main, Herb lead) {
-        if (main.mainAttr1Type.startsWith("性寒") && lead.leadAttrType.startsWith("性热")) {
-            return true;
-        } else if (main.mainAttr1Type.startsWith("性热") && lead.leadAttrType.startsWith("性寒")) {
-            return true;
-        } else {
-            return main.mainAttr1Type.startsWith("性平") && lead.leadAttrType.startsWith("性平");
-        }
+    private boolean checkBalance(Herb main, Herb lead) {
+        return (main.mainAttr1Type.startsWith("性寒") && lead.leadAttrType.startsWith("性热")) ||
+                (main.mainAttr1Type.startsWith("性热") && lead.leadAttrType.startsWith("性寒")) ||
+                (main.mainAttr1Type.startsWith("性平") && lead.leadAttrType.startsWith("性平"));
     }
 
-    List<RecipeResult> findHighestDan(Herb main, Herb lead, Herb assist) {
+    private List<RecipeResult> findHighestDan(Herb main, Herb lead, Herb assist) {
         List<RecipeResult> recipeResultList = new ArrayList<>();
         for (Dan dan : sortedDans) {
-
-            int mainCount = 0;
-            int leadCount = 0;
-            int assistCount = 0;
+            int mainCount = 0, leadCount = 0, assistCount = 0;
             boolean valid = true;
 
             for (Map.Entry<String, Integer> req : dan.requirements.entrySet()) {
@@ -532,89 +366,55 @@ public class DanCalculator {
                 int needed = req.getValue();
 
                 if (main.mainAttr2Type.equals(type)) {
-                    int per = main.mainAttr2Value;
-                    if (per == 0) {
-                        valid = false;
-                        break;
-                    }
-                    mainCount = Math.max(mainCount, (int) Math.ceil((double) needed / per));
+                    if (main.mainAttr2Value == 0) { valid = false; break; }
+                    mainCount = Math.max(mainCount, (int) Math.ceil((double) needed / main.mainAttr2Value));
                 } else if (assist.assistAttrType.equals(type)) {
-                    int per = assist.assistAttrValue;
-                    if (per == 0 || per/needed >= 2) {
-                        valid = false;
-                        break;
-                    }
-                    assistCount = Math.max(assistCount, (int) Math.ceil((double) needed / per));
-                } else {
-                    valid = false;
-                    break;
-                }
+                    if (assist.assistAttrValue == 0 || assist.assistAttrValue / needed >= 2) { valid = false; break; }
+                    assistCount = Math.max(assistCount, (int) Math.ceil((double) needed / assist.assistAttrValue));
+                } else valid = false;
             }
 
-            if (main.mainAttr1Type.equals("性平")){
-                leadCount = 1;
-            }else {
+            if (main.mainAttr1Type.equals("性平")) leadCount = 1;
+            else {
                 int leadNumber = main.mainAttr1Value * mainCount;
-                if (leadNumber < lead.leadAttrValue){
-                    continue;
-                }
-                leadCount = leadNumber/lead.leadAttrValue;
-                if (leadNumber != leadCount*lead.leadAttrValue){
-                    continue;
-                }
+                if (leadNumber < lead.leadAttrValue) continue;
+                leadCount = leadNumber / lead.leadAttrValue;
+                if (leadNumber != leadCount * lead.leadAttrValue) continue;
             }
-            //花费
+
             int spend = mainCount * main.price + leadCount * lead.price + assistCount * assist.price;
-            //炼金收益
-
             int alchemyValue = dan.alchemyValue * config.getDanNumber();
-            //坊市收益
-            // 0|500w|1000w|1500w|2000w|无限　
-            // 5％|-10％‐|-15％-|-20％‐|-30％‐|手续费
             int marketValue;
-            if (dan.marketValue <= 500) {
-                marketValue = (int) ((double) dan.marketValue * 0.95 * (double) config.getDanNumber());
-            } else if (dan.marketValue <= 1000) {
-                marketValue = (int) ((double) dan.marketValue * 0.9 * (double) config.getDanNumber());
-            } else if (dan.marketValue <= 1500) {
-                marketValue = (int) ((double) dan.marketValue * 0.85 * (double) config.getDanNumber());
-            } else if (dan.marketValue <= 2000) {
-                marketValue = (int) ((double) dan.marketValue * 0.8 * (double) config.getDanNumber());
-            } else {
-                marketValue = (int) ((double) dan.marketValue * 0.7 * (double) config.getDanNumber());
-            }
-            if (config.isAlchemy()) {
-                if (spend > alchemyValue - config.getAlchemyNumber()) {
-                    continue;
-                }
-            } else if (("&" + config.getMakeName() + "&").contains("&" + config.getMakeName() + "&") && spend <= marketValue - config.getMakeNumber()) {
-                if (spend > alchemyValue - config.getAlchemyNumber() && spend > marketValue - config.getMakeNumber()){
-                    continue;
-                }
-            }
+            if (dan.marketValue <= 500) marketValue = (int) (dan.marketValue * 0.95 * config.getDanNumber());
+            else if (dan.marketValue <= 1000) marketValue = (int) (dan.marketValue * 0.9 * config.getDanNumber());
+            else if (dan.marketValue <= 1500) marketValue = (int) (dan.marketValue * 0.85 * config.getDanNumber());
+            else if (dan.marketValue <= 2000) marketValue = (int) (dan.marketValue * 0.8 * config.getDanNumber());
+            else marketValue = (int) (dan.marketValue * 0.7 * config.getDanNumber());
 
+            if (config.isAlchemy() && spend > alchemyValue - config.getAlchemyNumber()) continue;
+            if (!config.isAlchemy() && spend > marketValue - config.getMakeNumber()) continue;
 
-            if (valid && (mainCount + leadCount + assistCount) < 100) {
+            if (valid && mainCount + leadCount + assistCount < 100) {
                 recipeResultList.add(new RecipeResult(dan, mainCount, leadCount, assistCount, spend, alchemyValue, marketValue));
-
             }
         }
         return recipeResultList;
     }
 
-     String formatRecipe(Herb main, Herb lead, Herb assist, int mainCount, int leadCount, int assistCount, int spend, int alchemyValue, int marketValue,String name) {
-         if(config.isAlchemy()){
-             return String.format("主药%s-%d&%d 药引%s-%d&%d 辅药%s-%d&%d 花费%d 炼金收益%d %d丹 %s",
-                     main.name, mainCount,main.price,
-                     lead.name, leadCount,lead.price,
-                     assist.name, assistCount, assist.price,
-                     spend, alchemyValue, config.getDanNumber(), name);
-         }else{
-             return String.format("主药%s-%d&%d 药引%s-%d&%d 辅药%s-%d&%d 花费%d 坊市收益%d %d丹 %s",
-                     main.name, mainCount,main.price,
-                     lead.name, leadCount,lead.price,
-                     assist.name, assistCount, assist.price,
-                     spend, marketValue, config.getDanNumber(), name);
-         }
+    private String formatRecipe(Herb main, Herb lead, Herb assist, int mainCount, int leadCount, int assistCount,
+                                int spend, int alchemyValue, int marketValue, String name) {
+        if (config.isAlchemy()) {
+            return String.format("主药%s-%d&%d 药引%s-%d&%d 辅药%s-%d&%d 花费%d 炼金收益%d %d丹 %s",
+                    main.name, mainCount, main.price,
+                    lead.name, leadCount, lead.price,
+                    assist.name, assistCount, assist.price,
+                    spend, alchemyValue, config.getDanNumber(), name);
+        } else {
+            return String.format("主药%s-%d&%d 药引%s-%d&%d 辅药%s-%d&%d 花费%d 坊市收益%d %d丹 %s",
+                    main.name, mainCount, main.price,
+                    lead.name, leadCount, lead.price,
+                    assist.name, assistCount, assist.price,
+                    spend, marketValue, config.getDanNumber(), name);
+        }
     }
 }

@@ -107,7 +107,7 @@ public class AutoAlchemyTask {
                 public void run() {
                     try {
                         try {
-                            File dataFile = new File(bot.getBotId() + "炼丹配方.txt");
+                            File dataFile = new File(bot.getBotId() + "/炼丹配方.txt");
                             if (dataFile.exists()) {
 //
                                 bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "炼丹配方.txt", "");
@@ -424,7 +424,7 @@ public class AutoAlchemyTask {
                             this.group.sendMessage((new MessageChain()).text("匹配到" + this.alchemyList.size() + "个丹方，准备开始自动炼丹"));
                         }
 
-                        this.autoAlchemy(this.group);
+//                        this.autoAlchemy(this.group);
                         return;
                     }
 

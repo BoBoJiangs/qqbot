@@ -557,7 +557,7 @@ public class RemoteVerifyCode {
                 imageBytes = downloadImageBytes(url);
                 // 上传到服务器
                 String hash = md5(url);
-                String returnMsg = uploadMultipart(shituApiUrl + "report_error", imageBytes, "error_" + hash + ".jpg", question, answer);
+                String returnMsg = uploadMultipart(shituApiUrl + "report_error", imageBytes, "error_" + hash + ".jpg", question, answer,url);
                 RecognitionResult result = JSON.parseObject(returnMsg, RecognitionResult.class);
                 if (result.msg.contains("已保存")) {
                     groupManager.verifyCount.addError();
@@ -860,7 +860,7 @@ public class RemoteVerifyCode {
     }
 
     // 发送 multipart/form-data 请求
-    private static String uploadMultipart(String serverUrl, byte[] imageBytes, String fileName, String question, String answer) throws IOException {
+    private static String uploadMultipart(String serverUrl, byte[] imageBytes, String fileName, String question, String answer,String imageUrl) throws IOException {
         try (CloseableHttpClient client = HttpClients.createDefault()) {
             HttpPost post = new HttpPost(serverUrl);
 
@@ -868,6 +868,7 @@ public class RemoteVerifyCode {
                     .addBinaryBody("image", imageBytes, ContentType.IMAGE_JPEG, fileName)
                     .addTextBody("question", question, ContentType.TEXT_PLAIN.withCharset("UTF-8"))
                     .addTextBody("answer", answer, ContentType.TEXT_PLAIN.withCharset("UTF-8"))
+                    .addTextBody("imageUrl", imageUrl, ContentType.TEXT_PLAIN.withCharset("UTF-8"))
                     .build();
 
             post.setEntity(entity);
