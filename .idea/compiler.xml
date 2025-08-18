@@ -12,6 +12,7 @@
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
+      <module name="bot (1) (com.zhuangxv)" target="1.5" />
       <module name="bot-core" target="1.8" />
     </bytecodeTargetLevel>
   </component>

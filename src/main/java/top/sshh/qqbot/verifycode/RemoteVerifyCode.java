@@ -9,6 +9,14 @@ import com.zhuangxv.bot.core.*;
 import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -853,54 +861,69 @@ public class RemoteVerifyCode {
 
     // 发送 multipart/form-data 请求
     private static String uploadMultipart(String serverUrl, byte[] imageBytes, String fileName, String question, String answer) throws IOException {
-        String boundary = "----JavaFormBoundary" + System.currentTimeMillis();
-        String lineEnd = "\r\n";
-        String twoHyphens = "--";
+        try (CloseableHttpClient client = HttpClients.createDefault()) {
+            HttpPost post = new HttpPost(serverUrl);
 
-        URL url = new URL(serverUrl);
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setDoOutput(true);
-        conn.setUseCaches(false);
-        conn.setRequestMethod("POST");
-        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+            HttpEntity entity = MultipartEntityBuilder.create()
+                    .addBinaryBody("image", imageBytes, ContentType.IMAGE_JPEG, fileName)
+                    .addTextBody("question", question, ContentType.TEXT_PLAIN.withCharset("UTF-8"))
+                    .addTextBody("answer", answer, ContentType.TEXT_PLAIN.withCharset("UTF-8"))
+                    .build();
 
-        try (DataOutputStream dos = new DataOutputStream(conn.getOutputStream())) {
+            post.setEntity(entity);
 
-            // 图片字段
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"image\"; filename=\"" + fileName + "\"" + lineEnd);
-            dos.writeBytes("Content-Type: image/jpeg" + lineEnd);
-            dos.writeBytes(lineEnd);
-            dos.write(imageBytes);
-            dos.writeBytes(lineEnd);
-
-            // question字段
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"question\"" + lineEnd);
-            dos.writeBytes("Content-Type: text/plain; charset=UTF-8" + lineEnd);
-            dos.writeBytes(lineEnd);
-            dos.write(question.getBytes(StandardCharsets.UTF_8));
-            dos.writeBytes(lineEnd);
-
-            // answer字段
-            dos.writeBytes(twoHyphens + boundary + lineEnd);
-            dos.writeBytes("Content-Disposition: form-data; name=\"answer\"" + lineEnd);
-            dos.writeBytes("Content-Type: text/plain; charset=UTF-8" + lineEnd);
-            dos.writeBytes(lineEnd);
-            dos.write(answer.getBytes(StandardCharsets.UTF_8));
-            dos.writeBytes(lineEnd);
-
-            // 结束标志
-            dos.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd);
-            dos.flush();
+            try (CloseableHttpResponse response = client.execute(post)) {
+                return EntityUtils.toString(response.getEntity(), "UTF-8");
+            }
         }
-
-        // 获取响应
-        int responseCode = conn.getResponseCode();
-        InputStream is = (responseCode == 200) ? conn.getInputStream() : conn.getErrorStream();
-        String response = readStream(is);
-        System.out.println("服务器响应: " + response);
-        return response;
+//        String boundary = "----JavaFormBoundary" + System.currentTimeMillis();
+//        String lineEnd = "\r\n";
+//        String twoHyphens = "--";
+//
+//        URL url = new URL(serverUrl);
+//        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+//        conn.setDoOutput(true);
+//        conn.setUseCaches(false);
+//        conn.setRequestMethod("POST");
+//        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+//
+//        try (DataOutputStream dos = new DataOutputStream(conn.getOutputStream())) {
+//
+//            // 图片字段
+//            dos.writeBytes(twoHyphens + boundary + lineEnd);
+//            dos.writeBytes("Content-Disposition: form-data; name=\"image\"; filename=\"" + fileName + "\"" + lineEnd);
+//            dos.writeBytes("Content-Type: image/jpeg" + lineEnd);
+//            dos.writeBytes(lineEnd);
+//            dos.write(imageBytes);
+//            dos.writeBytes(lineEnd);
+//
+//            // question字段
+//            dos.writeBytes(twoHyphens + boundary + lineEnd);
+//            dos.writeBytes("Content-Disposition: form-data; name=\"question\"" + lineEnd);
+//            dos.writeBytes("Content-Type: text/plain; charset=UTF-8" + lineEnd);
+//            dos.writeBytes(lineEnd);
+//            dos.write(question.getBytes(StandardCharsets.UTF_8));
+//            dos.writeBytes(lineEnd);
+//
+//            // answer字段
+//            dos.writeBytes(twoHyphens + boundary + lineEnd);
+//            dos.writeBytes("Content-Disposition: form-data; name=\"answer\"" + lineEnd);
+//            dos.writeBytes("Content-Type: text/plain; charset=UTF-8" + lineEnd);
+//            dos.writeBytes(lineEnd);
+//            dos.write(answer.getBytes(StandardCharsets.UTF_8));
+//            dos.writeBytes(lineEnd);
+//
+//            // 结束标志
+//            dos.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd);
+//            dos.flush();
+//        }
+//
+//        // 获取响应
+//        int responseCode = conn.getResponseCode();
+//        InputStream is = (responseCode == 200) ? conn.getInputStream() : conn.getErrorStream();
+//        String response = readStream(is);
+//        System.out.println("服务器响应: " + response);
+//        return response;
     }
 
     private static String readStream(InputStream is) throws IOException {

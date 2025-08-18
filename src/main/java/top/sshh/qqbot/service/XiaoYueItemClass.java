@@ -29,7 +29,13 @@ public class XiaoYueItemClass {
     )
     public void 物品分类(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
+        if(!messageChain.isEmpty()){
+            message =   messageChain.get(messageChain.size()-1).toString();
+        }
+
         if (message.contains("出售结果如下") && botConfig.isEnableXyHerbClass()) {
+
+            System.out.println(message);
             String[] lines = message.split("\n");
             try {
                 showItemClass(lines, group, messageId);
@@ -62,18 +68,17 @@ public class XiaoYueItemClass {
         Map<String, Integer> gradeCount = new HashMap<>();
         Map<String, Integer> gradeSpecialCount = new HashMap<>();
 
-        Pattern pattern = Pattern.compile("【(.*?)】(\\d+)个");
+        Pattern pattern = Pattern.compile("【(.*?)】(\\d+)个(?!\\d)");
+
         for (String record : records) {
             Matcher matcher = pattern.matcher(record);
-            if (matcher.find()) {
+            while (matcher.find()) {
                 String name = matcher.group(1).trim();
                 int count = Integer.parseInt(matcher.group(2));
                 String grade = ITEM_GRADE_MAP.getOrDefault(name, "未知");
 
-                // 总数
                 gradeCount.put(grade, gradeCount.getOrDefault(grade, 0) + count);
 
-                // 特殊数
                 if (SPECIAL_ITEMS.contains(name)) {
                     gradeSpecialCount.put(grade, gradeSpecialCount.getOrDefault(grade, 0) + count);
                 }
@@ -84,7 +89,7 @@ public class XiaoYueItemClass {
         String[] gradeOrder = {
                 "一品药材", "二品药材", "三品药材", "四品药材", "五品药材",
                 "六品药材", "七品药材", "八品药材", "九品药材",
-                "天元", "圣器", "圣人", "未知"
+                "天元", "圣器", "圣人","神器", "未知"
         };
 
         StringBuilder stringBuilder = new StringBuilder();
@@ -101,6 +106,7 @@ public class XiaoYueItemClass {
                 stringBuilder.append("\n");
             }
         }
+
         group.sendMessage((new MessageChain()).reply(messageId).text(stringBuilder.toString()));
     }
 

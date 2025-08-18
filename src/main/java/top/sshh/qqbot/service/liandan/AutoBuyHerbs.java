@@ -193,7 +193,7 @@ public class AutoBuyHerbs {
         } else if (message.startsWith("批量取消采购药材")) {
             productMap.clear();
             try {
-                updateMedicinePrices(new ArrayList<>());
+                updateMedicinePrices(new ArrayList<>(),bot.getBotId());
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -224,7 +224,7 @@ public class AutoBuyHerbs {
                 }
             }
 
-            this.updateMedicinePrices(priceList);
+            this.updateMedicinePrices(priceList,bot.getBotId());
             if(AutoAlchemyTask.isCreateDan){
                 group.sendMessage((new MessageChain()).text("添加成功,开始同步炼丹配方"));
             }else{
@@ -238,8 +238,8 @@ public class AutoBuyHerbs {
 
     }
 
-    public void updateMedicinePrices(List<ProductPrice> purchases) throws IOException {
-        Path filePath = Paths.get(targetDir, "properties", "药材价格.txt");
+    public void updateMedicinePrices(List<ProductPrice> purchases,Long botId) throws IOException {
+        Path filePath = Paths.get(targetDir, botId+"", "药材价格.txt");
 
         // 如果purchases为空，清空文件
         if (purchases == null || purchases.isEmpty()) {

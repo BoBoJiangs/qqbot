@@ -69,7 +69,7 @@ public class AutoAlchemyTask {
         }
 
         if ("设置炼丹指定丹药".startsWith(message)) {
-            AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config);
+            AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config,bot.getBotId());
         }
 
 
@@ -81,7 +81,7 @@ public class AutoAlchemyTask {
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        AutoAlchemyTask.clearFile(targetDir + "背包药材.txt");
+                        AutoAlchemyTask.clearFile(bot.getBotId() + "/背包药材.txt");
                         group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     } catch (Exception e) {
                         e.printStackTrace();
@@ -107,7 +107,7 @@ public class AutoAlchemyTask {
                 public void run() {
                     try {
                         try {
-                            File dataFile = new File(targetDir + "炼丹配方.txt");
+                            File dataFile = new File(bot.getBotId() + "炼丹配方.txt");
                             if (dataFile.exists()) {
 //
                                 bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "炼丹配方.txt", "");
@@ -132,7 +132,7 @@ public class AutoAlchemyTask {
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        File dataFile = new File(targetDir + "properties/药材价格.txt");
+                        File dataFile = new File(bot.getBotId() + "/药材价格.txt");
                         bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "药材价格.txt", "");
                     } catch (Exception var2) {
                         System.out.println("上传文件异常");
@@ -148,8 +148,8 @@ public class AutoAlchemyTask {
                     try {
                         if(isCreateDan){
                             isCreateDan = false;
-                            danCalculator.loadData();
-                            danCalculator.calculateAllDans();
+                            danCalculator.loadData(bot.getBotId());
+                            danCalculator.calculateAllDans(bot.getBotId());
                             group.sendMessage((new MessageChain()).text("已同步炼丹配方！"));
                             isCreateDan = true;
                         }else{
@@ -197,12 +197,12 @@ public class AutoAlchemyTask {
                                 if(isCreateDan){
                                     isCreateDan = false;
                                     setConfig(matcher);
-                                    AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config);
+                                    AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config,bot.getBotId());
                                     group.sendMessage((new MessageChain()).text("丹方配置已更新，正在重新匹配丹方！"));
-                                    AutoAlchemyTask.this.danCalculator.loadData();
-                                    AutoAlchemyTask.this.danCalculator.calculateAllDans();
+                                    AutoAlchemyTask.this.danCalculator.loadData(bot.getBotId());
+                                    AutoAlchemyTask.this.danCalculator.calculateAllDans(bot.getBotId());
                                     group.sendMessage((new MessageChain()).text("丹方匹配成功！"));
-                                    AutoAlchemyTask.this.danCalculator.addAutoBuyHerbs();
+                                    AutoAlchemyTask.this.danCalculator.addAutoBuyHerbs(bot.getBotId());
                                     isCreateDan = true;
                                 }else{
                                     group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
@@ -217,7 +217,7 @@ public class AutoAlchemyTask {
                     });
                 } else {
                     setConfig(matcher);
-                    AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config);
+                    AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config,bot.getBotId());
                     group.sendMessage((new MessageChain()).text("配置已更新！"));
                 }
 
@@ -396,7 +396,7 @@ public class AutoAlchemyTask {
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包" + this.page));
                 } else {
                     group.sendMessage((new MessageChain()).text("药材背包已刷新，开始匹配丹方..."));
-                    this.parseHerbList();
+                    this.parseHerbList(bot.getBotId());
                 }
             } else {
 //                System.out.println("message==" + message);
@@ -406,8 +406,8 @@ public class AutoAlchemyTask {
 
     }
 
-    private void buyHerbAndSmeltDan() throws Exception {
-        Map<String, List<String>> parseRecipes = this.parseRecipes();
+    private void buyHerbAndSmeltDan(Long botId) throws Exception {
+        Map<String, List<String>> parseRecipes = this.parseRecipes(botId);
         Iterator var2 = parseRecipes.entrySet().iterator();
 
         while (true) {
@@ -486,7 +486,7 @@ public class AutoAlchemyTask {
                         }
                     }
 
-                    int stayHerbCount = this.herbExistence(herb, herbCount);
+                    int stayHerbCount = this.herbExistence(herb, herbCount,botId);
                     if (stayHerbCount > 0) {
                         b = false;
                         break;
@@ -508,7 +508,7 @@ public class AutoAlchemyTask {
                         key = (String) herbEntry.getKey();
                         herb = key.replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", "");
                         int amount = Integer.parseInt(((String) herbEntry.getValue()).split("&")[0]);
-                        modifyHerbCount(herb, amount);
+                        modifyHerbCount(herb, amount,botId);
                     }
                 }
             }
@@ -531,9 +531,9 @@ public class AutoAlchemyTask {
 
     }
 
-    public Map<String, List<String>> parseRecipes() throws IOException {
+    public Map<String, List<String>> parseRecipes(Long botId) throws IOException {
         Map<String, List<String>> danRecipes = new LinkedHashMap();
-        BufferedReader reader = new BufferedReader(new FileReader(targetDir + "炼丹配方.txt"));
+        BufferedReader reader = new BufferedReader(new FileReader(botId + "/炼丹配方.txt"));
         String currentDan = null;
         List<String> currentRecipes = null;
 
@@ -562,8 +562,8 @@ public class AutoAlchemyTask {
         return danRecipes;
     }
 
-    private int herbExistence(String herb, int herbCount) {
-        int count = getHerbCount(herb);
+    private int herbExistence(String herb, int herbCount,Long botId) {
+        int count = getHerbCount(herb,botId);
         return count == -1 ? herbCount : herbCount - count;
     }
 
@@ -584,9 +584,9 @@ public class AutoAlchemyTask {
         return map;
     }
 
-    public static int getHerbCount(String name) {
+    public static int getHerbCount(String name,Long botId) {
         try {
-            BufferedReader reader = new BufferedReader(new FileReader(targetDir + "背包药材.txt"));
+            BufferedReader reader = new BufferedReader(new FileReader(botId+ "/背包药材.txt"));
 
             while (true) {
                 try {
@@ -613,12 +613,12 @@ public class AutoAlchemyTask {
         }
     }
 
-    public static void modifyHerbCount(String name, int amount) {
+    public static void modifyHerbCount(String name, int amount,Long botId) {
         List<String> lines = new ArrayList();
         boolean found = false;
 
         try {
-            BufferedReader reader = new BufferedReader(new FileReader(targetDir + "背包药材.txt"));
+            BufferedReader reader = new BufferedReader(new FileReader(botId + "/背包药材.txt"));
 
             String line;
             try {
@@ -647,7 +647,7 @@ public class AutoAlchemyTask {
         }
 
         try {
-            FileWriter fw = new FileWriter(targetDir + "背包药材.txt", false);
+            FileWriter fw = new FileWriter(botId + "/背包药材.txt", false);
 
             try {
                 BufferedWriter writer = new BufferedWriter(fw);
@@ -677,7 +677,7 @@ public class AutoAlchemyTask {
 
     }
 
-    public void parseHerbList() throws Exception {
+    public void parseHerbList(Long botId) throws Exception {
         String currentHerb = null;
         Iterator var2 = this.medicinalList.iterator();
 
@@ -688,7 +688,7 @@ public class AutoAlchemyTask {
                 currentHerb = line.replaceAll("名字：", "");
             } else if (currentHerb != null && line.contains("拥有数量:")) {
                 int count = Integer.parseInt(line.split("拥有数量:|炼金")[1]);
-                this.updateMedicine(currentHerb, count);
+                this.updateMedicine(currentHerb, count,botId);
                 currentHerb = null;
             }
         }
@@ -697,7 +697,7 @@ public class AutoAlchemyTask {
         customPool.submit(new Runnable() {
             public void run() {
                 try {
-                    AutoAlchemyTask.this.buyHerbAndSmeltDan();
+                    AutoAlchemyTask.this.buyHerbAndSmeltDan(botId);
                 } catch (Exception var2) {
                     System.out.println("加载药材基础数据异常");
                 }
@@ -706,8 +706,8 @@ public class AutoAlchemyTask {
         });
     }
 
-    public void updateMedicine(String name, int quantity) {
-        String filePath = targetDir + "背包药材.txt";
+    public void updateMedicine(String name, int quantity,Long botId) {
+        String filePath = botId + "/背包药材.txt";
         List<String> lines = new ArrayList<>();
         boolean found = false;
         // 读取文件内容并处理

@@ -6,6 +6,8 @@
 package top.sshh.qqbot.service.liandan;
 
 import com.alibaba.fastjson2.JSON;
+import com.zhuangxv.bot.annotation.OnQQConnected;
+import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.MessageChain;
@@ -44,17 +46,10 @@ public class DanCalculator {
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
 
     public DanCalculator() {
-        customPool.submit(new Runnable() {
-            public void run() {
-                DanCalculator.this.loadOrCreateConfig();
-                DanCalculator.this.loadData();
-                DanCalculator.this.calculateAllDans();
-                DanCalculator.this.addAutoBuyHerbs();
-            }
-        });
+
     }
 
-    public void addAutoBuyHerbs() {
+    public void addAutoBuyHerbs(Long botId) {
         if (config != null && config.getAlchemyQQ() != null) {
             List<String> lines = new ArrayList();
             Map productMap = (Map) AutoBuyHerbs.AUTO_BUY_HERBS.computeIfAbsent(config.getAlchemyQQ(), (k) -> {
@@ -62,7 +57,7 @@ public class DanCalculator {
             });
 
             try {
-                BufferedReader reader = new BufferedReader(new FileReader(targetDir+"properties/药材价格.txt"));
+                BufferedReader reader = new BufferedReader(new FileReader(botId+"/药材价格.txt"));
 
                 try {
                     int i = 0;
@@ -98,19 +93,35 @@ public class DanCalculator {
         return config;
     }
 
+    @OnQQConnected
+    public void onConnected(Bot bot) {
+        BotConfig botConfig = bot.getBotConfig();
+        if(botConfig.isEnableAlchemy()){
+            customPool.submit(new Runnable() {
+                public void run() {
+                    DanCalculator.this.loadOrCreateConfig(bot.getBotId());
+                    DanCalculator.this.loadData(bot.getBotId());
+                    DanCalculator.this.calculateAllDans(bot.getBotId());
+                    DanCalculator.this.addAutoBuyHerbs(bot.getBotId());
+                }
+            });
+        }
+
+    }
 
 
-    public void loadOrCreateConfig() {
-        Path configFile = Paths.get(targetDir+"炼丹配置.txt");
+
+    public void loadOrCreateConfig(Long botId) {
+        Path configFile = Paths.get(botId+"/炼丹配置.txt");
 
         try {
             if (Files.exists(configFile, new LinkOption[0])) {
                 logger.info("配置文件存在，正在读取...");
-                this.readConfig();
+                this.readConfig(botId);
             } else {
                 logger.info("配置文件不存在，创建并写入默认配置...");
                 config = new Config();
-                this.saveConfig(config);
+                this.saveConfig(config,botId);
             }
         } catch (Exception e) {
             logger.info("配置文件操作失败{}", e.getMessage());
@@ -118,9 +129,9 @@ public class DanCalculator {
 
     }
 
-    private void readConfig() {
+    private void readConfig(Long botId) {
         try {
-            BufferedReader reader = new BufferedReader(new FileReader(targetDir+"炼丹配置.txt"));
+            BufferedReader reader = new BufferedReader(new FileReader(botId+"/炼丹配置.txt"));
 
             try {
                 StringBuilder jsonStr = new StringBuilder();
@@ -148,34 +159,33 @@ public class DanCalculator {
 
     }
 
-    public void saveConfig(Config config) {
-        try {
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(targetDir+"炼丹配置.txt"), StandardCharsets.UTF_8));
+    public void saveConfig(Config config,Long botId) {
+        File dir = new File(String.valueOf(botId));
+        if (!dir.exists()) dir.mkdirs(); // 创建 botId 文件夹
 
-            try {
-                String jsonStr = JSON.toJSONString(config);
-                if(StringUtils.isNotBlank(jsonStr)){
-                    writer.write(jsonStr);
-                    writer.flush();
-                    logger.info("配置保存成功!{}", jsonStr);
-                }
+        File file = new File(dir, "炼丹配置.txt"); // 文件就在这个文件夹下面
+        try (BufferedWriter writer = new BufferedWriter(
+                new OutputStreamWriter(new FileOutputStream(botId + "/炼丹配置.txt"), StandardCharsets.UTF_8))) {
 
-            } catch (Throwable var4) {
+            String jsonStr = JSON.toJSONString(config);
+            if (StringUtils.isNotBlank(jsonStr)) {
+                writer.write(jsonStr);
+                writer.flush();
+                logger.info("配置保存成功!{}", jsonStr);
             }
 
-            writer.close();
-        } catch (Exception var5) {
-            System.err.println("写入失败: ");
+        } catch (Exception e) {
+            logger.error("写入失败", e);
         }
 
     }
 
-    public void loadData() {
+    public void loadData(Long botId) {
         try {
             this.loadElixirProperties();
             this.loadDanMarketData();
             this.loadDanAlchemyData();
-            this.loadHerbPricesData();
+            this.loadHerbPricesData(botId);
             this.bindAdditionalData();
         } catch (Exception e) {
             AutoAlchemyTask.isCreateDan = false;
@@ -358,9 +368,9 @@ public class DanCalculator {
         });
     }
 
-    public void loadHerbPricesData() throws Exception {
+    public void loadHerbPricesData(Long qq) throws Exception {
         herbPrices.clear();
-        this.loadTxtFile(targetDir+"properties/药材价格.txt", (parts) -> {
+        this.loadTxtFile(qq+"/药材价格.txt", (parts) -> {
             int value = Integer.parseInt(parts[0]);
             herbPrices.put(parts[1], value + 0);
         });
@@ -399,11 +409,11 @@ public class DanCalculator {
 
 
 
-    public void calculateAllDans() {
+    public void calculateAllDans(Long botId) {
         Map<Dan, Set<String>> danRecipes = new LinkedHashMap<>();
 
         // 使用 try-with-resources 自动关闭资源
-        String targetFilePath = targetDir+"炼丹配方.txt";
+        String targetFilePath = botId+"/炼丹配方.txt";
         try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(targetFilePath), StandardCharsets.UTF_8))) {
 
             for (Herb main : herbs) {

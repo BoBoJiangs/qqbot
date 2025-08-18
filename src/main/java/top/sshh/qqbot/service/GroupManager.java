@@ -9,6 +9,7 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.TypeReference;
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
+import com.zhuangxv.bot.annotation.OnQQConnected;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
@@ -575,6 +576,8 @@ public class GroupManager {
         }
 
     }
+
+
 
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE

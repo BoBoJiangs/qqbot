@@ -1,4 +1,4 @@
-xbGroupId: 993970673
+xbGroupId: 690933736
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
 xxGroupId: 690933736
 #captcha:
@@ -28,7 +28,7 @@ bot:
     #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
     enableXslPriceQuery: false
     # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-    cultivationMode: 3
+    cultivationMode: 0
     #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认） 4时长最短 5修为最高
     rewardMode: 5
     #宗门任务1：邪修和查抄（默认） 2：所有任务
@@ -46,7 +46,7 @@ bot:
     botNumber: 5
     enableSelfTitle: false
     #开启小北脚本
-    enableXiaoBei: false
+    enableXiaoBei: true
     #赠送灵石的数量 或者自己发送我要灵石**
     lingShiNum: 100
     #赠送灵石的QQ群 不要设置大群 不然看到有接收码就会自己送哈
@@ -64,6 +64,7 @@ bot:
     #挑战模式 0:不自动执行 1：一口气打完9层 2：3，7，8层打完回血
     challengeMode: 1
     enableXyHerbClass: true
+    enableAlchemy: true
 
 spring:
   datasource:

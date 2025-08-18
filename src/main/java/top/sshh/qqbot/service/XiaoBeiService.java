@@ -433,7 +433,7 @@ public class XiaoBeiService {
             botName = cardName;
         }
 
-        return message.contains(botName);
+        return message.contains(botName) || message.contains("@"+bot.getBotId());
     }
 
     public static Map<String, Integer> extractHerbs(String input) {
@@ -524,6 +524,9 @@ public class XiaoBeiService {
 
     private void sectMessage(Bot bot, String message) throws InterruptedException {
         QQBotConfig botConfig = (QQBotConfig)this.botConfigMap.get(bot.getBotId() + "");
+        if (botConfig == null) {
+            return;
+        }
         if (message.contains("今日无法再获取宗门任务")) {
             this.proccessCultivation(bot, botConfig);
             this.sendGroupMessage(bot, "小北宗门任务已完成");

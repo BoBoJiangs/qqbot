@@ -78,6 +78,9 @@ public class AutoBuyGoods {
                     autoBuyMap.put(bot.getBotId(),new CopyOnWriteArrayList<>());
                     botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
                     bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text(action));
+                    if(botConfig.getCultivationMode() == 1){
+                        botConfig.setStartScheduled(false);
+                    }
                 } catch (Exception e) {
                     group.sendMessage((new MessageChain()).text("格式不正确\n命令格式: 开始捡漏 频率2 坊市查看装备"));
                 }
@@ -122,6 +125,9 @@ public class AutoBuyGoods {
 
             if(message.contains("今天已经很努力了")){
                 botConfig.setEnableAutoBuyLowPrice(false);
+                if(botConfig.getCultivationMode() == 1){
+                    botConfig.setStartScheduled(true);
+                }
             }
             if (!autoBuyMap.get(bot.getBotId()).isEmpty()) {
                 autoBuyMap.get(bot.getBotId()).remove(0);
