@@ -14,6 +14,7 @@ import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
+import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,6 +68,9 @@ public class AutoBuyHerbs {
     )
     public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
+        if (StringUtils.isEmpty(message) || !botConfig.isEnableAlchemy()) {
+            return;
+        }
         message = message.trim();
         if (!message.contains("可用命令")) {
             switch (message) {

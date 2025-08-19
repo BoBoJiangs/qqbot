@@ -325,6 +325,7 @@ public class DanCalculator {
                     });
 
             List<String> sortedRecipes = new ArrayList<>();
+            writer.write(System.lineSeparator() +  (config.isAlchemy()?"炼金丹配方":"坊市丹配方") + System.lineSeparator());
             sortedDans.forEach(dan -> {
                 Set<String> recipes = danRecipes.getOrDefault(dan, Collections.emptySet());
                 sortedRecipes.addAll(recipes);

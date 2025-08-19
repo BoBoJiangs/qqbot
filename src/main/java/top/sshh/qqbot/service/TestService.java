@@ -726,6 +726,8 @@ public class TestService {
             sb.append("循环执行命令××\n");
             sb.append("引用背包 一键上架/炼金\n");
             sb.append("悬赏价格限制 ××\n");
+            sb.append("设置定时任务\n");
+            sb.append("任务统计\n");
             sb.append("－－－－－快捷命令－－－－－\n");
             sb.append("确认一键丹药炼金\n");
             sb.append("确认一键装备炼金\n");
@@ -733,7 +735,7 @@ public class TestService {
             sb.append("一键使用次元之钥\n");
             sb.append("一键使用追捕令\n");
             sb.append("开始自动悬赏/秘境/宗门任务\n");
-            sb.append("任务统计\n");
+
             sb.append("－－－－－掌门命令－－－－－\n");
             sb.append("编号/爱称听令1(不@)\n");
             sb.append("编号/爱称听令2(@小小)\n");
@@ -2472,8 +2474,6 @@ public class TestService {
                 }
 
                 long groupId = botConfig.getGroupId();
-                botConfig.setMjTime(-1L);
-
                 try {
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("秘境结算"));
                     Thread.sleep(3000L);
@@ -2485,21 +2485,18 @@ public class TestService {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             if (botConfig.getRewardMode() != 1 && botConfig.getXslTime() > 0L && botConfig.getXslTime() < System.currentTimeMillis()) {
-                if (botConfig.isStop()) {
+                if (botConfig.isStop() && botConfig.getAutoVerifyModel() == 0) {
                     botConfig.setStop(false);
                     botConfig.setXslTime(-1L);
                     Bot remindBot = this.getRemindAtQQ(bot);
                     if (remindBot == null) {
                         return;
                     }
-
                     bot.getGroup(this.getRemindGroupId(bot)).sendMessage((new MessageChain()).at(remindBot.getBotConfig().getMasterQQ() + "").text("悬赏令结算异常，请手动结算！"));
                     return;
                 }
 
                 long groupId = botConfig.getGroupId();
-                botConfig.setXslTime(-1L);
-
                 try {
                     bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("悬赏令结算"));
                     Thread.sleep(3000L);

@@ -64,7 +64,8 @@ bot:
     #挑战模式 0:不自动执行 1：一口气打完9层 2：3，7，8层打完回血
     challengeMode: 1
     enableXyHerbClass: true
-    enableAlchemy: true
+    #启用炼丹模块
+    enableAlchemy: false
 
 spring:
   datasource:

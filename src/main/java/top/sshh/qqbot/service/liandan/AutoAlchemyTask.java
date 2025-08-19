@@ -57,7 +57,7 @@ public class AutoAlchemyTask {
     )
     public void enableScheduled(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
         BotConfig botConfig = bot.getBotConfig();
-        if (StringUtils.isEmpty(message)) {
+        if (StringUtils.isEmpty(message) || !botConfig.isEnableAlchemy()) {
             return;
         }
         if ("炼丹命令".equals(message)) {
@@ -407,112 +407,90 @@ public class AutoAlchemyTask {
     }
 
     private void buyHerbAndSmeltDan(Long botId) throws Exception {
-        Map<String, List<String>> parseRecipes = this.parseRecipes(botId);
-        Iterator var2 = parseRecipes.entrySet().iterator();
+        Map<String, List<String>> allRecipes = this.parseRecipes(botId);
 
-        while (true) {
-            List value;
-            String v;
-            do {
-                do {
-                    if (!var2.hasNext()) {
-                        if (this.alchemyList.isEmpty() && this.group != null) {
-                            this.group.sendMessage((new MessageChain()).text("未匹配到丹方，请检查丹方设置"));
+        for (Map.Entry<String, List<String>> entry : allRecipes.entrySet()) {
+            List<String> recipeList = entry.getValue();
+            if (recipeList == null || recipeList.isEmpty()) continue;
 
-                            this.resetPram();
-                        } else {
-                            this.group.sendMessage((new MessageChain()).text("匹配到" + this.alchemyList.size() + "个丹方，准备开始自动炼丹"));
-                        }
+            for (int i = 0; i < recipeList.size(); i++) {
+                String recipe = recipeList.get(i);
+                Map<String, String> herbMap = this.getParseRecipeMap(recipe);
 
-//                        this.autoAlchemy(this.group);
-                        return;
+                if (herbMap.isEmpty()) continue;
+
+                // 校验背包药材是否足够
+                if (checkAndConsumeHerbs(herbMap, botId)) {
+                    String main = "";
+                    String lead = "";
+                    String assist = "";
+
+                    for (Map.Entry<String, String> herbEntry : herbMap.entrySet()) {
+                        String key = herbEntry.getKey();
+                        int herbCount = Integer.parseInt(herbEntry.getValue().split("&")[0]);
+                        if (key.contains("主药")) main = key + herbCount;
+                        if (key.contains("药引")) lead = key + herbCount;
+                        if (key.contains("辅药")) assist = key + herbCount;
                     }
 
-                    Map.Entry<String, List<String>> entry = (Map.Entry) var2.next();
-                    value = (List) entry.getValue();
-                    v = (String) entry.getKey();
-                } while (value == null);
-            } while (value.isEmpty());
-
-            for (int d = 0; d < value.size(); ++d) {
-                v = (String) value.get(d);
-                Map<String, String> herbMap = this.getParseRecipeMap(v);
-                String main = "";
-                String lead = "";
-                String assist = "";
-                boolean b = true;
-                Iterator var13 = herbMap.entrySet().iterator();
-
-                Map.Entry herbEntry;
-                String key;
-                String herb;
-                while (var13.hasNext()) {
-                    herbEntry = (Map.Entry) var13.next();
-                    key = (String) herbEntry.getKey();
-                    herb = key.replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", "");
-                    String[] sList = ((String) herbEntry.getValue()).split("&");
-                    int herbCount = Integer.parseInt(sList[0]);
-                    int herbPrice = Integer.parseInt(sList[1]);
-                    if (key.contains("主药")) {
-                        main = key + herbCount;
-                        if (lead.contains(herb)) {
-                            herbCount += Integer.parseInt(lead.replaceAll(herb, "").replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", ""));
-                        }
-
-                        if (assist.contains(herb)) {
-                            herbCount += Integer.parseInt(assist.replaceAll(herb, "").replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", ""));
-                        }
+                    if (StringUtils.isNoneBlank(main, lead, assist)) {
+                        String formula = buildFormula(main, lead, assist);
+                        this.alchemyList.add(formula);
                     }
 
-                    if (key.contains("药引")) {
-                        lead = key + herbCount;
-                        if (main.contains(herb)) {
-                            herbCount += Integer.parseInt(main.replaceAll(herb, "").replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", ""));
-                        }
-
-                        if (assist.contains(herb)) {
-                            herbCount += Integer.parseInt(assist.replaceAll(herb, "").replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", ""));
-                        }
-                    }
-
-                    if (key.contains("辅药")) {
-                        assist = key + herbCount;
-                        if (main.contains(herb)) {
-                            herbCount += Integer.parseInt(main.replaceAll(herb, "").replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", ""));
-                        }
-
-                        if (lead.contains(herb)) {
-                            herbCount += Integer.parseInt(lead.replaceAll(herb, "").replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", ""));
-                        }
-                    }
-
-                    int stayHerbCount = this.herbExistence(herb, herbCount,botId);
-                    if (stayHerbCount > 0) {
-                        b = false;
-                        break;
-                    }
-                }
-
-                if (b) {
-//                    System.out.println("背包药材校验成功！开始炼丹");
-
-                    if (StringUtils.isNotBlank(main) && StringUtils.isNotBlank(lead) && StringUtils.isNotBlank(assist)) {
-                        this.alchemyList.add("配方" + main + lead + assist + "丹炉寒铁铸心炉");
-                    }
-
-                    --d;
-                    var13 = herbMap.entrySet().iterator();
-
-                    while (var13.hasNext()) {
-                        herbEntry = (Map.Entry) var13.next();
-                        key = (String) herbEntry.getKey();
-                        herb = key.replaceAll("主药", "").replaceAll("药引", "").replaceAll("辅药", "");
-                        int amount = Integer.parseInt(((String) herbEntry.getValue()).split("&")[0]);
-                        modifyHerbCount(herb, amount,botId);
-                    }
+                    // 重新校验当前配方（因为扣减了药材，防止遗漏）
+                    i--;
                 }
             }
         }
+
+        if (this.alchemyList.isEmpty() && this.group != null) {
+            this.group.sendMessage(new MessageChain().text("未匹配到丹方，请检查丹方设置"));
+            this.resetPram();
+        } else {
+            this.group.sendMessage(new MessageChain().text("匹配到" + this.alchemyList.size() + "个丹方，准备开始自动炼丹"));
+            this.autoAlchemy(this.group);
+        }
+    }
+
+    /**
+     * 校验并消耗背包药材
+     */
+    private boolean checkAndConsumeHerbs(Map<String, String> herbMap, Long botId) {
+        for (Map.Entry<String, String> herbEntry : herbMap.entrySet()) {
+            String key = herbEntry.getKey();
+            String herbName = normalizeHerbName(key);
+            int requiredCount = Integer.parseInt(herbEntry.getValue().split("&")[0]);
+
+            int shortage = herbExistence(herbName, requiredCount, botId);
+            if (shortage > 0) {
+                return false; // 药材不足，直接放弃
+            }
+        }
+
+        // 扣减药材
+        for (Map.Entry<String, String> herbEntry : herbMap.entrySet()) {
+            String herbName = normalizeHerbName(herbEntry.getKey());
+            int amount = Integer.parseInt(herbEntry.getValue().split("&")[0]);
+            modifyHerbCount(herbName, amount, botId);
+        }
+        return true;
+    }
+
+    /**
+     * 构建炼丹配方
+     */
+    private String buildFormula(String main, String lead, String assist) {
+        return "配方" + main + lead + assist + "丹炉寒铁铸心炉";
+    }
+
+    /**
+     * 去掉角色前缀（主药/药引/辅药）
+     */
+    private String normalizeHerbName(String key) {
+        return key.replaceAll("主药", "")
+                .replaceAll("药引", "")
+                .replaceAll("辅药", "");
     }
 
     private static void clearFile(String filePath) {
