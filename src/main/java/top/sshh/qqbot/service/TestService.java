@@ -40,10 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ForkJoinPool;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -2194,9 +2191,15 @@ public class TestService {
                     }
 
                     if (isSpecialSkill && highestPrioritySkill != null) {
-                        bot.sendPrivateMessage(botConfig.getMasterQQ(), (new MessageChain()).text("恭喜道友" + bot.getBotName() + "的悬赏令在【" + group.getGroupName() + "】群里获得：" + highestPrioritySkill));
                         long groupId = botConfig.getGroupId();
                         bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("悬赏令接取" + currentReceIndex));
+                        try {
+                            if(bot.isFriend(botConfig.getMasterQQ())){
+                                bot.sendPrivateMessage(botConfig.getMasterQQ(), (new MessageChain()).text("恭喜道友" + bot.getBotName() + "的悬赏令在【" + group.getGroupName() + "】群里获得：" + highestPrioritySkill));
+                            }
+                        } catch (Exception e) {
+                           e.printStackTrace();
+                        }
                         return;
                     }
 

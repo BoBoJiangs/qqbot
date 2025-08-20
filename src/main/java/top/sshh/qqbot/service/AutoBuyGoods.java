@@ -34,10 +34,7 @@ import java.nio.file.StandardOpenOption;
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.*;
 
 import static top.sshh.qqbot.constant.Constant.targetDir;
 import static top.sshh.qqbot.service.utils.Utils.getRemindGroup;
@@ -113,14 +110,32 @@ public class AutoBuyGoods {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             if (message.contains("道友成功购买")) {
                 String buyMessage = String.valueOf(messageChain.get(messageChain.size()-1));
-                if(StringUtils.isNotBlank(message)){
-                    getRemindGroup(bot,xxGroupId).sendMessage((new MessageChain()).text(buyMessage));
+//                if(StringUtils.isNotBlank(message) && bot.getBotConfig().getMasterQQ()>0){
+//
+//                    getRemindGroup(bot,xxGroupId).sendMessage((new MessageChain().at(bot.getBotConfig().getMasterQQ()+"")).text(buyMessage));
+//                }
+                try {
+                    if(bot.isFriend(bot.getBotConfig().getMasterQQ())){
+                        ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
+                        bot.sendPrivateMessage(bot.getBotConfig().getMasterQQ(),
+                                (new MessageChain()).text("又让你小子捡到一个"+productPrice.getPrice()+"万的"+productPrice.getName()));
+                    }
+                } catch (ExecutionException e) {
+                    throw new RuntimeException(e);
                 }
-
             }
 
             if(message.contains("未查询到该物品")){
                 Utils.forwardMessage(bot, this.xxGroupId, messageChain);
+                try {
+                    if(bot.isFriend(bot.getBotConfig().getMasterQQ())){
+                        ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
+                        bot.sendPrivateMessage(bot.getBotConfig().getMasterQQ(),
+                                (new MessageChain()).text("糟糕！"+productPrice.getPrice()+"万的"+productPrice.getName()+"被别人捡走了"));
+                    }
+                } catch (ExecutionException e) {
+                    throw new RuntimeException(e);
+                }
             }
 
             if(message.contains("今天已经很努力了")){
@@ -182,10 +197,6 @@ public class AutoBuyGoods {
                 });
                 ProductPrice existingProduct = (ProductPrice)productMap.get(itemName);
                 if (existingProduct != null && price <= (double)existingProduct.getPrice()) {
-                    if (botConfig.isStop()) {
-                        botConfig.setStop(false);
-                        return;
-                    }
 
                     if (group.getGroupId() == botConfig.getGroupId()) {
 //                        group.sendMessage((new MessageChain()).at("3889001741").text(" 坊市购买 " + code));
@@ -248,6 +259,7 @@ public class AutoBuyGoods {
             try {
                 if (bot.getBotConfig().isEnableAutoBuyLowPrice()) {
                     group.sendMessage((new MessageChain()).at("3889001741").text("坊市购买 " + productPrice.getCode()));
+
                 }
                 break;
             } catch (Exception var6) {

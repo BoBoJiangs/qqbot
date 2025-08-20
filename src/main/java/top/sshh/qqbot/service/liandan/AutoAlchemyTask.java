@@ -406,10 +406,14 @@ public class AutoAlchemyTask {
 
     }
 
-    private void buyHerbAndSmeltDan(Long botId) throws Exception {
-        Map<String, List<String>> allRecipes = this.parseRecipes(botId);
+    private static final String DAN_LU = "丹炉寒铁铸心炉";
 
-        for (Map.Entry<String, List<String>> entry : allRecipes.entrySet()) {
+    private void buyHerbAndSmeltDan(Long botId) throws Exception {
+        Map<String, List<String>> parseRecipes = this.parseRecipes(botId);
+
+        boolean matchedAny = false;
+
+        for (Map.Entry<String, List<String>> entry : parseRecipes.entrySet()) {
             List<String> recipeList = entry.getValue();
             if (recipeList == null || recipeList.isEmpty()) continue;
 
@@ -417,81 +421,125 @@ public class AutoAlchemyTask {
                 String recipe = recipeList.get(i);
                 Map<String, String> herbMap = this.getParseRecipeMap(recipe);
 
-                if (herbMap.isEmpty()) continue;
+                // 展示用（严格保留原始数量，含负号）
+                String main = "";
+                String lead = "";
+                String assist = "";
 
-                // 校验背包药材是否足够
-                if (checkAndConsumeHerbs(herbMap, botId)) {
-                    String main = "";
-                    String lead = "";
-                    String assist = "";
+                // 校验/扣减用（同名药材总需求量，按绝对值累加）
+                Map<String, Integer> totalNeed = new HashMap<>();
 
-                    for (Map.Entry<String, String> herbEntry : herbMap.entrySet()) {
-                        String key = herbEntry.getKey();
-                        int herbCount = Integer.parseInt(herbEntry.getValue().split("&")[0]);
-                        if (key.contains("主药")) main = key + herbCount;
-                        if (key.contains("药引")) lead = key + herbCount;
-                        if (key.contains("辅药")) assist = key + herbCount;
+                for (Map.Entry<String, String> he : herbMap.entrySet()) {
+                    String rolePlusName = he.getKey();       // 例如: "主药幻心草"
+                    String herbName     = cleanHerbName(rolePlusName); // "幻心草"
+
+                    String[] parts = he.getValue().split("&");
+                    int countRaw  = Integer.parseInt(parts[0]);  // 可能是 -1
+                    int countAbs  = Math.abs(countRaw);
+
+                    // 保留原始展示
+                    if (rolePlusName.contains("主药")) main  = rolePlusName + countRaw;
+                    if (rolePlusName.contains("药引")) lead  = rolePlusName + countRaw;
+                    if (rolePlusName.contains("辅药")) assist = rolePlusName + countRaw;
+
+                    // 同名药材总需求量（用于库存校验与扣减）
+                    totalNeed.merge(herbName, countAbs, Integer::sum);
+                }
+
+                boolean canSmelt = StringUtils.isNotBlank(main)
+                        && StringUtils.isNotBlank(lead)
+                        && StringUtils.isNotBlank(assist);
+
+                // 先校验库存（同名药材按总量一次性校验）
+                if (canSmelt) {
+                    for (Map.Entry<String, Integer> need : totalNeed.entrySet()) {
+                        int lack = herbExistence(need.getKey(), need.getValue(), botId);
+                        if (lack > 0) {
+                            canSmelt = false;
+                            break;
+                        }
+                    }
+                }
+
+                if (canSmelt) {
+                    matchedAny = true;
+                    // ==== 新增：解析收益 ====
+                    int profit = parseProfit(recipe);
+                    // 展示严格按原始数量（你的例子就会是：主药幻心草-1药引玄冰花-1辅药玄冰花-1）
+//                    this.alchemyList.add("配方" + main + lead + assist + DAN_LU);
+
+                    this.alchemyList.add("配方" + main + lead + assist + DAN_LU + " == 炼金收益" + profit);
+
+                    // 扣减库存（同名药材按总量扣减一次）
+                    for (Map.Entry<String, Integer> need : totalNeed.entrySet()) {
+                        modifyHerbCount(need.getKey(), need.getValue(), botId);
                     }
 
-                    if (StringUtils.isNoneBlank(main, lead, assist)) {
-                        String formula = buildFormula(main, lead, assist);
-                        this.alchemyList.add(formula);
-                    }
-
-                    // 重新校验当前配方（因为扣减了药材，防止遗漏）
+                    // 继续尝试当前配方
                     i--;
                 }
             }
         }
 
-        if (this.alchemyList.isEmpty() && this.group != null) {
-            this.group.sendMessage(new MessageChain().text("未匹配到丹方，请检查丹方设置"));
+        if (!matchedAny) {
+            if (this.group != null) {
+                this.group.sendMessage(new MessageChain().text("未匹配到丹方，请检查丹方设置"));
+            }
             this.resetPram();
         } else {
-            this.group.sendMessage(new MessageChain().text("匹配到" + this.alchemyList.size() + "个丹方，准备开始自动炼丹"));
-            this.autoAlchemy(this.group);
-        }
-    }
-
-    /**
-     * 校验并消耗背包药材
-     */
-    private boolean checkAndConsumeHerbs(Map<String, String> herbMap, Long botId) {
-        for (Map.Entry<String, String> herbEntry : herbMap.entrySet()) {
-            String key = herbEntry.getKey();
-            String herbName = normalizeHerbName(key);
-            int requiredCount = Integer.parseInt(herbEntry.getValue().split("&")[0]);
-
-            int shortage = herbExistence(herbName, requiredCount, botId);
-            if (shortage > 0) {
-                return false; // 药材不足，直接放弃
+            if (this.group != null) {
+                this.group.sendMessage(new MessageChain().text("匹配到" + this.alchemyList.size() + "个丹方，准备开始自动炼丹"));
             }
+             this.autoAlchemy(this.group);
         }
+    }
 
-        // 扣减药材
-        for (Map.Entry<String, String> herbEntry : herbMap.entrySet()) {
-            String herbName = normalizeHerbName(herbEntry.getKey());
-            int amount = Integer.parseInt(herbEntry.getValue().split("&")[0]);
-            modifyHerbCount(herbName, amount, botId);
+    /** 从丹方字符串里解析“炼金收益” */
+    private int parseProfit(String recipe) {
+        Pattern p = Pattern.compile("炼金收益(\\d+)");
+        Matcher m = p.matcher(recipe);
+        if (m.find()) {
+            return Integer.parseInt(m.group(1));
         }
-        return true;
+        return 0; // 没有写收益时返回 0
+    }
+
+    /** 去掉角色前缀，得到纯药材名 */
+    private String cleanHerbName(String key) {
+        return key.replace("主药", "").replace("药引", "").replace("辅药", "");
+    }
+
+
+
+    /**
+     * 提取公共方法：叠加药材数量
+     */
+    private int adjustHerbCount(int herbCount, String herb, String main, String lead, String assist) {
+        herbCount += extractCountIfContains(main, herb);
+        herbCount += extractCountIfContains(lead, herb);
+        herbCount += extractCountIfContains(assist, herb);
+        return herbCount;
     }
 
     /**
-     * 构建炼丹配方
+     * 从字符串里提取某个 herb 的数量
      */
-    private String buildFormula(String main, String lead, String assist) {
-        return "配方" + main + lead + assist + "丹炉寒铁铸心炉";
+    private int extractCountIfContains(String text, String herb) {
+        if (StringUtils.isBlank(text) || !text.contains(herb)) {
+            return 0;
+        }
+        return Integer.parseInt(text.replace(herb, "").replace("主药", "").replace("药引", "").replace("辅药", ""));
     }
 
     /**
-     * 去掉角色前缀（主药/药引/辅药）
+     * 封装发送消息
      */
-    private String normalizeHerbName(String key) {
-        return key.replaceAll("主药", "")
-                .replaceAll("药引", "")
-                .replaceAll("辅药", "");
+    private void notifyGroup(String msg) {
+        if (this.group != null) {
+            this.group.sendMessage(new MessageChain().text(msg));
+        }
     }
+
 
     private static void clearFile(String filePath) {
         try {
