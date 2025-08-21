@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.MessageNumber;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.GroupManager;
@@ -82,7 +83,7 @@ public class AutoBuyHerbs {
                     botConfig.setAutoBuyHerbsMode(1);
                     botConfig.setStartAuto(false);
                     break;
-                case "开始全自动采购药材":
+                case "一键采购药材":
                     resetPram();
                     botConfig.setStop(true);
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
@@ -399,7 +400,7 @@ public class AutoBuyHerbs {
         String[] split = message.split("\n");
         String[] var5 = split;
         int var6 = split.length;
-
+        Config config = danCalculator.getConfig(bot.getBotId());
         for(int var7 = 0; var7 < var6; ++var7) {
             String s = var5[var7];
             if (s.startsWith("价格") && s.contains("mqqapi")) {
@@ -426,8 +427,8 @@ public class AutoBuyHerbs {
                         this.herbPackMap.put(itemName, productPrice);
                     }
 
-                    if (((ProductPrice)this.herbPackMap.get(itemName)).getHerbCount() > danCalculator.config.getLimitHerbsCount()) {
-                        if (price <= (double)existingProduct.getPrice() - (double)danCalculator.config.getAddPrice()) {
+                    if (((ProductPrice)this.herbPackMap.get(itemName)).getHerbCount() > config.getLimitHerbsCount()) {
+                        if (price <= (double)existingProduct.getPrice() - (double)config.getAddPrice()) {
                             existingProduct.setCode(code);
                             existingProduct.setPriceDiff((int) (existingProduct.getPrice() - price));
                             this.autoBuyList.add(existingProduct);
@@ -500,7 +501,7 @@ public class AutoBuyHerbs {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             if(botConfig.getAutoBuyHerbsMode() == 2 ){
-                if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L){
+                if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 310000L){
                     this.autoBuyList.clear();
                     botConfig.setStop(false);
                 }

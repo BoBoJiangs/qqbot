@@ -45,7 +45,7 @@ public class AutoAlchemyTask {
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
     private List<String> alchemyList = new CopyOnWriteArrayList();
     private Group group;
-    private Config config;
+//    private Config config;
     public static boolean isCreateDan = true;
 
 
@@ -57,19 +57,20 @@ public class AutoAlchemyTask {
     )
     public void enableScheduled(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
         BotConfig botConfig = bot.getBotConfig();
-        if (StringUtils.isEmpty(message) || !botConfig.isEnableAlchemy()) {
+        Config config = danCalculator.getConfig(bot.getBotId());
+        if ((StringUtils.isEmpty(message) || !botConfig.isEnableAlchemy()) && config == null) {
             return;
         }
         if ("炼丹命令".equals(message)) {
-            group.sendMessage((new MessageChain()).reply(messageId).text(this.showReplyMessage(message)));
+            group.sendMessage((new MessageChain()).reply(messageId).text(this.showReplyMessage(message,config)));
         }
 
         if ("炼丹设置".equals(message)) {
-            group.sendMessage((new MessageChain()).reply(messageId).text(this.showReplyMessage(message)));
+            group.sendMessage((new MessageChain()).reply(messageId).text(this.showReplyMessage(message,config)));
         }
 
         if ("设置炼丹指定丹药".startsWith(message)) {
-            AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config,bot.getBotId());
+            AutoAlchemyTask.this.danCalculator.saveConfig(config,bot.getBotId());
         }
 
 
@@ -179,7 +180,6 @@ public class AutoAlchemyTask {
         }
 
         if (message.startsWith("更新炼丹配置")) {
-            this.config = this.danCalculator.getConfig();
             Pattern pattern = Pattern.compile("是否是炼金丹药：(true|false).*?炼金丹期望收益：(-?\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?炼丹完成是否购买药材：(true|false).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(\\d+)", Pattern.DOTALL);
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) {
@@ -196,8 +196,8 @@ public class AutoAlchemyTask {
                             try {
                                 if(isCreateDan){
                                     isCreateDan = false;
-                                    setConfig(matcher);
-                                    AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config,bot.getBotId());
+                                    setConfig(matcher,config);
+                                    AutoAlchemyTask.this.danCalculator.saveConfig(config,bot.getBotId());
                                     group.sendMessage((new MessageChain()).text("丹方配置已更新，正在重新匹配丹方！"));
                                     AutoAlchemyTask.this.danCalculator.loadData(bot.getBotId());
                                     AutoAlchemyTask.this.danCalculator.calculateAllDans(bot.getBotId());
@@ -216,30 +216,39 @@ public class AutoAlchemyTask {
                         }
                     });
                 } else {
-                    setConfig(matcher);
-                    AutoAlchemyTask.this.danCalculator.saveConfig(AutoAlchemyTask.this.config,bot.getBotId());
+                    setConfig(matcher,config);
+                    AutoAlchemyTask.this.danCalculator.saveConfig(config,bot.getBotId());
                     group.sendMessage((new MessageChain()).text("配置已更新！"));
                 }
 
             } else {
-                this.config = this.danCalculator.getConfig();
-                String alchemyConfig = "\n更新炼丹配置\n是否是炼金丹药：" + this.config.isAlchemy() + "\n炼金丹期望收益：" + this.config.getAlchemyNumber() + "\n坊市丹期望收益：" + this.config.getMakeNumber() + "\n丹药数量：" + this.config.getDanNumber() + "\n坊市丹名称：" + this.config.getMakeName() + "\n炼丹QQ号码：" + this.config.getAlchemyQQ() + "\n炼丹完成是否购买药材：" + this.config.isFinishAutoBuyHerb() + "\n背包药材数量限制：" + this.config.getLimitHerbsCount() + "\n降低采购药材价格：" + this.config.getAddPrice();
+                String alchemyConfig = "\n更新炼丹配置\n是否是炼金丹药：" + config.isAlchemy() + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n炼丹完成是否购买药材：" + config.isFinishAutoBuyHerb() + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice();
                 group.sendMessage((new MessageChain()).reply(messageId).text("输入格式不正确！示例：" + alchemyConfig));
             }
         }
-
+        try {
+            if (group != null && group.getGroupId() > 0 && groupManager != null && groupManager.MESSAGE_NUMBER_MAP != null) {
+                MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
+                if ((danCalculator != null && config != null && config.getAlchemyQQ() == bot.getBotId()) &&
+                        (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0)) {
+                    bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName() + "(发言次数:" + messageNumber.getNumber() + ")");
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
-    private void setConfig(Matcher matcher) {
-        this.config.setAlchemy(Boolean.parseBoolean(matcher.group(1)));
-        this.config.setAlchemyNumber(Integer.parseInt(matcher.group(2)));
-        this.config.setMakeNumber(Integer.parseInt(matcher.group(3)));
-        this.config.setDanNumber(Integer.parseInt(matcher.group(4)));
-        this.config.setMakeName(matcher.group(5));
-        this.config.setAlchemyQQ(Long.parseLong(matcher.group(6)));
-        this.config.setFinishAutoBuyHerb(Boolean.parseBoolean(matcher.group(7)));
-        this.config.setLimitHerbsCount(Integer.parseInt(matcher.group(8)));
-        this.config.setAddPrice(Integer.parseInt(matcher.group(9)));
+    private void setConfig(Matcher matcher,Config config) {
+        config.setAlchemy(Boolean.parseBoolean(matcher.group(1)));
+        config.setAlchemyNumber(Integer.parseInt(matcher.group(2)));
+        config.setMakeNumber(Integer.parseInt(matcher.group(3)));
+        config.setDanNumber(Integer.parseInt(matcher.group(4)));
+        config.setMakeName(matcher.group(5));
+        config.setAlchemyQQ(Long.parseLong(matcher.group(6)));
+        config.setFinishAutoBuyHerb(Boolean.parseBoolean(matcher.group(7)));
+        config.setLimitHerbsCount(Integer.parseInt(matcher.group(8)));
+        config.setAddPrice(Integer.parseInt(matcher.group(9)));
     }
 
     @GroupMessageHandler(
@@ -263,7 +272,7 @@ public class AutoAlchemyTask {
 
     }
 
-    private String showReplyMessage(String message) {
+    private String showReplyMessage(String message,Config config) {
         StringBuilder sb = new StringBuilder();
         if (message.equals("炼丹命令")) {
             sb.append("－－－－－功能设置－－－－－\n");
@@ -283,8 +292,7 @@ public class AutoAlchemyTask {
             return sb.toString();
         } else {
             if (message.equals("炼丹设置")) {
-                this.config = this.danCalculator.getConfig();
-                String alchemyConfig = "是否是炼金丹药：" + this.config.isAlchemy() + "\n炼金丹期望收益：" + this.config.getAlchemyNumber() + "\n坊市丹期望收益：" + this.config.getMakeNumber() + "\n丹药数量：" + this.config.getDanNumber() + "\n坊市丹名称：" + this.config.getMakeName() + "\n炼丹QQ号码：" + this.config.getAlchemyQQ() + "\n炼丹完成是否购买药材：" + this.config.isFinishAutoBuyHerb() + "\n背包药材数量限制：" + this.config.getLimitHerbsCount() + "\n降低采购药材价格：" + this.config.getAddPrice();
+                String alchemyConfig = "是否是炼金丹药：" + config.isAlchemy() + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n炼丹完成是否购买药材：" + config.isFinishAutoBuyHerb() + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice();
                 sb.append("－－－－－当前设置－－－－－\n");
                 sb.append(alchemyConfig);
             }
@@ -341,25 +349,25 @@ public class AutoAlchemyTask {
 
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
-    )
-    public void 统计群聊发言次数(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-
-        try {
-            if (group != null && group.getGroupId() > 0 && groupManager != null && groupManager.MESSAGE_NUMBER_MAP != null) {
-                MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
-                if ((danCalculator != null && danCalculator.config != null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
-                        (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0)) {
-                    bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName() + "(发言次数:" + messageNumber.getNumber() + ")");
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-
-    }
+//    @GroupMessageHandler(
+//            ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
+//    )
+//    public void 统计群聊发言次数(final Bot bot, final Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+//
+//        try {
+//            if (group != null && group.getGroupId() > 0 && groupManager != null && groupManager.MESSAGE_NUMBER_MAP != null) {
+//                MessageNumber messageNumber = groupManager.MESSAGE_NUMBER_MAP.get(bot.getBotId()+"");
+//                if ((danCalculator != null && danCalculator.config != null && danCalculator.config.getAlchemyQQ() == bot.getBotId()) &&
+//                        (messageNumber.getNumber() == 10 || messageNumber.getNumber() % 100 == 0)) {
+//                    bot.setGroupCard(bot.getBotConfig().getGroupId(), bot.getBotId(), bot.getBotName() + "(发言次数:" + messageNumber.getNumber() + ")");
+//                }
+//            }
+//        } catch (Exception e) {
+//            e.printStackTrace();
+//        }
+//
+//
+//    }
 
     @GroupMessageHandler(
             senderIds = {3889001741L}

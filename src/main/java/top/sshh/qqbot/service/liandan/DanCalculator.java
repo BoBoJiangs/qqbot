@@ -38,7 +38,8 @@ public class DanCalculator {
     private Map<String, Integer> herbPrices = new LinkedHashMap<>();
     private Map<String, Integer> danMarketValues = new LinkedHashMap<>();
     private Map<String, Integer> danAlchemyValues = new LinkedHashMap<>();
-    public Config config = new Config();
+//    public Config config = new Config();
+    public Map<Long, Config> configMap = new ConcurrentHashMap<>();
 
     // ======================= 事件入口 =======================
     @OnQQConnected
@@ -48,8 +49,8 @@ public class DanCalculator {
 
         customPool.submit(() -> {
             loadOrCreateConfig(bot.getBotId());
-            loadData(bot.getBotId());
-            calculateAllDans(bot.getBotId());
+//            loadData(bot.getBotId());
+//            calculateAllDans(bot.getBotId());
             addAutoBuyHerbs(bot.getBotId());
         });
     }
@@ -63,7 +64,8 @@ public class DanCalculator {
                 readConfig(botId);
             } else {
                 logger.info("配置文件不存在，创建默认配置...");
-                config = new Config();
+                Config config = new Config();
+                configMap.put(botId, config);
                 saveConfig(config, botId);
             }
         } catch (Exception e) {
@@ -76,12 +78,14 @@ public class DanCalculator {
         try (BufferedReader reader = Files.newBufferedReader(configFile, StandardCharsets.UTF_8)) {
             String jsonStr = reader.lines().collect(Collectors.joining());
             if (StringUtils.isNotBlank(jsonStr)) {
-                config = JSON.parseObject(jsonStr, Config.class);
+                Config config = JSON.parseObject(jsonStr, Config.class);
+                configMap.put(botId, config);
                 logger.info("配置读取成功：{}", JSON.toJSONString(config));
             }
         } catch (IOException e) {
             logger.error("读取配置文件失败!", e);
-            config = new Config();
+            Config config = new Config();
+            configMap.put(botId, config);
         }
     }
 
@@ -98,12 +102,13 @@ public class DanCalculator {
         }
     }
 
-    public Config getConfig() {
-        return config;
+    public Config getConfig(Long botId) {
+        return configMap.get(botId);
     }
 
     // ======================= 自动购买药材 =======================
     public void addAutoBuyHerbs(Long botId) {
+        Config config = getConfig(botId);
         if (config == null || config.getAlchemyQQ() == null) return;
 
         Map<String, ProductPrice> productMap = AutoBuyHerbs.AUTO_BUY_HERBS
@@ -301,7 +306,7 @@ public class DanCalculator {
     public void calculateAllDans(Long botId) {
         Map<Dan, Set<String>> danRecipes = new LinkedHashMap<>();
         String targetFilePath = botId + "/炼丹配方.txt";
-
+        Config config = getConfig(botId);
         try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(targetFilePath), StandardCharsets.UTF_8)) {
             // 三重循环遍历组合（可以考虑 parallelStream 提升性能）
             herbs.parallelStream()
@@ -313,11 +318,11 @@ public class DanCalculator {
                                     herbs.stream()
                                             .filter(assist -> assist.price > 0)
                                             .forEach(assist -> {
-                                                List<RecipeResult> resultList = findHighestDan(main, lead, assist);
+                                                List<RecipeResult> resultList = findHighestDan(main, lead, assist,botId);
                                                 for (RecipeResult result : resultList) {
                                                     String recipe = formatRecipe(main, lead, assist,
                                                             result.mainCount, result.leadCount, result.assistCount,
-                                                            result.spend, (result.alchemyValue - result.spend), (result.marketValue - result.spend), result.dan.name);
+                                                            result.spend, (result.alchemyValue - result.spend), (result.marketValue - result.spend), result.dan.name,botId);
                                                     danRecipes.computeIfAbsent(result.dan, k -> new HashSet<>()).add(recipe);
                                                 }
                                             });
@@ -356,7 +361,8 @@ public class DanCalculator {
                 (main.mainAttr1Type.startsWith("性平") && lead.leadAttrType.startsWith("性平"));
     }
 
-    private List<RecipeResult> findHighestDan(Herb main, Herb lead, Herb assist) {
+    private List<RecipeResult> findHighestDan(Herb main, Herb lead, Herb assist,Long botId) {
+        Config config = getConfig(botId);
         List<RecipeResult> recipeResultList = new ArrayList<>();
         for (Dan dan : sortedDans) {
             int mainCount = 0, leadCount = 0, assistCount = 0;
@@ -403,7 +409,8 @@ public class DanCalculator {
     }
 
     private String formatRecipe(Herb main, Herb lead, Herb assist, int mainCount, int leadCount, int assistCount,
-                                int spend, int alchemyValue, int marketValue, String name) {
+                                int spend, int alchemyValue, int marketValue, String name,Long botId) {
+        Config config = getConfig(botId);
         if (config.isAlchemy()) {
             return String.format("主药%s-%d&%d 药引%s-%d&%d 辅药%s-%d&%d 花费%d 炼金收益%d %d丹 %s",
                     main.name, mainCount, main.price,

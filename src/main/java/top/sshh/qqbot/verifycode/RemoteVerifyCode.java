@@ -202,8 +202,6 @@ public class RemoteVerifyCode {
             }
 
             RecognitionResult recognitionResult = recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText());
-//            result = "识别结果: " + result;
-//            result = "识别成功率：" + groupManager.verifyCount.getAccuracy() + "%" + "\n" + result;
             if (StringUtils.isNotBlank(verifyQQ)) {
                 codeUrlMap.put(Long.parseLong(verifyQQ), recognitionResult);
             } else {
@@ -285,18 +283,7 @@ public class RemoteVerifyCode {
      * 识别错误后尝试随机点击一个按钮
      */
     private void errorClickButton(Buttons buttons, Bot bot, Group group, String resultText) {
-//        String key = "识别结果:";
-//        int index = resultText.indexOf(key);
-        //        if (index != -1) {
-//            // 从“识别结果:”后面截取
-//            result = resultText.substring(index + key.length()).trim();
-//            // 如果后面还有换行，只取第一行
-//            int newlineIndex = result.indexOf("\n");
-//            if (newlineIndex != -1) {
-//                result = result.substring(0, newlineIndex).trim();
-//            }
-//            System.out.println(result); // 输出：请点击六加九加2的结果
-//        }
+
         if (resultText.contains("加") && (resultText.length() == 11 || resultText.length() == 10)) {
             Button maxNumberButton = null;
             for (Button button : buttons.getButtonList()) {
@@ -502,7 +489,7 @@ public class RemoteVerifyCode {
             for (String emoji : recognitionResult.emojiList) {
                 stringBuilder.append(emoji);
             }
-            stringBuilder.append("识别表情：");
+            stringBuilder.append("\n");
         }
         stringBuilder.append("正确答案："+recognitionResult.answer);
         if (StringUtils.isEmpty(verifyQQ)) {
@@ -877,54 +864,6 @@ public class RemoteVerifyCode {
                 return EntityUtils.toString(response.getEntity(), "UTF-8");
             }
         }
-//        String boundary = "----JavaFormBoundary" + System.currentTimeMillis();
-//        String lineEnd = "\r\n";
-//        String twoHyphens = "--";
-//
-//        URL url = new URL(serverUrl);
-//        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-//        conn.setDoOutput(true);
-//        conn.setUseCaches(false);
-//        conn.setRequestMethod("POST");
-//        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
-//
-//        try (DataOutputStream dos = new DataOutputStream(conn.getOutputStream())) {
-//
-//            // 图片字段
-//            dos.writeBytes(twoHyphens + boundary + lineEnd);
-//            dos.writeBytes("Content-Disposition: form-data; name=\"image\"; filename=\"" + fileName + "\"" + lineEnd);
-//            dos.writeBytes("Content-Type: image/jpeg" + lineEnd);
-//            dos.writeBytes(lineEnd);
-//            dos.write(imageBytes);
-//            dos.writeBytes(lineEnd);
-//
-//            // question字段
-//            dos.writeBytes(twoHyphens + boundary + lineEnd);
-//            dos.writeBytes("Content-Disposition: form-data; name=\"question\"" + lineEnd);
-//            dos.writeBytes("Content-Type: text/plain; charset=UTF-8" + lineEnd);
-//            dos.writeBytes(lineEnd);
-//            dos.write(question.getBytes(StandardCharsets.UTF_8));
-//            dos.writeBytes(lineEnd);
-//
-//            // answer字段
-//            dos.writeBytes(twoHyphens + boundary + lineEnd);
-//            dos.writeBytes("Content-Disposition: form-data; name=\"answer\"" + lineEnd);
-//            dos.writeBytes("Content-Type: text/plain; charset=UTF-8" + lineEnd);
-//            dos.writeBytes(lineEnd);
-//            dos.write(answer.getBytes(StandardCharsets.UTF_8));
-//            dos.writeBytes(lineEnd);
-//
-//            // 结束标志
-//            dos.writeBytes(twoHyphens + boundary + twoHyphens + lineEnd);
-//            dos.flush();
-//        }
-//
-//        // 获取响应
-//        int responseCode = conn.getResponseCode();
-//        InputStream is = (responseCode == 200) ? conn.getInputStream() : conn.getErrorStream();
-//        String response = readStream(is);
-//        System.out.println("服务器响应: " + response);
-//        return response;
     }
 
     private static String readStream(InputStream is) throws IOException {
