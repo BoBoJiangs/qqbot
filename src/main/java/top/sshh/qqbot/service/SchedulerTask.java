@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.TaskInfo;
 import top.sshh.qqbot.service.impl.TaskStore;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
@@ -27,7 +28,8 @@ public class SchedulerTask {
         message = message.trim();
         if (message.startsWith("设置定时任务")) {
             String qq = String.valueOf(bot.getBotId()); // 使用发送消息用户 QQ
-            TaskStore.taskMap.get(qq).clear();
+//            TaskStore.taskMap.get(qq).clear();
+            TaskStore.taskMap.computeIfAbsent(qq, k -> new ArrayList<>()).clear();
             String[] lines = message.split("\n");
             for (int i = 1; i < lines.length; i++) {
                 String line = lines[i].trim();

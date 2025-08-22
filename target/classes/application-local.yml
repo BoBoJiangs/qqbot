@@ -1,8 +1,8 @@
 xbGroupId: 690933736
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
 #xxGroupId: 690933736
-#captcha:
-#   shitu-api-url: http://113.45.9.127:8000/
+captcha:
+   shitu-api-url: http://113.45.9.127:8000/
 #   shitu-api-url: http://116:205:232:32:8848/shitu
 
 bot:
@@ -51,6 +51,7 @@ bot:
     lingShiNum: 100
     #赠送灵石的QQ群 不要设置大群 不然看到有接收码就会自己送哈
     lingShiQQ: 1011466037
+    #群管提醒
     enableAutomaticReply: false
     #0:不转发 1转发部分消息
     forwardMode: 1

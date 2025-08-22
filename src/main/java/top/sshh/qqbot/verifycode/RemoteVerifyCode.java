@@ -159,7 +159,8 @@ public class RemoteVerifyCode {
                     RecognitionResult codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
                     if (buttons.getImageUrl().equals(codeData.getUrl())) {
                         saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult());
-                        sendFailMessage(bot, message, buttons, messageChain, codeData.getResult());
+//                        sendFailMessage(bot, message, buttons, messageChain, codeData.getResult());
+                        errorClickButton(buttons, bot, group, codeData.result,verifyQQ);
                         bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("自动验证失败，请手动验证"));
                         return;
                     }
@@ -282,7 +283,7 @@ public class RemoteVerifyCode {
     /**
      * 识别错误后尝试随机点击一个按钮
      */
-    private void errorClickButton(Buttons buttons, Bot bot, Group group, String resultText) {
+    private void errorClickButton(Buttons buttons, Bot bot, Group group, String resultText, String verifyQQ) {
 
         if (resultText.contains("加") && (resultText.length() == 11 || resultText.length() == 10)) {
             Button maxNumberButton = null;
@@ -300,13 +301,18 @@ public class RemoteVerifyCode {
             }
             if (maxNumberButton != null) {
                 logger.info("点击最大数字按钮：" + maxNumberButton.getLabel());
-                bot.clickKeyboardButton(
-                        group.getGroupId(),
-                        buttons.getBotAppid(),
-                        maxNumberButton.getId(),
-                        maxNumberButton.getData(),
-                        buttons.getMsgSeq()
-                );
+                if(!StringUtils.isEmpty(verifyQQ)){
+                    bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("点击" + maxNumberButton.getLabel()));
+                }else{
+                    bot.clickKeyboardButton(
+                            group.getGroupId(),
+                            buttons.getBotAppid(),
+                            maxNumberButton.getId(),
+                            maxNumberButton.getData(),
+                            buttons.getMsgSeq()
+                    );
+                }
+
             }
 
         }
@@ -329,20 +335,8 @@ public class RemoteVerifyCode {
             recognitionResult.url = imageUrl;
             recognitionResult.title = title;
             resultText = recognitionResult.result;
-            resultText = resultText.replaceAll("请点点", "请点击");
-            resultText = resultText.replaceAll("情点", "请点");
-            resultText = resultText.replaceAll("漏点", "请点");
-            resultText = resultText.replaceAll("乘情", "表情");
-            resultText = resultText.replaceAll("乘击", "点击");
-            resultText = resultText.replaceAll("请击", "点击");
-            resultText = resultText.replaceAll("点请", "点击");
-            resultText = resultText.replaceAll("图4", "图中");
-            resultText = resultText.replaceAll("图8", "图中");
-            resultText = resultText.replaceAll("表蟹", "表情");
-            resultText = resultText.replaceAll("表鲸", "表情");
-            resultText = resultText.replaceAll("表请", "表情");
-            resultText = resultText.replaceAll("点表", "点击");
-            resultText = resultText.replaceAll("鲸击", "点击");
+
+            resultText = Utils.extractAfterPleaseClick(resultText);
             if (StringUtils.isNotBlank(title) && StringUtils.isNotBlank(resultText)) {
                 if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
                     Character targetChar = extractTargetChar(title);
@@ -501,7 +495,7 @@ public class RemoteVerifyCode {
                 }
 
             } else {
-                errorClickButton(buttons, bot, group, recognitionResult.result);
+                errorClickButton(buttons, bot, group, recognitionResult.result,"");
             }
             RecognitionResult codeData = codeUrlMap.get(bot.getBotId());
             saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult());
@@ -671,22 +665,6 @@ public class RemoteVerifyCode {
         return s.matches("\\d+") ? Integer.parseInt(s) : CHINESE_NUMBERS.getOrDefault(s, -1);
     }
 
-//    public static class RecognitionResult {
-//        public List<String> emojiList;
-//        public String result;
-//        public int code;
-//        public String msg;
-//        public String answer;
-//        public String url;
-//
-//        public RecognitionResult(List<String> list, String r) {
-//            this.emojiList = list;
-//            this.result = r;
-//        }
-//
-//        public RecognitionResult() {
-//        }
-//    }
 
     public RecognitionResult callShituAPI(String shituApiUrl, String imageUrl, String titleText, String annu, String mode) {
         HttpURLConnection conn = null;

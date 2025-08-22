@@ -5,6 +5,7 @@ top/sshh/qqbot/data/RecipeResult.class
 top/sshh/qqbot/data/TaskStatus.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$7.class
 top/sshh/qqbot/service/MemoryCleaner$BufferTracker.class
+top/sshh/qqbot/data/BotConfigPersist.class
 top/sshh/qqbot/service/impl/TaskStore.class
 top/sshh/qqbot/service/AutoSellGoods.class
 top/sshh/qqbot/service/liandan/AutoAlchemyTask$3.class

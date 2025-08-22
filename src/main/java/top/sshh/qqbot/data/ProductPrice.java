@@ -19,6 +19,7 @@ public class ProductPrice {
     )
     private Long id;
     private int price;
+
     private String name;
     private String code;
     private LocalDateTime time;
@@ -35,6 +36,8 @@ public class ProductPrice {
     @Transient
     @JSONField(serialize = false)
     private int priceDiff = 0;
+    @JSONField(serialize = false)
+    private double buyPrice;
 
     @Transient
     public String getTime2() {
@@ -42,6 +45,14 @@ public class ProductPrice {
     }
 
     public ProductPrice() {
+    }
+
+    public double getBuyPrice() {
+        return buyPrice;
+    }
+
+    public void setBuyPrice(double buyPrice) {
+        this.buyPrice = buyPrice;
     }
 
     public int getPriceDiff() {

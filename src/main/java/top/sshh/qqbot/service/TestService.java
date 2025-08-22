@@ -5,8 +5,10 @@
 
 package top.sshh.qqbot.service;
 
+import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
+import com.zhuangxv.bot.annotation.OnQQConnected;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Button;
@@ -29,6 +31,10 @@ import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -53,6 +59,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.constant.Constant;
+import top.sshh.qqbot.data.BotConfigPersist;
 import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
@@ -89,7 +96,9 @@ public class TestService {
             botConfig.setStartScheduled(false);
         } else if (cultivationMode == 1) {
             botConfig.setStartScheduled(true);
-            group.sendMessage((new MessageChain()).at("3889001741").text("修炼"));
+            if(!botConfig.isEnableAutoBuyLowPrice()){
+                group.sendMessage((new MessageChain()).at("3889001741").text("修炼"));
+            }
         } else if (cultivationMode == 2) {
             botConfig.setStartScheduled(false);
             group.sendMessage((new MessageChain()).at("3889001741").text("闭关"));
@@ -159,31 +168,37 @@ public class TestService {
             if ("启用悬赏令价格查询".equals(message)) {
                 botConfig.setEnableXslPriceQuery(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("启用悬赏令价格查询成功"));
+                saveBotConfig(bot);
             }
 
             if ("启用自动秘境".equals(message)) {
                 botConfig.setEnableAutoSecret(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("启用自动秘境成功"));
+                saveBotConfig(bot);
             }
 
             if ("关闭自动秘境".equals(message)) {
                 botConfig.setEnableAutoSecret(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("关闭自动秘境"));
+                saveBotConfig(bot);
             }
 
             if ("关闭悬赏令价格查询".equals(message)) {
                 botConfig.setEnableXslPriceQuery(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("关闭悬赏令价格查询成功"));
+                saveBotConfig(bot);
             }
 
             if ("启用无偿双修".equals(message)) {
                 botConfig.setEnableAutoRepair(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("启用无偿双修成功"));
+                saveBotConfig(bot);
             }
 
             if ("关闭无偿双修".equals(message)) {
                 botConfig.setEnableAutoRepair(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("关闭无偿双修成功"));
+                saveBotConfig(bot);
             }
 
 
@@ -215,16 +230,19 @@ public class TestService {
             if ("悬赏优先时长最短".equals(message)) {
                 botConfig.setRewardMode(4);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
 
             if ("悬赏优先价值".equals(message)) {
                 botConfig.setRewardMode(3);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
 
             if ("悬赏优先修为".equals(message)) {
                 botConfig.setRewardMode(5);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
 
             if (message.startsWith("悬赏价格限制")) {
@@ -235,30 +253,46 @@ public class TestService {
                 } else {
                     group.sendMessage((new MessageChain()).reply(messageId).text("格式错误，示例：悬赏价格限制 1000"));
                 }
+                saveBotConfig(bot);
             }
 
             if (message.startsWith("设置主号")) {
                 String typeString = message.substring(message.indexOf("设置主号") + 4).trim();
                 botConfig.setControlQQ(typeString);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
 
             if (message.startsWith("添加主号")) {
                 String typeString = message.substring(message.indexOf("添加主号") + 4).trim();
                 botConfig.setControlQQ(botConfig.getControlQQ() + "&" + typeString);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
 
             if (message.startsWith("设置提醒群号")) {
                 String groupString = message.substring(message.indexOf("设置提醒群号") + 6).trim();
                 botConfig.setGroupQQ(groupString);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
 
             if (message.startsWith("添加提醒群号")) {
                 String groupString = message.substring(message.indexOf("添加提醒群号") + 6).trim();
                 botConfig.setGroupQQ(botConfig.getGroupQQ() + "&" + groupString);
                 group.sendMessage((new MessageChain()).reply(messageId).text("添加成功"));
+                saveBotConfig(bot);
+            }
+
+            if (message.startsWith("设置赠送灵石群号")) {
+                try {
+                    String groupString = message.substring(message.indexOf("设置赠送灵石群号") + 8).trim();
+                    botConfig.setLingShiQQ(Long.parseLong(groupString));
+                    group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                    saveBotConfig(bot);
+                } catch (NumberFormatException e) {
+                    group.sendMessage((new MessageChain()).reply(messageId).text("格式错误，示例：设置赠送灵石群号 123456789"));
+                }
             }
 
             if ("一键使用追捕令".equals(message)) {
@@ -299,6 +333,7 @@ public class TestService {
             if ("开启群管提醒".equals(message)) {
                 botConfig.setEnableAutomaticReply(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
             if ("开启妖塔挑战".equals(message) && (
                     botConfig.getChallengeMode() == 1 || botConfig.getChallengeMode() == 2)) {
@@ -308,6 +343,7 @@ public class TestService {
                 } else {
                     botConfig.setChallengeMode(21);
                 }
+                saveBotConfig(bot);
             }
             if ("停止妖塔挑战".equals(message)) {
                 if (botConfig.getChallengeMode() == 11 || botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 13) {
@@ -315,12 +351,14 @@ public class TestService {
                 } else if (botConfig.getChallengeMode() == 21 || botConfig.getChallengeMode() == 22 || botConfig.getChallengeMode() == 23) {
                     botConfig.setChallengeMode(2);
                 }
+                saveBotConfig(bot);
             }
 
 
             if ("关闭群管提醒".equals(message)) {
                 botConfig.setEnableAutomaticReply(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
 
             if ("开启自助头衔".equals(message)) {
@@ -331,6 +369,17 @@ public class TestService {
             if ("关闭自助头衔".equals(message)) {
                 botConfig.setEnableSelfTitle(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+            }
+
+            if ("启用定时任务".equals(message)) {
+                botConfig.setEnableAutoTask(true);
+                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
+            }
+            if ("关闭定时任务".equals(message)) {
+                botConfig.setEnableAutoTask(false);
+                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
 
             if ("开始自动修炼".equals(message)) {
@@ -366,7 +415,9 @@ public class TestService {
 
                     botConfig.setCultivationMode(type);
                     proccessCultivation(group);
+                    saveBotConfig(bot);
                 }
+
             } else if (message.startsWith("悬赏令模式")) {
                 String typeString = message.substring(message.indexOf("悬赏令模式") + 5).trim();
                 if (StringUtils.isNotBlank(typeString)) {
@@ -383,8 +434,27 @@ public class TestService {
                     if (type == 3) {
                         group.sendMessage((new MessageChain()).reply(messageId).text("已开启全自动悬赏"));
                     }
+                    saveBotConfig(bot);
                 }
-            } else if (message.startsWith("设置宗门任务")) {
+            }else if (message.startsWith("验证模式")) {
+                String typeString = message.substring(message.indexOf("验证模式") + 4).trim();
+                if (StringUtils.isNotBlank(typeString)) {
+                    int type = Integer.parseInt(typeString);
+                    botConfig.setAutoVerifyModel(type);
+                    if (type == 0) {
+                        group.sendMessage((new MessageChain()).reply(messageId).text("关闭自动验证"));
+                    }
+
+                    if (type == 1) {
+                        group.sendMessage((new MessageChain()).reply(messageId).text("已开启半自动验证模式"));
+                    }
+
+                    if (type == 2) {
+                        group.sendMessage((new MessageChain()).reply(messageId).text("已开启全自动验证模式"));
+                    }
+                    saveBotConfig(bot);
+                }
+            }  else if (message.startsWith("设置宗门任务")) {
                 String typeString = message.substring(message.indexOf("设置宗门任务") + 6).trim();
                 if (StringUtils.isNotBlank(typeString)) {
                     int typex = Integer.parseInt(typeString);
@@ -394,6 +464,7 @@ public class TestService {
                     } else {
                         group.sendMessage((new MessageChain()).reply(messageId).text("启用所有宗门任务成功"));
                     }
+                    saveBotConfig(bot);
                 }
             } else if ("停止自动宗门任务".equals(message)) {
                 botConfig.setFamilyTaskStatus(0);
@@ -402,22 +473,28 @@ public class TestService {
                 botConfig.setFamilyTaskStatus(0);
                 botConfig.setEnableSectMission(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("启用自动宗门任务成功"));
+                saveBotConfig(bot);
             } else if ("关闭自动宗门任务".equals(message)) {
                 botConfig.setFamilyTaskStatus(0);
                 botConfig.setEnableSectMission(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("关闭自动宗门任务成功"));
+                saveBotConfig(bot);
             } else if ("启用价格查询".equals(message)) {
                 botConfig.setEnableCheckPrice(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("启用价格查询成功"));
+                saveBotConfig(bot);
             } else if ("关闭价格查询".equals(message)) {
                 botConfig.setEnableCheckPrice(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止价格查询成功"));
+                saveBotConfig(bot);
             } else if ("启用猜成语查询".equals(message)) {
                 botConfig.setEnableGuessTheIdiom(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("启用猜成语成功"));
+                saveBotConfig(bot);
             } else if ("关闭猜成语查询".equals(message)) {
                 botConfig.setEnableGuessTheIdiom(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止猜成语成功"));
+                saveBotConfig(bot);
             } else if ("开启查行情".equals(message)) {
                 botConfig.setEnableCheckMarket(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("启用查行情成功"));
@@ -513,6 +590,84 @@ public class TestService {
         }
 
     }
+
+    @OnQQConnected
+    public void onConnected(Bot bot) {
+        BotConfig botConfig = bot.getBotConfig();
+        if (!botConfig.isEnableAlchemy()) return;
+
+        customPool.submit(() -> {
+            loadBotConfig(bot);
+        });
+    }
+
+
+    public void saveBotConfig(Bot bot) {
+        try {
+            BotConfig botConfig = bot.getBotConfig();
+            BotConfigPersist persist = new BotConfigPersist();
+            persist.setGroupQQ(botConfig.getGroupQQ());
+            persist.setEnableSectMission(botConfig.isEnableSectMission());
+            persist.setControlQQ(botConfig.getControlQQ());
+            persist.setEnableAutoSecret(botConfig.isEnableAutoSecret());
+            persist.setEnableXslPriceQuery(botConfig.isEnableXslPriceQuery());
+            persist.setRewardMode(botConfig.getRewardMode());
+            persist.setEnableCheckPrice(botConfig.isEnableCheckPrice());
+            persist.setEnableGuessTheIdiom(botConfig.isEnableGuessTheIdiom());
+            persist.setEnableAutomaticReply(botConfig.isEnableAutomaticReply());
+            persist.setBotNumber(botConfig.getBotNumber());
+            persist.setEnableAutoTask(botConfig.isEnableAutoTask());
+            persist.setAutoVerifyModel(botConfig.getAutoVerifyModel());
+            persist.setEnableAutoField(botConfig.isEnableAutoField());
+            persist.setEnableAutoRepair(botConfig.isEnableAutoRepair());
+            persist.setCultivationMode(botConfig.getCultivationMode());
+            persist.setSectMode(botConfig.getSectMode());
+            persist.setXslPriceLimit(botConfig.getXslPriceLimit());
+            persist.setLingShiQQ(botConfig.getLingShiQQ());
+
+            Path path = Paths.get("./config/bot-" + bot.getBotId() + ".json");
+            Files.createDirectories(path.getParent());
+            Files.write(path,
+                    JSON.toJSONString(persist).getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void loadBotConfig(Bot bot) {
+        try {
+            Path path = Paths.get("./config/bot-" + bot.getBotId() + ".json");
+            if (!Files.exists(path)) return;
+
+            String content = Utils.readString(path);
+            BotConfigPersist persist = JSON.parseObject(content, BotConfigPersist.class);
+            BotConfig botConfig = bot.getBotConfig();
+            botConfig.setGroupQQ(persist.getGroupQQ());
+            botConfig.setEnableSectMission(persist.isEnableSectMission());
+            botConfig.setControlQQ(persist.getControlQQ());
+            botConfig.setEnableAutoSecret(persist.isEnableAutoSecret());
+            botConfig.setEnableXslPriceQuery(persist.isEnableXslPriceQuery());
+            botConfig.setRewardMode(persist.getRewardMode());
+            botConfig.setEnableCheckPrice(persist.isEnableCheckPrice());
+            botConfig.setEnableGuessTheIdiom(persist.isEnableGuessTheIdiom());
+            botConfig.setEnableAutomaticReply(persist.isEnableAutomaticReply());
+            botConfig.setBotNumber(persist.getBotNumber());
+            botConfig.setEnableAutoTask(persist.isEnableAutoTask());
+            botConfig.setAutoVerifyModel(persist.getAutoVerifyModel());
+            botConfig.setEnableAutoField(persist.isEnableAutoField());
+            botConfig.setEnableAutoRepair(persist.isEnableAutoRepair());
+            botConfig.setCultivationMode(persist.getCultivationMode());
+            botConfig.setSectMode(persist.getSectMode());
+            botConfig.setXslPriceLimit(persist.getXslPriceLimit());
+            botConfig.setLingShiQQ(persist.getLingShiQQ());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
 
     private void startAutoTask(Bot bot, BotConfig botConfig, int cultivationMode, Long groupId, String command) {
         if (cultivationMode == 2) {
@@ -769,32 +924,29 @@ public class TestService {
                 sb.append(Constant.padRight("自动修炼", 11) + ": " + (botConfig.isStartScheduled() ? "启用" : "关闭") + "\n");
                 int rewardMode = botConfig.getRewardMode();
                 if (rewardMode == 1) {
-                    sb.append(Constant.padRight("自动悬赏令", 9) + ": 关闭\n");
-                    sb.append(Constant.padRight("悬赏令模式", 9) + ": 手动\n");
+                    sb.append(Constant.padRight("自动悬赏", 11) + ": 关闭\n");
+                    sb.append(Constant.padRight("悬赏模式", 11) + ": 手动\n");
                 } else if (rewardMode == 2) {
-                    sb.append(Constant.padRight("自动悬赏令", 9) + ": 关闭\n");
-                    sb.append(Constant.padRight("悬赏令模式", 9) + ": 半自动\n");
+                    sb.append(Constant.padRight("自动悬赏", 11) + ": 关闭\n");
+                    sb.append(Constant.padRight("悬赏模式", 11) + ": 半自动\n");
                 } else if (rewardMode == 3) {
-                    sb.append(Constant.padRight("自动悬赏令", 9) + ": 自动\n");
-                    sb.append(Constant.padRight("悬赏令模式", 9) + ": 优先价值\n");
+                    sb.append(Constant.padRight("自动悬赏", 11) + ": 自动\n");
+                    sb.append(Constant.padRight("悬赏模式", 11) + ": 优先价值\n");
                 } else if (rewardMode == 4) {
-                    sb.append(Constant.padRight("自动悬赏令", 9) + ": 自动\n");
-                    sb.append(Constant.padRight("悬赏令模式", 9) + ": 优先时长最短\n");
+                    sb.append(Constant.padRight("自动悬赏", 11) + ": 自动\n");
+                    sb.append(Constant.padRight("悬赏模式", 11) + ": 优先时长最短\n");
                 } else if (rewardMode == 5) {
-                    sb.append(Constant.padRight("自动悬赏令", 9) + ": 自动\n");
-                    sb.append(Constant.padRight("悬赏令模式", 9) + ": 优先修为\n");
+                    sb.append(Constant.padRight("自动悬赏", 11) + ": 自动\n");
+                    sb.append(Constant.padRight("悬赏模式", 11) + ": 优先修为\n");
                 }
 
-                sb.append(Constant.padRight("自动宗门任务", 0) + ": " + (botConfig.isEnableSectMission() ? "启用" : "关闭") + "\n");
-                sb.append(Constant.padRight("宗门任务模式", 0) + ": " + (botConfig.getSectMode() == 1 ? "邪修查抄" : "所有") + "\n");
-                sb.append(Constant.padRight("悬赏令价格查询", 0) + ": " + (botConfig.isEnableXslPriceQuery() ? "启用" : "关闭") + "\n");
-                sb.append(Constant.padRight("猜成语查询", 9) + ": " + (botConfig.isEnableGuessTheIdiom() ? "启用" : "关闭") + "\n");
-                if (botConfig.getLastExecuteTime() == 0L) {
-                    sb.append(Constant.padRight("灵田收取时间", 9) + ": 无\n");
-                } else {
-                    sb.append(Constant.padRight("灵田收取时间", 9) + ": " + FamilyTask.sdf.format(new Date(botConfig.getLastExecuteTime() + 172800000L)) + "\n");
-                }
-
+                sb.append(Constant.padRight("宗门任务", 11) + ": " + (botConfig.isEnableSectMission() ? "启用" : "关闭") + "\n");
+                sb.append(Constant.padRight("宗门模式", 11) + ": " + (botConfig.getSectMode() == 1 ? "邪修查抄" : "所有") + "\n");
+                sb.append(Constant.padRight("悬赏价格", 11) + ": " + (botConfig.isEnableXslPriceQuery() ? "启用" : "关闭") + "\n");
+                sb.append(Constant.padRight("成语查询", 11) + ": " + (botConfig.isEnableGuessTheIdiom() ? "启用" : "关闭") + "\n");
+                sb.append(Constant.padRight("验证模式", 11) + ": " +
+                        (botConfig.getAutoVerifyModel() == 0 ? "手动" :
+                                botConfig.getAutoVerifyModel() == 1 ? "半自动" : "自动") + "\n");
                 sb.append("－－－－－其它设置－－－－－\n");
                 if (StringUtils.isNotBlank(botConfig.getControlQQ())) {
                     sb.append(Constant.padRight("主号", 3) + ": " + botConfig.getControlQQ() + "\n");
@@ -2019,6 +2171,7 @@ public class TestService {
             LocalDateTime now = LocalDateTime.now();
             if (message.contains("正在秘境中") && message.contains("分身乏术")) {
                 long groupId = botConfig.getGroupId();
+                botConfig.setFamilyTaskStatus(0);
                 bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("秘境结算"));
             } else if (message.contains("道友现在什么都没干")) {
                 botConfig.setXslTime(-1L);
@@ -2088,6 +2241,7 @@ public class TestService {
             if (message.contains("在做悬赏令呢") && message.contains("分身乏术")) {
                 botConfig.setStartScheduled(false);
                 bot.getBotConfig().setMjTime(-1L);
+                botConfig.setFamilyTaskStatus(0);
                 group.sendMessage((new MessageChain()).at("3889001741").text("悬赏令结算"));
             }
 
@@ -2371,7 +2525,7 @@ public class TestService {
                 this.groupManager.setDanYaoFinished(bot);
             }
 
-            if (message.contains("奖励") && message.contains("灵石")) {
+            if (message.contains("奖励") && message.contains("灵石") && botConfig.getAutoVerifyModel() == 0) {
 //                Utils.forwardMessage(bot, this.xxGroupId, message);
                 Utils.forwardMessage(bot, this.xxGroupId, messageChain);
             }

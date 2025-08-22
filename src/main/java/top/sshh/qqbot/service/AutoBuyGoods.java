@@ -1,8 +1,3 @@
-//
-// Source code recreated from a .class file by IntelliJ IDEA
-// (powered by FernFlower decompiler)
-//
-
 package top.sshh.qqbot.service;
 
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
@@ -12,9 +7,7 @@ import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.MessageChain;
-import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
-import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,212 +17,240 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.utils.Utils;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardOpenOption;
-import java.text.SimpleDateFormat;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.*;
 
-import static top.sshh.qqbot.constant.Constant.targetDir;
-import static top.sshh.qqbot.service.utils.Utils.getRemindGroup;
 import static top.sshh.qqbot.service.utils.Utils.isAtSelf;
 
 @Component
 public class AutoBuyGoods {
     private static final Logger logger = LoggerFactory.getLogger(AutoBuyGoods.class);
     private final ExecutorService customPool = Executors.newCachedThreadPool();
-    private Map<Long, List<ProductPrice>> autoBuyMap = new ConcurrentHashMap();
-    private List<String> medicinalList = new ArrayList();
-    private Map<String, ProductPrice> herbPackMap = new ConcurrentHashMap();
-    private List<Integer> makeDrugIndexList = new ArrayList<>();
+
+    /** 每个 botId 对应的捡漏队列 */
+    private final Map<Long, List<ProductPrice>> autoBuyMap = new ConcurrentHashMap<>();
+    /** 每个 botId 对应的顺序循环命令队列 */
+    private final Map<Long, Queue<String>> botCommandQueue = new ConcurrentHashMap<>();
+
     @Autowired
     public GroupManager groupManager;
+
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
 
-    public AutoBuyGoods() {
-    }
+    public AutoBuyGoods() {}
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
-    )
-    public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+    /** 处理用户命令：开始捡漏 / 停止捡漏 */
+    @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.ONLY_ITSELF)
+    public void enableScheduled(Bot bot, Group group, Member member,
+                                MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
         message = message.trim();
-        if (!message.contains("可用命令")) {
-            if (message.startsWith("开始捡漏")) {
-                try {
-                    String[] parts = message.split(" ");
 
-                    int frequency = Integer.parseInt(parts[1].split("频率")[1]);  // "频率2"
-                    String action = parts[2];
-                    botConfig.setCommand(action);
-                    botConfig.setFrequency(frequency);
-                    bot.getBotConfig().setEnableAutoBuyLowPrice(true);
-                    autoBuyMap.put(bot.getBotId(),new CopyOnWriteArrayList<>());
-                    botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
-                    bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text(action));
-                    if(botConfig.getCultivationMode() == 1){
-                        botConfig.setStartScheduled(false);
-                    }
-                } catch (Exception e) {
-                    group.sendMessage((new MessageChain()).text("格式不正确\n命令格式: 开始捡漏 频率2 坊市查看装备"));
+        if (message.startsWith("开始捡漏")) {
+            try {
+                String[] parts = message.split(" ");
+                int frequency = Integer.parseInt(parts[1].split("频率")[1]);
+                List<String> actions = Arrays.asList(parts[2].split("&"));
+
+                botConfig.setFrequency(frequency);
+                botConfig.setEnableAutoBuyLowPrice(true);
+                botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
+
+                // 初始化循环队列
+                botCommandQueue.put(bot.getBotId(), new LinkedList<>(actions));
+                autoBuyMap.put(bot.getBotId(), new CopyOnWriteArrayList<>());
+                sendNextCommand(bot, botConfig);
+
+                if (botConfig.getCultivationMode() == 1) {
+                    botConfig.setStartScheduled(false);
                 }
-            }
-
-            if ("停止捡漏".equals(message)) {
-                botConfig.setCommand("");
-                autoBuyMap.put(bot.getBotId(),new CopyOnWriteArrayList<>());
-                bot.getBotConfig().setEnableAutoBuyLowPrice(false);
-                group.sendMessage((new MessageChain()).reply(messageId).text("停止捡漏成功"));
+            } catch (Exception e) {
+                group.sendMessage(new MessageChain().text("格式不正确\n命令格式: 开始捡漏 频率1 装备1&技能5"));
             }
         }
 
-
-
+        if ("停止捡漏".equals(message)) {
+            autoBuyMap.put(bot.getBotId(), new CopyOnWriteArrayList<>());
+            botCommandQueue.remove(bot.getBotId());
+            botConfig.setEnableAutoBuyLowPrice(false);
+            group.sendMessage(new MessageChain().reply(messageId).text("停止捡漏成功"));
+        }
     }
 
+    /** 发送循环队列中的下一条命令 */
+    private void sendNextCommand(Bot bot, BotConfig botConfig) {
+        Queue<String> queue = botCommandQueue.get(bot.getBotId());
+        if (queue != null && !queue.isEmpty()) {
+            String nextCmd = queue.poll();   // 取队头
+            bot.getGroup(botConfig.getGroupId())
+                    .sendMessage(new MessageChain().at("3889001741").text("坊市查看" + nextCmd));
+            queue.offer(nextCmd);  // 放回队尾，实现循环
+        }
+    }
 
-
-
-    @GroupMessageHandler(
-            senderIds = {3889001741L}
-    )
-    public void 成功购买物品(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+    /** 购买物品成功/失败处理 */
+    @GroupMessageHandler(senderIds = {3889001741L})
+    public void 成功购买物品(Bot bot, Group group, Member member,
+                             MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
-        boolean isAtSelf = isAtSelf(bot,group,message,xxGroupId);
-        if (isGroup && isAtSelf && botConfig.isEnableAutoBuyLowPrice() && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
-                message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
+        boolean isAtSelf = isAtSelf(bot, group, message, xxGroupId);
+
+        if (isGroup && isAtSelf && botConfig.isEnableAutoBuyLowPrice()
+                && (message.contains("道友成功购买")
+                || message.contains("卖家正在进行其他操作")
+                || message.contains("今天已经很努力了")
+                || message.contains("坊市现在太繁忙了")
+                || message.contains("没钱还来买东西")
+                || message.contains("未查询")
+                || message.contains("道友的上一条指令还没执行完"))) {
+
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
+
+            // 购买成功
             if (message.contains("道友成功购买")) {
-                String buyMessage = String.valueOf(messageChain.get(messageChain.size()-1));
-//                if(StringUtils.isNotBlank(message) && bot.getBotConfig().getMasterQQ()>0){
-//
-//                    getRemindGroup(bot,xxGroupId).sendMessage((new MessageChain().at(bot.getBotConfig().getMasterQQ()+"")).text(buyMessage));
-//                }
                 try {
-                    if(bot.isFriend(bot.getBotConfig().getMasterQQ())){
+                    if(!autoBuyMap.get(bot.getBotId()).isEmpty()){
                         ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
-                        bot.sendPrivateMessage(bot.getBotConfig().getMasterQQ(),
-                                (new MessageChain()).text("又让你小子捡到一个"+productPrice.getPrice()+"万的"+productPrice.getName()));
+                        Random random = new Random();
+                        String[] successMsgs = getSuccessMsgs(productPrice);
+                        sendBuyMessage(bot, random, successMsgs);
                     }
+
                 } catch (ExecutionException e) {
                     throw new RuntimeException(e);
                 }
             }
 
-            if(message.contains("未查询到该物品")){
+            // 未查询到该物品
+            if (message.contains("未查询到该物品")) {
                 Utils.forwardMessage(bot, this.xxGroupId, messageChain);
                 try {
-                    if(bot.isFriend(bot.getBotConfig().getMasterQQ())){
+                    if(!autoBuyMap.get(bot.getBotId()).isEmpty()){
                         ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
-                        bot.sendPrivateMessage(bot.getBotConfig().getMasterQQ(),
-                                (new MessageChain()).text("糟糕！"+productPrice.getPrice()+"万的"+productPrice.getName()+"被别人捡走了"));
+                        Random random = new Random();
+                        String[] failMsgs = getFailMsgs(productPrice);
+                        sendBuyMessage(bot, random, failMsgs);
                     }
                 } catch (ExecutionException e) {
                     throw new RuntimeException(e);
                 }
             }
 
-            if(message.contains("今天已经很努力了")){
+            // 今天已经很努力了
+            if (message.contains("今天已经很努力了")) {
                 botConfig.setEnableAutoBuyLowPrice(false);
-                if(botConfig.getCultivationMode() == 1){
+                if (botConfig.getCultivationMode() == 1) {
                     botConfig.setStartScheduled(true);
                 }
             }
+
+            // 移除已处理的物品
             if (!autoBuyMap.get(bot.getBotId()).isEmpty()) {
                 autoBuyMap.get(bot.getBotId()).remove(0);
             }
-            if(autoBuyMap.get(bot.getBotId()).isEmpty()){
-                group.sendMessage((new MessageChain()).at("3889001741").text(botConfig.getCommand()));
-            }else{
+
+            // 如果队列为空或已处理完，循环发送下一条命令
+            if (autoBuyMap.get(bot.getBotId()).isEmpty()) {
+                sendNextCommand(bot, botConfig);
+            } else {
                 this.buyHerbs(group, bot);
+            }
+        }
+    }
+
+    private void sendBuyMessage(Bot bot, Random random, String[] successMsgs) throws InterruptedException, ExecutionException {
+        String successMsg = successMsgs[random.nextInt(successMsgs.length)];
+        if (bot.isFriend(bot.getBotConfig().getMasterQQ())) {
+            bot.sendPrivateMessage(bot.getBotConfig().getMasterQQ(),
+                    (new MessageChain()).text(successMsg));
+        }else{
+            if(xxGroupId>0){
+                bot.sendGroupMessage(xxGroupId, new MessageChain().text(successMsg));
             }
 
         }
-
     }
 
+    private String[] getFailMsgs(ProductPrice productPrice) {
+        return new String[]{
+                "啊哦！" + productPrice.getName() + "(" + productPrice.getBuyPrice() + "万)一眨眼被隔壁老王顺走了！",
+                "糟糕！你正准备拿" + productPrice.getName() + "时，突然被妖风刮跑，别人拣到了…",
+                "道友刚伸手，就见一只仓鼠叼走了价值" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "！",
+                "真惨！" + productPrice.getName() + "刚出炉，你还没来得及喊666就被别人抢光了～",
+                "嘿嘿，别哭，" + productPrice.getName() + "(" + productPrice.getBuyPrice() + "万)已经跟别人私奔了～"
+        };
+    }
 
-    @GroupMessageHandler(
-            senderIds = {3889001741L}
-    )
-    public void 自动购买药材(Bot bot, Group group, String message, Integer messageId)  {
+    private String[] getSuccessMsgs(ProductPrice productPrice) {
+        return new String[]{
+                "咦？系统出Bug了，居然给你掉出来一个" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "！",
+                "道友运气爆棚！" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "轻轻松松到手～",
+                "叮！快递小哥敲门：您点的" + productPrice.getName() + "(" + productPrice.getBuyPrice() + "万)已到账！",
+                "神秘商人笑眯眯地塞给你一个" + productPrice.getName() + "，顺便还要了你" + productPrice.getBuyPrice() + "万灵石～",
+                "恭喜！你刚刚踩到香蕉皮摔倒，顺手捡起一个" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "。"
+        };
+    }
+
+    /** 自动购买药材 */
+    @GroupMessageHandler(senderIds = {3889001741L})
+    public void 自动购买药材(Bot bot, Group group, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        if (isGroup && message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架") && botConfig.isEnableAutoBuyLowPrice() ) {
+        if (isGroup && message.contains("不鼓励不保障任何第三方交易行为")
+                && !message.contains("下架") && botConfig.isEnableAutoBuyLowPrice()) {
             this.customPool.submit(() -> {
                 botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
                 this.processMarketMessage(bot, group, message);
             });
         }
-
     }
 
     private void processMarketMessage(Bot bot, Group group, String message) {
         String[] split = message.split("\n");
-        String[] var5 = split;
-        int var6 = split.length;
-
-        for(int var7 = 0; var7 < var6; ++var7) {
-            String s = var5[var7];
+        for (String s : split) {
             if (s.startsWith("价格") && s.contains("mqqapi")) {
                 BotConfig botConfig = bot.getBotConfig();
-                if (botConfig.getTaskId() != 0L) {
-                    botConfig.getTaskId();
-                } else {
-                    botConfig.getGroupId();
-                }
-
                 String[] split1 = s.split("\\[|\\]");
                 String code = s.split("%E5%9D%8A%E5%B8%82%E8%B4%AD%E4%B9%B0|&")[1];
                 double price = this.extractPrice(s);
                 String itemName = this.extractItemName(split1[1].trim());
-                Map<String, ProductPrice> productMap = (Map)this.groupManager.autoBuyProductMap.computeIfAbsent(bot.getBotId()+"", (k) -> {
-                    return new ConcurrentHashMap();
-                });
-                ProductPrice existingProduct = (ProductPrice)productMap.get(itemName);
-                if (existingProduct != null && price <= (double)existingProduct.getPrice()) {
 
+                Map<String, ProductPrice> productMap = groupManager.autoBuyProductMap
+                        .computeIfAbsent(bot.getBotId() + "", k -> new ConcurrentHashMap<>());
+
+                ProductPrice existingProduct = productMap.get(itemName);
+                if (existingProduct != null && price <= existingProduct.getPrice()) {
                     if (group.getGroupId() == botConfig.getGroupId()) {
-//                        group.sendMessage((new MessageChain()).at("3889001741").text(" 坊市购买 " + code));
                         existingProduct.setCode(code);
+                        existingProduct.setBuyPrice(price);
                         existingProduct.setPriceDiff((int) (existingProduct.getPrice() - price));
                         autoBuyMap.get(bot.getBotId()).add(existingProduct);
                     }
-
                 }
             }
         }
+
         autoBuyMap.get(bot.getBotId()).sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
-        if(autoBuyMap.get(bot.getBotId()).isEmpty()){
+
+        if (autoBuyMap.get(bot.getBotId()).isEmpty()) {
             try {
                 Thread.sleep(bot.getBotConfig().getFrequency() * 1000L);
-                group.sendMessage((new MessageChain()).at("3889001741").text(bot.getBotConfig().getCommand()));
+                sendNextCommand(bot, bot.getBotConfig());
             } catch (InterruptedException e) {
                 logger.info(e.getMessage());
             }
-        }else{
+        } else {
             this.buyHerbs(group, bot);
         }
-
     }
 
     private double extractPrice(String message) {
-        String[] split;
         if (message.contains("万 [")) {
-            split = message.split("价格:|万");
-            return Double.parseDouble(split[1]);
+            return Double.parseDouble(message.split("价格:|万")[1]);
         } else if (message.contains("亿 [")) {
-            split = message.split("价格:|亿");
-            return Double.parseDouble(split[1]) * 10000.0;
+            return Double.parseDouble(message.split("价格:|亿")[1]) * 10000.0;
         } else {
             return Double.MAX_VALUE;
         }
@@ -237,54 +258,41 @@ public class AutoBuyGoods {
 
     private String extractItemName(String rawName) {
         StringBuilder result = new StringBuilder();
-        char[] var3 = rawName.toCharArray();
-        int var4 = var3.length;
-
-        for(int var5 = 0; var5 < var4; ++var5) {
-            char c = var3[var5];
+        for (char c : rawName.toCharArray()) {
             if (Character.toString(c).matches("[\\u4e00-\\u9fa5()（）]")) {
                 result.append(c);
             }
         }
-
         return result.toString();
     }
 
     private void buyHerbs(Group group, Bot bot) {
-        Iterator var3 = autoBuyMap.get(bot.getBotId()).iterator();
-
-        while(var3.hasNext()) {
-            ProductPrice productPrice = (ProductPrice)var3.next();
-
+        for (ProductPrice productPrice : autoBuyMap.get(bot.getBotId())) {
             try {
                 if (bot.getBotConfig().isEnableAutoBuyLowPrice()) {
-                    group.sendMessage((new MessageChain()).at("3889001741").text("坊市购买 " + productPrice.getCode()));
-
+                    group.sendMessage(new MessageChain().at("3889001741")
+                            .text("坊市购买 " + productPrice.getCode()));
                 }
                 break;
-            } catch (Exception var6) {
+            } catch (Exception e) {
                 logger.error("发送购买消息失败");
                 Thread.currentThread().interrupt();
             }
         }
-
     }
 
-    @Scheduled(
-            fixedDelay = 10000L,
-            initialDelay = 30000L
-    )
+    /** 定时检查任务，刷新捡漏命令 */
+    @Scheduled(fixedDelay = 10000L, initialDelay = 30000L)
     public void 超时执行刷新任务() {
-        BotFactory.getBots().values().forEach((bot) -> {
+        BotFactory.getBots().values().forEach(bot -> {
             BotConfig botConfig = bot.getBotConfig();
-            if (botConfig.isEnableAutoBuyLowPrice() && StringUtils.isNotBlank(botConfig.getCommand())) {
-                if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L && bot.getBotConfig().getAutoVerifyModel() == 2){
-                    this.autoBuyMap.put(bot.getBotId(), new CopyOnWriteArrayList<>());
-                    bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text(bot.getBotConfig().getCommand()));
-                }
+            if (botConfig.isEnableAutoBuyLowPrice()
+                    && System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L
+                    && botConfig.getAutoVerifyModel() == 2) {
 
+                autoBuyMap.put(bot.getBotId(), new CopyOnWriteArrayList<>());
+                sendNextCommand(bot, botConfig);
             }
-
         });
     }
 }
