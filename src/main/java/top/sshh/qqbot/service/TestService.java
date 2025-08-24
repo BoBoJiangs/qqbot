@@ -95,8 +95,8 @@ public class TestService {
         if (cultivationMode == 0) {
             botConfig.setStartScheduled(false);
         } else if (cultivationMode == 1) {
-            botConfig.setStartScheduled(true);
             if(!botConfig.isEnableAutoBuyLowPrice()){
+                botConfig.setStartScheduled(true);
                 group.sendMessage((new MessageChain()).at("3889001741").text("修炼"));
             }
         } else if (cultivationMode == 2) {
