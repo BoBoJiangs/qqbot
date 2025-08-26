@@ -63,6 +63,7 @@ import top.sshh.qqbot.data.BotConfigPersist;
 import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
+import top.sshh.qqbot.service.liandan.DanCalculator;
 import top.sshh.qqbot.service.utils.Utils;
 
 @Component
@@ -85,6 +86,8 @@ public class TestService {
     private static final List<String> KEYWORDS = Arrays.asList("烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后", "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困", "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得", "从腐朽道袍中滑落");
     private static final List<String> commandWords = Arrays.asList("悬赏令", "秘境", "宗门任务", "宗门丹药", "灵田", "灵石");
     private static final List<String> forwardWords = Arrays.asList("稍等一会", "宗门系统繁忙", "宗门闭关室", "当前灵石", "探索需要花费时间", "探索耗时", "道友成功领取到丹药", "道友已经领取过了", "不需要验证", "验证码已过期", "道友今天已经很努力了");
+    @Autowired
+    public DanCalculator danCalculator;
 
     public TestService() {
     }
@@ -95,8 +98,8 @@ public class TestService {
         if (cultivationMode == 0) {
             botConfig.setStartScheduled(false);
         } else if (cultivationMode == 1) {
+            botConfig.setStartScheduled(true);
             if(!botConfig.isEnableAutoBuyLowPrice()){
-                botConfig.setStartScheduled(true);
                 group.sendMessage((new MessageChain()).at("3889001741").text("修炼"));
             }
         } else if (cultivationMode == 2) {
@@ -583,7 +586,13 @@ public class TestService {
                 String finalMessage = message;
                 customPool.submit(new Runnable() {
                     public void run() {
-                        TestService.this.alchemyAndListed(messageChain, bot, finalMessage, group);
+                        alchemyAndListed(messageChain, bot, finalMessage, group);
+                        log.info("======"+botConfig.getCommand());
+                        if(botConfig.getCommand().equals("确认一键丹药炼金")){
+                            log.info("丹药炼金完成");
+                            group.sendMessage((new MessageChain()).text("丹药炼金完成"));
+                        }
+                        botConfig.setCommand("");
                     }
                 });
             }
@@ -845,7 +854,6 @@ public class TestService {
                         }
                     }
 
-                    botConfig.setCommand("");
                 }
             }
         }

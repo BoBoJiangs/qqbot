@@ -103,6 +103,7 @@ public class AutoBuyGoods {
                 || message.contains("今天已经很努力了")
                 || message.contains("坊市现在太繁忙了")
                 || message.contains("没钱还来买东西")
+                ||message.contains("验证码不正确")
                 || message.contains("未查询")
                 || message.contains("道友的上一条指令还没执行完"))) {
 
@@ -198,7 +199,7 @@ public class AutoBuyGoods {
     public void 自动购买药材(Bot bot, Group group, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        if (isGroup && message.contains("不鼓励不保障任何第三方交易行为")
+        if (isGroup && (message.contains("不鼓励不保障任何第三方交易行为")||message.contains("验证码不正确"))
                 && !message.contains("下架") && botConfig.isEnableAutoBuyLowPrice()) {
             this.customPool.submit(() -> {
                 botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());

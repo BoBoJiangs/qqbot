@@ -102,6 +102,7 @@ public class RemoteVerifyCode {
                     buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
                 }
                 botButtonMap.put(bot.getBotId(), buttons);
+                List<Button> buttonList = buttons.getButtonList();
                 if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
                     RecognitionResult codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
                     if (buttons.getImageUrl().equals(codeData.getUrl())) {
@@ -112,7 +113,7 @@ public class RemoteVerifyCode {
                     }
                 }
 
-                List<Button> buttonList = buttons.getButtonList();
+
                 StringBuilder buttonBuilder = new StringBuilder();
                 for (int i = 0; i < buttonList.size(); i++) {
                     Button button = buttonList.get(i);
@@ -219,10 +220,6 @@ public class RemoteVerifyCode {
 
             if (StringUtils.isNotBlank(recognitionResult.answer)) {
                 String text = recognitionResult.answer;
-//                String[] parts = result.split("正确答案：", 2); // 限制最多分两段
-//                if (parts.length > 1) {
-//                    text = parts[1];
-//                }
                 if (text.contains("序号")) {
                     text = text.replaceAll("序号", "");
 
@@ -268,8 +265,10 @@ public class RemoteVerifyCode {
 
             }
             if (!isSuccess) {
+
                 verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, verifyQQ, recognitionResult);
             } else {
+
                 groupManager.verifyCount.addCorrect();
             }
         } catch (Exception e) {
@@ -313,6 +312,17 @@ public class RemoteVerifyCode {
                     );
                 }
 
+            }
+
+        }else{
+            if(bot.getBotConfig().getAutoVerifyModel() == 2 && StringUtils.isEmpty(verifyQQ)){
+                bot.clickKeyboardButton(
+                        group.getGroupId(),
+                        buttons.getBotAppid(),
+                        buttons.getButtonList().get(0).getId(),
+                        buttons.getButtonList().get(0).getData(),
+                        buttons.getMsgSeq()
+                );
             }
 
         }

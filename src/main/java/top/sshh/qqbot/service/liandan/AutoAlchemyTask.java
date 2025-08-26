@@ -7,9 +7,7 @@ package top.sshh.qqbot.service.liandan;
 
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
-import com.zhuangxv.bot.core.Bot;
-import com.zhuangxv.bot.core.Group;
-import com.zhuangxv.bot.core.Member;
+import com.zhuangxv.bot.core.*;
 import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
@@ -180,7 +178,7 @@ public class AutoAlchemyTask {
         }
 
         if (message.startsWith("更新炼丹配置")) {
-            Pattern pattern = Pattern.compile("是否是炼金丹药：(true|false).*?炼金丹期望收益：(-?\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?炼丹完成是否购买药材：(true|false).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(\\d+)", Pattern.DOTALL);
+            Pattern pattern = Pattern.compile("是否是炼金丹药：(true|false).*?炼金丹期望收益：(-?\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?开启全自动炼丹：(true|false).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(\\d+)", Pattern.DOTALL);
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) {
 
@@ -222,7 +220,7 @@ public class AutoAlchemyTask {
                 }
 
             } else {
-                String alchemyConfig = "\n更新炼丹配置\n是否是炼金丹药：" + config.isAlchemy() + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n炼丹完成是否购买药材：" + config.isFinishAutoBuyHerb() + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice();
+                String alchemyConfig = "\n更新炼丹配置\n是否是炼金丹药：" + config.isAlchemy() + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + config.isFinishAutoBuyHerb() + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice();
                 group.sendMessage((new MessageChain()).reply(messageId).text("输入格式不正确！示例：" + alchemyConfig));
             }
         }
@@ -292,7 +290,7 @@ public class AutoAlchemyTask {
             return sb.toString();
         } else {
             if (message.equals("炼丹设置")) {
-                String alchemyConfig = "是否是炼金丹药：" + config.isAlchemy() + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n炼丹完成是否购买药材：" + config.isFinishAutoBuyHerb() + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice();
+                String alchemyConfig = "是否是炼金丹药：" + config.isAlchemy() + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + config.isFinishAutoBuyHerb() + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice();
                 sb.append("－－－－－当前设置－－－－－\n");
                 sb.append(alchemyConfig);
             }
@@ -310,20 +308,33 @@ public class AutoAlchemyTask {
     @GroupMessageHandler(
             senderIds = {3889001741L}
     )
-    public void 自动炼丹(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+    public void 自动炼丹(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId, Buttons buttons) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        if (isAtSelf(group,bot) && botConfig.isStartAuto() && (message.contains("请检查炼丹炉是否在背包中") || message.contains("成功炼成丹药") || message.contains("药材是否在背包中"))) {
-            if (!this.alchemyList.isEmpty()) {
-                this.alchemyList.remove(0);
+
+        if (isAtSelf(group,bot) && botConfig.isStartAuto()) {
+            if(message.contains("请检查炼丹炉是否在背包中") || message.contains("验证码不正确") || message.contains("成功炼成丹药") || message.contains("药材是否在背包中") ){
+                if(message.contains("验证码不正确") && !this.alchemyList.isEmpty()){
+                    this.autoAlchemy(group);
+                    return;
+                }
+                if (!this.alchemyList.isEmpty()) {
+                    this.alchemyList.remove(0);
+                }
+                Config config = danCalculator.getConfig(bot.getBotId());
+                if (this.alchemyList.isEmpty()) {
+                    this.resetPram();
+                    if(config.isFinishAutoBuyHerb()){
+                        group.sendMessage((new MessageChain()).text("确认一键丹药炼金"));
+                    }else{
+                        group.sendMessage((new MessageChain()).text("自动炼丹完成！！"));
+                        botConfig.setStartAuto(false);
+                    }
+                }
+                this.autoAlchemy(group);
+
+
             }
 
-            if (this.alchemyList.isEmpty()) {
-                this.resetPram();
-                botConfig.setStartAuto(false);
-                group.sendMessage((new MessageChain()).text("自动炼丹完成！！"));
-            }
-
-            this.autoAlchemy(group);
         }
 
     }

@@ -101,7 +101,41 @@ bot:
     enableGroupManager: false
     #0:不转发 1转发部分消息
     forwardMode: 0
+    autoVerifyModel: 2
     enableAlchemy: true
+
+#  - type: ws
+#    url: ws://115.120.199.227:8091
+#    accessToken: 1024*1024*1024
+#    #    修炼群号
+#    groupId: 1045024671
+#    # 控制小号的QQ
+#    #    大号qq
+#    controlQQ: 2135212677&819463350
+#    masterQQ: 2135212677
+#    # 是否开启查价格
+#    enableCheckPrice: true
+#    # 是否开启猜成语
+#    enableGuessTheIdiom: false
+#    # 是否开启查行情
+#    enableCheckMarket: false
+#    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
+#    enableXslPriceQuery: false
+#    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
+#    cultivationMode: 3
+#    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认）
+#    rewardMode: 4
+#    #宗门任务1：邪修和查抄（默认） 2：所有任务
+#    sectMode: 2
+#    #自动灵田结算（默认 true）
+#    enableAutoField: true
+#    #自动秘境结算 （默认 true）
+#    enableAutoSecret: true
+#    #无偿双修
+#    enableAutoRepair: true
+#    enableXiaoBei: false
+#    forwardMode: 0
+#    autoVerifyModel: 2
 
 spring:
   datasource:

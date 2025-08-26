@@ -8,6 +8,7 @@ package top.sshh.qqbot.service.liandan;
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
+import com.zhuangxv.bot.core.Buttons;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.core.component.BotFactory;
@@ -75,6 +76,16 @@ public class AutoBuyHerbs {
         message = message.trim();
         if (!message.contains("可用命令")) {
             switch (message) {
+                case "丹药炼金完成":
+                    if(botConfig.isStartAuto()){
+                        resetPram();
+                        botConfig.setStop(true);
+                        botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
+                        group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+                        botConfig.setAutoBuyHerbsMode(1);
+                        botConfig.setStartAuto(false);
+                    }
+                    break;
                 case "开始采购药材":
                     resetPram();
                     botConfig.setStop(true);
@@ -330,7 +341,7 @@ public class AutoBuyHerbs {
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         boolean isAtSelf = isAtSelf(group,bot);
         if (isGroup && isAtSelf && botConfig.getAutoBuyHerbsMode()!=0 && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
-                message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
+                message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("验证码不正确") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             if (message.contains("道友成功购买")) {
                 if(!this.autoBuyList.isEmpty()){
@@ -352,9 +363,20 @@ public class AutoBuyHerbs {
 
             }
 
-            if(message.contains("今天已经很努力了") || message.contains("没钱还来买东西")){
+            if(message.contains("今天已经很努力了") ){
                 botConfig.setStartAuto(false);
                 botConfig.setAutoBuyHerbsMode(0);
+            }
+
+            if(message.contains("没钱还来买东西")){
+                Config config = danCalculator.getConfig(bot.getBotId());
+                if(config.isFinishAutoBuyHerb()){
+                    group.sendMessage((new MessageChain()).text("开始自动炼丹"));
+                }else{
+                    botConfig.setStartAuto(false);
+                    botConfig.setAutoBuyHerbsMode(0);
+                }
+
             }
 
             if(message.contains("未查询")){
