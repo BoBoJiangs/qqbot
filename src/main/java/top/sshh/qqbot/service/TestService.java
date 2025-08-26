@@ -98,8 +98,9 @@ public class TestService {
         if (cultivationMode == 0) {
             botConfig.setStartScheduled(false);
         } else if (cultivationMode == 1) {
-            botConfig.setStartScheduled(true);
+
             if(!botConfig.isEnableAutoBuyLowPrice()){
+                botConfig.setStartScheduled(true);
                 group.sendMessage((new MessageChain()).at("3889001741").text("修炼"));
             }
         } else if (cultivationMode == 2) {
@@ -1014,7 +1015,7 @@ public class TestService {
         if (isAtSelf && message.contains("的丹药背包")) {
             BotConfig botConfig = bot.getBotConfig();
             if (StringUtils.isNotBlank(botConfig.getCommand()) && botConfig.getCommand().equals("确认一键丹药炼金")) {
-                botConfig.setCommand("");
+//                botConfig.setCommand("");
                 group.sendMessage((new MessageChain()).reply(messageId).text("一键炼金"));
             }
         }
@@ -1492,7 +1493,7 @@ public class TestService {
             }
         }
 
-        if ((message.contains("奖励") && message.contains("灵石") || message.contains("不需要验证") || message.contains("验证码已过期")) && message.contains("" + bot.getBotId())) {
+        if ((message.contains("奖励") && message.contains("灵石") || message.contains("不需要验证") || message.contains("验证码已过期") || message.contains("验证码不正确")) && message.contains("" + bot.getBotId())) {
             bot.getBotConfig().setStop(false);
             if (message.contains("奖励") && message.contains("灵石") && StringUtils.isNotBlank(bot.getBotConfig().getCommand())) {
                 bot.getBotConfig().setVerificationStatus("");

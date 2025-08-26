@@ -502,6 +502,8 @@ public class RemoteVerifyCode {
                 if (xxGroupId > 0){
                     testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
                     bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
+                }else{
+                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
                 }
 
             } else {

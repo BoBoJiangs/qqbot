@@ -199,7 +199,7 @@ public class AutoBuyGoods {
     public void 自动购买药材(Bot bot, Group group, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        if (isGroup && (message.contains("不鼓励不保障任何第三方交易行为")||message.contains("验证码不正确"))
+        if (isGroup && (message.contains("不鼓励不保障任何第三方交易行为"))
                 && !message.contains("下架") && botConfig.isEnableAutoBuyLowPrice()) {
             this.customPool.submit(() -> {
                 botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
@@ -233,16 +233,20 @@ public class AutoBuyGoods {
             }
         }
 
-        autoBuyMap.get(bot.getBotId()).sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
+
 
         if (autoBuyMap.get(bot.getBotId()).isEmpty()) {
             try {
-                Thread.sleep(bot.getBotConfig().getFrequency() * 1000L);
+                if(bot.getBotConfig().getFrequency()>0){
+                    Thread.sleep(bot.getBotConfig().getFrequency() * 1000L);
+                }
+
                 sendNextCommand(bot, bot.getBotConfig());
             } catch (InterruptedException e) {
                 logger.info(e.getMessage());
             }
         } else {
+            autoBuyMap.get(bot.getBotId()).sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
             this.buyHerbs(group, bot);
         }
     }
@@ -270,10 +274,8 @@ public class AutoBuyGoods {
     private void buyHerbs(Group group, Bot bot) {
         for (ProductPrice productPrice : autoBuyMap.get(bot.getBotId())) {
             try {
-                if (bot.getBotConfig().isEnableAutoBuyLowPrice()) {
-                    group.sendMessage(new MessageChain().at("3889001741")
-                            .text("坊市购买 " + productPrice.getCode()));
-                }
+                group.sendMessage(new MessageChain().at("3889001741")
+                        .text("坊市购买 " + productPrice.getCode()));
                 break;
             } catch (Exception e) {
                 logger.error("发送购买消息失败");

@@ -341,8 +341,9 @@ public class AutoBuyHerbs {
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         boolean isAtSelf = isAtSelf(group,bot);
         if (isGroup && isAtSelf && botConfig.getAutoBuyHerbsMode()!=0 && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
-                message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西") || message.contains("验证码不正确") || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
+                message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西")  || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
+
             if (message.contains("道友成功购买")) {
                 if(!this.autoBuyList.isEmpty()){
                     ProductPrice price = (ProductPrice)this.herbPackMap.get(((ProductPrice)this.autoBuyList.get(0)).getName());
