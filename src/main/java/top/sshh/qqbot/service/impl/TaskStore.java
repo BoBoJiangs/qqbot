@@ -68,6 +68,13 @@ public class TaskStore {
         saveTasks();
     }
 
+    public static boolean removeTask(String qq, String time) {
+        List<TaskInfo> tasks = taskMap.get(qq);
+        if (tasks == null) return false;
+        return tasks.removeIf(task -> task.getTime().equals(time));
+    }
+
+
     /** 每分钟检查任务并执行 */
     public static void checkTasks() {
         String now = LocalTime.now().format(TIME_FORMAT);

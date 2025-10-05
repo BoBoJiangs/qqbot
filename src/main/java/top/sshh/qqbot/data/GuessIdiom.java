@@ -267,6 +267,7 @@ public class GuessIdiom {
         CACHE.put("\ud83e\uddd1\ud83c\udfd1☝\ud83c\ude2f", "首屈一指");
         CACHE.put("\ud83c\udf2a️\ud83c\udf2a️\ud83d\udd25\ud83d\udd25", "风风火火");
         CACHE.put("\ud83e\udd5f\ud83d\udc30\ud83c\udf02\ud83d\ude2d", "狡兔三窟");
+        CACHE.put("\uD83D\uDD1F\uD83E\uDD1B\uD83D\uDD1F\uD83E\uDDDC\u200D♀\uFE0F","十全十美");
         riddleMap.put("红公鸡", "萝卜");
         riddleMap.put("有头没有尾", "水龙头");
         riddleMap.put("四四方方一座城", "象棋");

@@ -20,4 +20,6 @@ public interface ProductPriceResponse extends CrudRepository<ProductPrice, Long>
 
     boolean existsByCodeAndTimeIsBeforeOrderByTimeDesc(String code, LocalDateTime from);
 
+    ProductPrice findTopByCodeOrderByTimeDesc(String code);
+
 }

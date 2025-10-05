@@ -386,6 +386,15 @@ public class TestService {
                 saveBotConfig(bot);
             }
 
+            if ("开始挑战苍穹秘境".equals(message)) {
+                botConfig.setEnableAutoCqMj(true);
+                bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("进入苍穹秘境"));
+            }
+            if ("停止挑战苍穹秘境".equals(message)) {
+                botConfig.setEnableAutoCqMj(false);
+                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+            }
+
             if ("开始自动修炼".equals(message)) {
                 botConfig.setStartScheduled(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("开始自动修炼成功"));
@@ -604,7 +613,7 @@ public class TestService {
     @OnQQConnected
     public void onConnected(Bot bot) {
         BotConfig botConfig = bot.getBotConfig();
-        if (!botConfig.isEnableAlchemy()) return;
+        // if (!botConfig.isEnableAlchemy()) return;
 
         customPool.submit(() -> {
             loadBotConfig(bot);

@@ -290,7 +290,8 @@ public class FamilyTask {
                 double zhenYuan = (double)0.0F;
                 boolean hpFound = false;
                 Pattern daoHaoPattern = Pattern.compile("道号\\s*：\\s*(\\S+)");
-                Pattern hpPattern = Pattern.compile("气血\\s*:\\s*([\\d\\.]+)(?:亿)?\\s*/\\s*([\\d\\.]+)(?:亿)?");
+//                Pattern hpPattern = Pattern.compile("气血\\s*:\\s*([\\d\\.]+)(?:亿)?\\s*/\\s*([\\d\\.]+)(?:亿)?");
+                Pattern hpPattern = Pattern.compile("气血\\s*[:：]\\s*([\\d\\.]+)(?:[亿万兆]?)\\s*/\\s*([\\d\\.]+)(?:[亿万兆]?)");
                 Pattern zyPattern = Pattern.compile("真元\\s*:\\s*([\\d\\.]+)%");
 
                 for(String line : lines) {
@@ -432,6 +433,13 @@ public class FamilyTask {
                 long delaySeconds = ThreadLocalRandom.current().nextLong(5L, 60L);
                 scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门闭关")), delaySeconds, TimeUnit.SECONDS);
             }
+            if ((botConfig.getChallengeMode() == 1 || botConfig.getChallengeMode() == 2) && msg.contains("登上第九层")) {
+                if(xxGroupId>0){
+                    bot.sendGroupMessage(xxGroupId, (new MessageChain()).text("已完成本周妖塔挑战"));
+                }
+
+
+            }
         }
 
     }
@@ -560,6 +568,54 @@ public class FamilyTask {
                         botConfig.setStartAutoLingG(false);
                     }
                 }
+            }
+        }
+
+    }
+
+
+    List<String> gongFaList = new ArrayList<>(Arrays.asList("诛仙剑", "斩龙刃", "焚天烈焰掌", "火龙珠", "聚气诀", "烈火焚天", "土墙术", "血煞功", "金钟罩",
+    "寒冰诀", "布甲", "聚灵珠", "金钟罩", "乾坤袋", "精铁长剑", "铁骨符", "水龙珠", "寒冰诀", "破军杀", "聚气诀", "土墙术", "锐金石",
+     "精钢剑", "血玉坠", "固元腰带", "水龙珠", "凝神香", "九天玄甲", "万木复苏", "蓄力戒", "大地震颤", "抗蚀甲片", "养气玉佩", "五行灵盘", 
+     "疾风靴"));
+    @GroupMessageHandler(
+            senderIds = {3889001741L}
+    )
+    public void 苍穹秘境(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+        BotConfig botConfig = bot.getBotConfig();
+        boolean isAtSelf = isAtSelf(bot,group,message,xxGroupId);
+        if (isAtSelf && botConfig.isEnableAutoCqMj()) {
+            if (message.contains("可选择的路径") && message.contains("继续前进")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("继续前进"));
+            }else if (message.contains("可选择的路径") && message.contains("路径1")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("选择路径1"));
+            }else if (message.contains("基础剑诀")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("释放功法基础剑诀"));
+            }else if (message.contains("学习功法或选择奖励")) {
+                for (String gongFa : gongFaList) {
+                    if (message.contains(gongFa)) {
+                        group.sendMessage((new MessageChain()).at("3889001741").text("战利品选择" + gongFa));
+                        break; // 使用 break 真正跳出循环
+                    }
+                }
+            }else if (message.contains("进入了事件房间") && message.contains("强行破阵")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("事件选择 强行破阵"));
+            }else if (message.contains("可选择的路径") && message.contains("走右边")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("走右边"));
+            }else if (message.contains("进入了事件房间") && message.contains("离开")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("事件选择 离开"));
+            }else if (message.contains("离开商店")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("离开商店"));
+            }else if (message.contains("打开宝箱")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("打开宝箱"));
+            }else if (message.contains("休息") && message.contains("灵气充沛")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("休息"));
+            }else if (message.contains("进入了事件房间") && message.contains("反对")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("事件选择 反对"));
+            }else if (message.contains("你已经在苍穹秘境")) {
+                group.sendMessage((new MessageChain()).at("3889001741").text("查看苍穹秘境地图"));
+            }else if (message.contains("存活层数") && message.contains("陨落")) {
+                botConfig.setEnableAutoCqMj(false);
             }
         }
 

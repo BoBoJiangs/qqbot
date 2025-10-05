@@ -78,7 +78,7 @@ public class AutoBuyHerbs {
             switch (message) {
                 case "丹药炼金完成":
                     if(botConfig.isStartAuto()){
-                        resetPram();
+                        resetPram(botConfig);
                         botConfig.setStop(true);
                         botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
                         group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
@@ -87,22 +87,22 @@ public class AutoBuyHerbs {
                     }
                     break;
                 case "开始采购药材":
-                    resetPram();
+                    resetPram(botConfig);
                     botConfig.setStop(true);
                     botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     botConfig.setAutoBuyHerbsMode(1);
                     botConfig.setStartAuto(false);
+                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     break;
                 case "一键采购药材":
-                    resetPram();
+                    resetPram(botConfig);
                     botConfig.setStop(true);
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     botConfig.setAutoBuyHerbsMode(2);
                     botConfig.setStartAuto(false);
+                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     break;
                 case "停止采购药材":
-                    resetPram();
+                    resetPram(botConfig);
                     botConfig.setAutoBuyHerbsMode(0);
                     group.sendMessage((new MessageChain()).reply(messageId).text("停止采购"));
                     break;
@@ -128,12 +128,13 @@ public class AutoBuyHerbs {
 
     }
 
-    private void resetPram() {
+    private void resetPram(BotConfig botConfig) {
         this.page = 1;
         noQueriedCount = 0;
         drugIndex = 0;
         this.herbPackMap.clear();
         this.autoBuyList.clear();
+        botConfig.setTaskStatusHerbs(1);
     }
 
     @GroupMessageHandler(
@@ -168,6 +169,7 @@ public class AutoBuyHerbs {
                 } else {
                     botConfig.setStop(false);
                     this.parseHerbList();
+                    this.refreshHerbsIndex(bot);
                 }
             } else {
 //                System.out.println("message==" + message);
@@ -218,8 +220,34 @@ public class AutoBuyHerbs {
             this.addProductsToMap(bot, group, message, messageId, productMap);
         } else if (message.equals("查询采购药材")) {
             this.queryPurchasedProducts(group, messageId, productMap);
+        }else if (message.startsWith("批量修改性平价格")) {
+            String price = message.substring("批量修改性平价格".length()).trim();
+            if(StringUtils.isNumeric(price)){
+                updateXingPing(price,group);
+            }else{
+                group.sendMessage((new MessageChain()).text("请输入正确的价格"));
+            }
         }
 
+    }
+
+    private void updateXingPing(String price,Group group) {
+        try {
+            // 读取药材文件内容
+            List<String> herbs = Files.readAllLines(Paths.get(targetDir, "properties", "性平.txt"));
+
+            // 遍历每种药材并输出采购指令
+            StringBuilder stringBuilder = new StringBuilder();
+            for (String herb : herbs) {
+                if (!herb.trim().isEmpty()) {
+                    stringBuilder.append("采购药材" + herb.trim() +" "+price);
+                    stringBuilder.append("\n");
+                }
+            }
+            group.sendMessage(new MessageChain().text(stringBuilder.toString()));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private void addProductsToMap(Bot bot, Group group, String message, Integer messageId, Map<String, ProductPrice> productMap) {
@@ -328,6 +356,7 @@ public class AutoBuyHerbs {
             //出验证码跳过本页购买
             if(botConfig.getAutoBuyHerbsMode()!=0 && isGroup){
                 this.autoBuyList.clear();
+
             }
 
         }
@@ -341,12 +370,12 @@ public class AutoBuyHerbs {
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         boolean isAtSelf = isAtSelf(group,bot);
         if (isGroup && isAtSelf && botConfig.getAutoBuyHerbsMode()!=0 && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
-                message.contains("坊市现在太繁忙了") || message.contains("没钱还来买东西")  || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
+                message.contains("坊市现在太繁忙了")||message.contains("验证码不正确") || message.contains("没钱还来买东西")  || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
 
             if (message.contains("道友成功购买")) {
                 if(!this.autoBuyList.isEmpty()){
-                    ProductPrice price = (ProductPrice)this.herbPackMap.get(((ProductPrice)this.autoBuyList.get(0)).getName());
+                    ProductPrice price = this.herbPackMap.get(((ProductPrice)this.autoBuyList.get(0)).getName());
                     price.setHerbCount(price.getHerbCount() + 1);
                     this.herbPackMap.put(price.getName(), price);
                 }else{
@@ -391,8 +420,12 @@ public class AutoBuyHerbs {
             if (!this.autoBuyList.isEmpty()) {
                 this.autoBuyList.remove(0);
             }
+            if(this.autoBuyList.isEmpty()){
+                refreshHerbsIndex(bot);
+            }else{
+                this.buyHerbs(group, bot.getBotConfig());
+            }
 
-            this.buyHerbs(group, bot.getBotConfig());
         }
 
     }
@@ -467,7 +500,12 @@ public class AutoBuyHerbs {
 
         this.autoBuyList.sort(Comparator.comparingLong(ProductPrice::getId));
         this.autoBuyList.sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
-        this.buyHerbs(group, bot.getBotConfig());
+        if(!this.autoBuyList.isEmpty()){
+            this.buyHerbs(group, bot.getBotConfig());
+        }else{
+            this.refreshHerbsIndex(bot);
+        }
+
     }
 
     private double extractPrice(String message) {
@@ -517,46 +555,49 @@ public class AutoBuyHerbs {
 
     }
 
-    @Scheduled(
-            fixedDelay = 5000L
-    )
+    @Scheduled(fixedDelay = 5000L, initialDelay = 30000L)
     public void 定时查询坊市() {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
-            if(botConfig.getAutoBuyHerbsMode() == 2 ){
-                if(System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 310000L){
-                    this.autoBuyList.clear();
-                    botConfig.setStop(false);
-                }
+            if(botConfig.getAutoBuyHerbsMode() != 0 && !botConfig.isStop() &&
+                    System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L){
+                this.autoBuyList.clear();
+                botConfig.setStop(false);
+                this.refreshHerbsIndex(bot);
             }
-            if (!botConfig.isStop() && this.autoBuyList.isEmpty() && botConfig.getAutoBuyHerbsMode()!=0) {
-                long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
-                if(!makeDrugIndexList.isEmpty()){
-                    bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + makeDrugIndexList.get(drugIndex)));
-                    if(drugIndex == makeDrugIndexList.size() - 1){
-                        drugIndex = 0;
-                    }else{
-                        drugIndex = drugIndex + 1;
-                    }
-                }else{
-                    if (botConfig.getTaskStatusHerbs() == 8) {
-                        botConfig.setTaskStatusHerbs(1);
-                    }
 
-                    if (botConfig.getTaskStatusHerbs() < 8) {
-                        try {
-                            bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
-                            botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
-                            noQueriedCount = 0;
-                        } catch (Exception var6) {
-                            logger.error("定时查询坊市失败");
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-                }
-
-            }
 
         });
+    }
+
+    private void refreshHerbsIndex(Bot bot) {
+        BotConfig botConfig = bot.getBotConfig();
+        if (botConfig.getAutoBuyHerbsMode() != 0) {
+            long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
+            if(!makeDrugIndexList.isEmpty()){
+                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + makeDrugIndexList.get(drugIndex)));
+                if(drugIndex == makeDrugIndexList.size() - 1){
+                    drugIndex = 0;
+                }else{
+                    drugIndex = drugIndex + 1;
+                }
+            }else{
+                if (botConfig.getTaskStatusHerbs() >= 8) {
+                    botConfig.setTaskStatusHerbs(1);
+                }
+
+                if (botConfig.getTaskStatusHerbs() < 8) {
+                    try {
+                        bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
+                        botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
+                        noQueriedCount = 0;
+                    } catch (Exception var6) {
+                        logger.error("定时查询坊市失败");
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+
+        }
     }
 }

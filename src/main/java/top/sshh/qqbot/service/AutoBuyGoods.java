@@ -104,8 +104,7 @@ public class AutoBuyGoods {
                 || message.contains("坊市现在太繁忙了")
                 || message.contains("没钱还来买东西")
                 ||message.contains("验证码不正确")
-                || message.contains("未查询")
-                || message.contains("道友的上一条指令还没执行完"))) {
+                || message.contains("未查询"))) {
 
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
 
@@ -113,10 +112,19 @@ public class AutoBuyGoods {
             if (message.contains("道友成功购买")) {
                 try {
                     if(!autoBuyMap.get(bot.getBotId()).isEmpty()){
+                        
                         ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
+                        if(productPrice.getName().contains("无罪")){
+                            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备2")));
+                        }
+                        if(productPrice.getName().contains("原罪") || productPrice.getName().contains("东皇") ||
+                         productPrice.getName().contains("天罪")){
+                            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备1")));
+                        }
                         Random random = new Random();
                         String[] successMsgs = getSuccessMsgs(productPrice);
                         sendBuyMessage(bot, random, successMsgs);
+                        
                     }
 
                 } catch (ExecutionException e) {
@@ -129,10 +137,19 @@ public class AutoBuyGoods {
                 Utils.forwardMessage(bot, this.xxGroupId, messageChain);
                 try {
                     if(!autoBuyMap.get(bot.getBotId()).isEmpty()){
+                        
                         ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
+                        if(productPrice.getName().contains("无罪")){
+                            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备2")));
+                        }
+                        if(productPrice.getName().contains("原罪") || productPrice.getName().contains("东皇") ||
+                         productPrice.getName().contains("天罪")){
+                            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备1")));
+                        }
                         Random random = new Random();
                         String[] failMsgs = getFailMsgs(productPrice);
                         sendBuyMessage(bot, random, failMsgs);
+
                     }
                 } catch (ExecutionException e) {
                     throw new RuntimeException(e);
@@ -177,9 +194,9 @@ public class AutoBuyGoods {
     private String[] getFailMsgs(ProductPrice productPrice) {
         return new String[]{
                 "啊哦！" + productPrice.getName() + "(" + productPrice.getBuyPrice() + "万)一眨眼被隔壁老王顺走了！",
-                "糟糕！你正准备拿" + productPrice.getName() + "时，突然被妖风刮跑，别人拣到了…",
+                "糟糕！你正准备拿"+productPrice.getBuyPrice() + "万的" + productPrice.getName() + "时，突然被妖风刮跑，别人拣到了…",
                 "道友刚伸手，就见一只仓鼠叼走了价值" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "！",
-                "真惨！" + productPrice.getName() + "刚出炉，你还没来得及喊666就被别人抢光了～",
+                "真惨！"+productPrice.getBuyPrice() + "万的" + productPrice.getName() + "刚出炉，你还没来得及喊666就被别人抢光了～",
                 "嘿嘿，别哭，" + productPrice.getName() + "(" + productPrice.getBuyPrice() + "万)已经跟别人私奔了～"
         };
     }
@@ -246,7 +263,7 @@ public class AutoBuyGoods {
                 logger.info(e.getMessage());
             }
         } else {
-            autoBuyMap.get(bot.getBotId()).sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
+            // autoBuyMap.get(bot.getBotId()).sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
             this.buyHerbs(group, bot);
         }
     }

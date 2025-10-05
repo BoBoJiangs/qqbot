@@ -405,20 +405,23 @@ public class XiaoBeiService {
     )
     public void 讨伐世界boss(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         boolean isControlQQ = bot.getBotConfig().getMasterQQ() == member.getUserId();
-        QQBotConfig botConfig = (QQBotConfig)this.botConfigMap.get(bot.getBotId() + "");
-        boolean isGroup = this.isXbGroup(group, botConfig);
-        if (isGroup && isControlQQ && (message.contains("讨伐世界boss") || message.contains("讨伐世界BOSS")) && bot.getBotConfig().getMasterQQ() != bot.getBotId()) {
-            Pattern pattern = Pattern.compile("讨伐世界boss(\\d+)");
-            Matcher matcher = pattern.matcher(message);
-            String text = "";
-            if (matcher.find()) {
-                text = "讨伐世界boss" + matcher.group(1);
-            }
+        if(botConfigMap!=null){
+            QQBotConfig botConfig = (QQBotConfig)this.botConfigMap.get(bot.getBotId() + "");
+            boolean isGroup = this.isXbGroup(group, botConfig);
+            if (isGroup && isControlQQ && (message.contains("讨伐世界boss") || message.contains("讨伐世界BOSS")) && bot.getBotConfig().getMasterQQ() != bot.getBotId()) {
+                Pattern pattern = Pattern.compile("讨伐世界boss(\\d+)");
+                Matcher matcher = pattern.matcher(message);
+                String text = "";
+                if (matcher.find()) {
+                    text = "讨伐世界boss" + matcher.group(1);
+                }
 
-            if (StringUtils.isNotBlank(text)) {
-                group.sendMessage((new MessageChain()).at("3889029313").text(text));
+                if (StringUtils.isNotBlank(text)) {
+                    group.sendMessage((new MessageChain()).at("3889029313").text(text));
+                }
             }
         }
+
 
     }
 

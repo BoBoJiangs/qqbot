@@ -25,6 +25,7 @@ import java.io.*;
 import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinPool;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -45,6 +46,7 @@ public class AutoAlchemyTask {
     private Group group;
 //    private Config config;
     public static boolean isCreateDan = true;
+    private static final AtomicBoolean MATCHING = new AtomicBoolean(false);
 
 
     public AutoAlchemyTask() {
@@ -145,17 +147,20 @@ public class AutoAlchemyTask {
             customPool.submit(new Runnable() {
                 public void run() {
                     try {
-                        if(isCreateDan){
-                            isCreateDan = false;
-                            danCalculator.loadData(bot.getBotId());
-                            danCalculator.calculateAllDans(bot.getBotId());
-                            group.sendMessage((new MessageChain()).text("已同步炼丹配方！"));
-                            isCreateDan = true;
-                        }else{
+                        if (MATCHING.compareAndSet(false, true)) {
+                            try {
+                                danCalculator.loadData(bot.getBotId());
+                                danCalculator.calculateAllDans(bot.getBotId());
+                                group.sendMessage((new MessageChain()).text("已同步炼丹配方！"));
+                            } finally {
+                                MATCHING.set(false);
+                            }
+                        } else {
                             group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
                         }
 
                     } catch (Exception var2) {
+                        MATCHING.set(false);
                     }
 
                 }
@@ -192,22 +197,24 @@ public class AutoAlchemyTask {
                     customPool.submit(new Runnable() {
                         public void run() {
                             try {
-                                if(isCreateDan){
-                                    isCreateDan = false;
-                                    setConfig(matcher,config);
-                                    AutoAlchemyTask.this.danCalculator.saveConfig(config,bot.getBotId());
-                                    group.sendMessage((new MessageChain()).text("丹方配置已更新，正在重新匹配丹方！"));
-                                    AutoAlchemyTask.this.danCalculator.loadData(bot.getBotId());
-                                    AutoAlchemyTask.this.danCalculator.calculateAllDans(bot.getBotId());
-                                    group.sendMessage((new MessageChain()).text("丹方匹配成功！"));
-                                    AutoAlchemyTask.this.danCalculator.addAutoBuyHerbs(bot.getBotId());
-                                    isCreateDan = true;
-                                }else{
+                                if (MATCHING.compareAndSet(false, true)) {
+                                    try {
+                                        setConfig(matcher,config);
+                                        AutoAlchemyTask.this.danCalculator.saveConfig(config,bot.getBotId());
+                                        group.sendMessage((new MessageChain()).text("丹方配置已更新，正在重新匹配丹方！"));
+                                        AutoAlchemyTask.this.danCalculator.loadData(bot.getBotId());
+                                        AutoAlchemyTask.this.danCalculator.calculateAllDans(bot.getBotId());
+                                        group.sendMessage((new MessageChain()).text("丹方匹配成功！"));
+                                        AutoAlchemyTask.this.danCalculator.addAutoBuyHerbs(bot.getBotId());
+                                    } finally {
+                                        MATCHING.set(false);
+                                    }
+                                } else {
                                     group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
                                 }
 
                             } catch (Exception e) {
-                                isCreateDan = true;
+                                MATCHING.set(false);
                                 group.sendMessage((new MessageChain()).text("配置更新失败！！！"));
                             }
 
@@ -287,6 +294,7 @@ public class AutoAlchemyTask {
             sb.append("同步发言统计\n");
             sb.append("刷新指定药材坊市 ×&×&×\n");
             sb.append("取消刷新指定药材坊市\n");
+            sb.append("批量修改性平价格 ××\n");
             return sb.toString();
         } else {
             if (message.equals("炼丹设置")) {

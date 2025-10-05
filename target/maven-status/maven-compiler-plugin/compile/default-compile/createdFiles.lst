@@ -6,10 +6,10 @@ top\sshh\qqbot\service\utils\Utils.class
 top\sshh\qqbot\service\liandan\AutoAlchemyTask$3.class
 top\sshh\qqbot\service\GroupManager$6.class
 top\sshh\qqbot\service\XiaoBeiService$Task.class
-top\sshh\qqbot\verifycode\RemoteVerifyCode$2.class
 top\sshh\qqbot\service\PriceTask.class
 top\sshh\qqbot\service\liandan\AutoAlchemyTask$7.class
 top\sshh\qqbot\service\GroupManager$10.class
+top\sshh\qqbot\controller\BotConfigWebController.class
 top\sshh\qqbot\service\XiaoYueItemClass.class
 top\sshh\qqbot\data\BountyInfo.class
 top\sshh\qqbot\service\GroupManager$9.class
@@ -46,6 +46,7 @@ top\sshh\qqbot\service\GroupManager$1.class
 top\sshh\qqbot\service\impl\TaskStore$1.class
 top\sshh\qqbot\service\TestService$3.class
 top\sshh\qqbot\service\impl\TaskStore.class
+top\sshh\qqbot\controller\TestController.class
 top\sshh\qqbot\service\liandan\AutoAlchemyTask$2.class
 top\sshh\qqbot\service\MemoryCleaner$JavaVersion.class
 top\sshh\qqbot\data\RecipeResult.class
@@ -61,6 +62,9 @@ top\sshh\qqbot\service\AutoBuyGoods.class
 top\sshh\qqbot\service\GroupManager$7.class
 top\sshh\qqbot\service\impl\HttpsTrustManager$1.class
 top\sshh\qqbot\data\Config.class
+top\sshh\qqbot\controller\BotConfigController.class
+top\sshh\qqbot\service\BotConfigManager.class
+top\sshh\qqbot\data\BotConfigDTO.class
 top\sshh\qqbot\service\XiaoBeiService$EndlessState.class
 top\sshh\qqbot\service\impl\HttpsTrustManager.class
 top\sshh\qqbot\verifycode\RemoteVerifyCode$1.class

@@ -84,7 +84,7 @@ public class AutoSellGoods {
     )
     public void 药材背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
         BotConfig botConfig = bot.getBotConfig();
-        if (Utils.isAtSelf(bot, group,message,xxGroupId) && (message.contains("上一页") || message.contains("下一页")) && "批量上架药材".equals(botConfig.getCommand())) {
+        if (Utils.isAtSelf(bot, group,message,xxGroupId) && (message.contains("上一页") || message.contains("下一页") || message.contains("药材背包")) && "批量上架药材".equals(botConfig.getCommand())) {
             List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
             boolean hasNextPage = false;
             TextMessage textMessage = null;

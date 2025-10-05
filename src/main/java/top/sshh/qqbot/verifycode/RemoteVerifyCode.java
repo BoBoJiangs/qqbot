@@ -139,59 +139,59 @@ public class RemoteVerifyCode {
     }
 
 
-    @GroupMessageHandler(
-            senderIds = {3889001741L}
-    )
-    public void 辅助识别验证码(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId, Buttons buttons) {
+//     @GroupMessageHandler(
+//             senderIds = {3889001741L}
+//     )
+//     public void 辅助识别验证码(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId, Buttons buttons) {
 
-        if (bot.getBotConfig().isEnableAutoVerify() && buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13) {
-            String qq = message.split("at_tinyid=")[1].split("\\)")[0];
-            String verifyQQ = groupManager.autoVerifyQQ.get(qq);
-            if (verifyQQ != null) {
-                String regex = "https?://[^\\s\\)]+";
-                Pattern pattern = Pattern.compile(regex);
-                Matcher matcher = pattern.matcher(message);
-                botButtonMap.put(bot.getBotId(), buttons);
-                while (matcher.find()) {
-                    buttons.setImageUrl(matcher.group());
-                    buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
-                }
-                if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
-                    RecognitionResult codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
-                    if (buttons.getImageUrl().equals(codeData.getUrl())) {
-                        saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult());
-//                        sendFailMessage(bot, message, buttons, messageChain, codeData.getResult());
-                        errorClickButton(buttons, bot, group, codeData.result,verifyQQ);
-                        bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("自动验证失败，请手动验证"));
-                        return;
-                    }
-                }
+//         if (bot.getBotConfig().isEnableAutoVerify() && buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13) {
+//             String qq = message.split("at_tinyid=")[1].split("\\)")[0];
+//             String verifyQQ = groupManager.autoVerifyQQ.get(qq);
+//             if (verifyQQ != null) {
+//                 String regex = "https?://[^\\s\\)]+";
+//                 Pattern pattern = Pattern.compile(regex);
+//                 Matcher matcher = pattern.matcher(message);
+//                 botButtonMap.put(bot.getBotId(), buttons);
+//                 while (matcher.find()) {
+//                     buttons.setImageUrl(matcher.group());
+//                     buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
+//                 }
+//                 if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
+//                     RecognitionResult codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
+//                     if (buttons.getImageUrl().equals(codeData.getUrl())) {
+//                         saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult());
+// //                        sendFailMessage(bot, message, buttons, messageChain, codeData.getResult());
+//                         errorClickButton(buttons, bot, group, codeData.result,verifyQQ);
+//                         bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("自动验证失败，请手动验证"));
+//                         return;
+//                     }
+//                 }
 
-                List<Button> buttonList = buttons.getButtonList();
-                StringBuilder buttonBuilder = new StringBuilder();
-                for (int i = 0; i < buttonList.size(); i++) {
-                    Button button = buttonList.get(i);
-                    if (GuessIdiom.getEmoji(button.getLabel()) != null) {
-                        buttonBuilder.append(" ").append(GuessIdiom.getEmoji(button.getLabel())).append(" ");
-                    } else {
-                        buttonBuilder.append(" ").append(button.getLabel()).append(" ");
-                    }
+//                 List<Button> buttonList = buttons.getButtonList();
+//                 StringBuilder buttonBuilder = new StringBuilder();
+//                 for (int i = 0; i < buttonList.size(); i++) {
+//                     Button button = buttonList.get(i);
+//                     if (GuessIdiom.getEmoji(button.getLabel()) != null) {
+//                         buttonBuilder.append(" ").append(GuessIdiom.getEmoji(button.getLabel())).append(" ");
+//                     } else {
+//                         buttonBuilder.append(" ").append(button.getLabel()).append(" ");
+//                     }
 
-                }
+//                 }
 
-                customPool.submit(new Runnable() {
-                    public void run() {
-                        if (StringUtils.isNotBlank(shituApiUrl)) {
-                            autoVerifyCode(bot, group, messageChain, message, messageId, buttons, verifyQQ);
-                        }
+//                 customPool.submit(new Runnable() {
+//                     public void run() {
+//                         if (StringUtils.isNotBlank(shituApiUrl)) {
+//                             autoVerifyCode(bot, group, messageChain, message, messageId, buttons, verifyQQ);
+//                         }
 
-                    }
-                });
-            }
+//                     }
+//                 });
+//             }
 
 
-        }
-    }
+//         }
+//     }
 
 
     private void autoVerifyCode(Bot bot, Group group, MessageChain messageChain, String message, Integer messageId, Buttons buttons, String verifyQQ) {
@@ -520,24 +520,24 @@ public class RemoteVerifyCode {
     }
 
     public void sendFailMessage(Bot bot, String message, Buttons buttons, MessageChain messageChain, String result) {
-        if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13) {
-            String regex = "https?://[^\\s\\)]+";
-            Pattern pattern = Pattern.compile(regex);
-            Matcher matcher = pattern.matcher(message);
+        // if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13) {
+        //     String regex = "https?://[^\\s\\)]+";
+        //     Pattern pattern = Pattern.compile(regex);
+        //     Matcher matcher = pattern.matcher(message);
 
-            while (matcher.find()) {
-                buttons.setImageUrl(matcher.group());
-                buttons.setImageText(((Message) messageChain.get(messageChain.size() - 1)).toString());
-            }
+        //     while (matcher.find()) {
+        //         buttons.setImageUrl(matcher.group());
+        //         buttons.setImageText(((Message) messageChain.get(messageChain.size() - 1)).toString());
+        //     }
 
-            StringBuilder buttonBuilder = new StringBuilder();
-            buttonBuilder.append(buttons.getImageText());
-            buttonBuilder.append("\n");
-            buttonBuilder.append(result);
-            MessageChain messageChain1 = new MessageChain();
-            messageChain1.text("\n").image(buttons.getImageUrl()).text(buttonBuilder.toString());
-            bot.sendPrivateMessage(bot.getBotId(), messageChain1);
-        }
+        //     StringBuilder buttonBuilder = new StringBuilder();
+        //     buttonBuilder.append(buttons.getImageText());
+        //     buttonBuilder.append("\n");
+        //     buttonBuilder.append(result);
+        //     MessageChain messageChain1 = new MessageChain();
+        //     messageChain1.text("\n").image(buttons.getImageUrl()).text(buttonBuilder.toString());
+        //     bot.sendPrivateMessage(bot.getBotId(), messageChain1);
+        // }
 
     }
 

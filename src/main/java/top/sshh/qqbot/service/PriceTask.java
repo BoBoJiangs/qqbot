@@ -47,7 +47,7 @@ public class PriceTask {
     @Autowired
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
-    public static  String targetDir = "./";
+    public static String targetDir = "./";
     @Autowired
     private GroupManager groupManager;
 
@@ -75,7 +75,7 @@ public class PriceTask {
     public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         message = message.trim();
-        if (message.equals("同步坊市价格") || message.equals("同步数据") ||message.equals("同步坊市数据")) {
+        if (message.equals("同步坊市价格") || message.equals("同步数据") || message.equals("同步坊市数据")) {
             this.savePrice();
             group.sendMessage((new MessageChain()).text("同步坊市价格成功"));
         }
@@ -84,13 +84,13 @@ public class PriceTask {
 
     public void readPrice() {
         try {
-            BufferedReader reader = new BufferedReader(new FileReader(targetDir+"properties/坊市价格.txt"));
+            BufferedReader reader = new BufferedReader(new FileReader(targetDir + "properties/坊市价格.txt"));
 
             try {
                 StringBuilder jsonStr = new StringBuilder();
 
                 String line;
-                while((line = reader.readLine()) != null) {
+                while ((line = reader.readLine()) != null) {
                     jsonStr.append(line);
                 }
 
@@ -113,10 +113,10 @@ public class PriceTask {
 
     public void savePrice() {
         try {
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(targetDir+"properties/坊市价格.txt"), StandardCharsets.UTF_8));
+            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(targetDir + "properties/坊市价格.txt"), StandardCharsets.UTF_8));
 
             try {
-                List<ProductPrice> personList = (List)this.productPriceResponse.findAll();
+                List<ProductPrice> personList = (List) this.productPriceResponse.findAll();
                 if (!personList.isEmpty()) {
                     String jsonStr = JSON.toJSONString(personList);
                     writer.write(jsonStr);
@@ -158,17 +158,17 @@ public class PriceTask {
     )
     public void 查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, Integer messageId) {
         if (bot.getBotConfig().isEnableXslPriceQuery() && !remindGroupIdList.contains(group.getGroupId())) {
-            if(!groupManager.isRemindGroup(bot,group)){
+            if (!groupManager.isRemindGroup(bot, group)) {
                 return;
             }
             List<ReplyMessage> replyMessageList = messageChain.getMessageByType(ReplyMessage.class);
             if (replyMessageList != null && !replyMessageList.isEmpty()) {
-                ReplyMessage replyMessage = (ReplyMessage)replyMessageList.get(0);
+                ReplyMessage replyMessage = (ReplyMessage) replyMessageList.get(0);
                 MessageChain replyMessageChain = replyMessage.getChain();
                 if (replyMessageChain != null) {
                     List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
                     if (textMessageList != null && !textMessageList.isEmpty()) {
-                        TextMessage textMessage = (TextMessage)textMessageList.get(textMessageList.size() - 1);
+                        TextMessage textMessage = (TextMessage) textMessageList.get(textMessageList.size() - 1);
                         String message = textMessage.getText();
                         if (message.contains("道友的个人悬赏令")) {
                             Pattern pattern = Pattern.compile("可能额外获得：(.*?)!");
@@ -176,7 +176,7 @@ public class PriceTask {
                             StringBuilder stringBuilder = new StringBuilder();
                             int count = 0;
 
-                            while(matcher.find()) {
+                            while (matcher.find()) {
                                 String name = matcher.group(1).replaceAll("\\s", "");
                                 int colonIndex = name.indexOf(58);
                                 if (colonIndex >= 0) {
@@ -388,7 +388,7 @@ public class PriceTask {
 
                     List<BountyInfo> bountyInfos = new ArrayList<>();
 
-                    while(matcher.find()) {
+                    while (matcher.find()) {
                         int completionRate = Integer.parseInt(matcher.group(1));
                         long cultivation = Long.parseLong(matcher.group(2));
                         String name = matcher.group(3).replaceAll("\\s", "");
@@ -402,8 +402,7 @@ public class PriceTask {
                             ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
 
 
-
-                            if(completionRate == 100){
+                            if (completionRate == 100) {
                                 cultivation = cultivation * 2;
                             } else {
                                 hasNon100Rate = true;
@@ -422,7 +421,7 @@ public class PriceTask {
                                     maxPrice = first.getPrice();
                                     maxPriceIndex = count;
                                 }
-                                stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(formatCultivation(first.getPrice()*10000L))
+                                stringBuilder.append("\n\uD83C\uDF81悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(formatCultivation(first.getPrice() * 10000L))
                                         .append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
                             }
 
@@ -459,7 +458,7 @@ public class PriceTask {
                         stringBuilder.append("\n\n最高修为:悬赏令").append(maxCultivateIndex)
                                 .append("(修为").append(formatCultivation(maxCultivate)).append(")");
                         stringBuilder.append("\n最高价格:悬赏令").append(maxPriceIndex)
-                                .append("(价格").append(formatCultivation(maxPrice*10000L)).append(")");
+                                .append("(价格").append(formatCultivation(maxPrice * 10000L)).append(")");
 
                         // 添加推荐信息
                         if (hasNon100Rate) {
@@ -485,9 +484,8 @@ public class PriceTask {
     }
 
 
-
     private String formatCultivation(long reward) {
-        return reward >= 100000000L ? String.format("%.2f亿", (double)reward / 1.0E8) : reward / 10000L + "万";
+        return reward >= 100000000L ? String.format("%.2f亿", (double) reward / 1.0E8) : reward / 10000L + "万";
     }
 
     @GroupMessageHandler(
@@ -507,7 +505,7 @@ public class PriceTask {
                 processReplyMessage(messageChain, message, result);
             } else {
                 // 处理直接查询的情况
-                processDirectQuery(message, result,bot);
+                processDirectQuery(message, result, bot);
             }
 
             // 如果计算结果有效，发送消息
@@ -715,7 +713,7 @@ public class PriceTask {
     }
 
     // 处理直接查询
-    private void processDirectQuery(String message, PriceCalculationResult result,Bot bot) {
+    private void processDirectQuery(String message, PriceCalculationResult result, Bot bot) {
         String cleanMessage = message.replace("@" + bot.getBotId(), "").replace("查上架价格", "");
         Arrays.stream(cleanMessage.split("\n"))
                 .map(line -> line.replaceAll("\\s", ""))
@@ -772,11 +770,12 @@ public class PriceTask {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 猜成语(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+
         if (bot.getBotConfig().isEnableGuessTheIdiom() && group.getGroupId() != 665980114L && message.contains("看表情猜成语")) {
             Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
 
-            while(var7.hasNext()) {
-                TextMessage textMessage = (TextMessage)var7.next();
+            while (var7.hasNext()) {
+                TextMessage textMessage = (TextMessage) var7.next();
                 message = textMessage.getText();
                 if (message.contains("题目：")) {
                     String emoji = message.substring(message.indexOf("题目：") + 3).trim();
@@ -797,8 +796,8 @@ public class PriceTask {
         if (message.contains("" + bot.getBotId()) && message.contains("看表情猜成语")) {
             Iterator var7 = messageChain.getMessageByType(TextMessage.class).iterator();
 
-            while(var7.hasNext()) {
-                TextMessage textMessage = (TextMessage)var7.next();
+            while (var7.hasNext()) {
+                TextMessage textMessage = (TextMessage) var7.next();
                 message = textMessage.getText();
                 if (message.contains("题目：")) {
                     String emoji = message.substring(message.indexOf("题目：") + 3).trim();
@@ -831,6 +830,82 @@ public class PriceTask {
 
     }
 
+    //    @GroupMessageHandler(
+//            senderIds = {3889001741L}
+//    )
+//    public void 保存商品价格(Bot bot, Group group, String message, Integer messageId) throws InterruptedException {
+//        if (message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架")) {
+//            String[] split = message.split("\n");
+//            LocalDateTime now = LocalDateTime.now();
+//            customPool.submit(() -> {
+//                String[] var5 = split;
+//                int var6 = split.length;
+//
+//                for(int var7 = 0; var7 < var6; ++var7) {
+//                    String s = var5[var7];
+//                    if (s.startsWith("价格") && s.contains("mqqapi")) {
+//                        BotConfig botConfig = bot.getBotConfig();
+//                        long groupId = botConfig.getGroupId();
+//                        if (botConfig.getTaskId() != 0L) {
+//                            groupId = botConfig.getTaskId();
+//                        }
+//
+//                        String[] split1 = s.split("\\[|\\]");
+//                        String code = s.split("%E5%9D%8A%E5%B8%82%E8%B4%AD%E4%B9%B0|&")[1];
+//
+//
+//
+//                        double price = Double.MAX_VALUE;
+//                        String itemName = split1[1].trim();
+//                        StringBuilder result = new StringBuilder();
+//                        char[] var17 = itemName.toCharArray();
+//                        int var18 = var17.length;
+//
+//                        for(int var19 = 0; var19 < var18; ++var19) {
+//                            char c = var17[var19];
+//                            if (Character.toString(c).matches("[\\u4e00-\\u9fa5()（）]")) {
+//                                result.append(c);
+//                            }
+//                        }
+//
+//                        itemName = result.toString();
+//                        String[] split2;
+//                        if (s.contains("万 [")) {
+//                            split2 = s.split("价格:|万");
+//                            price = Double.parseDouble(split2[1]);
+//                        } else if (s.contains("亿 [")) {
+//                            split2 = s.split("价格:|亿");
+//                            price = Double.parseDouble(split2[1]) * 10000.0;
+//                        }
+//
+//                        ProductPrice productPrice = new ProductPrice();
+//                        productPrice.setName(itemName);
+//                        productPrice.setPrice((int)price);
+//                        productPrice.setCode(code);
+//                        productPrice.setTime(now);
+//                        Map<String, ProductPrice> productMap = (Map)this.groupManager.autoBuyProductMap.computeIfAbsent(bot.getBotId()+"", (k) -> {
+//                            return new ConcurrentHashMap();
+//                        });
+//                        ProductPrice existingProduct = (ProductPrice)productMap.get(itemName);
+//                        ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(productPrice.getName());
+//                        if (first != null) {
+//                            if ((double)first.getPrice() != price) {
+//                                first.setPrice((int)price);
+//                                first.setCode(code);
+//                                first.setTime(LocalDateTime.now());
+//                            }
+//                        } else {
+//                            first = productPrice;
+//                        }
+//
+//                        this.productPriceResponse.save(first);
+//                    }
+//                }
+//
+//            });
+//        }
+//
+//    }
     @GroupMessageHandler(
             senderIds = {3889001741L}
     )
@@ -838,12 +913,9 @@ public class PriceTask {
         if (message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架")) {
             String[] split = message.split("\n");
             LocalDateTime now = LocalDateTime.now();
-            customPool.submit(() -> {
-                String[] var5 = split;
-                int var6 = split.length;
 
-                for(int var7 = 0; var7 < var6; ++var7) {
-                    String s = var5[var7];
+            customPool.submit(() -> {
+                for (String s : split) {
                     if (s.startsWith("价格") && s.contains("mqqapi")) {
                         BotConfig botConfig = bot.getBotConfig();
                         long groupId = botConfig.getGroupId();
@@ -851,76 +923,66 @@ public class PriceTask {
                             groupId = botConfig.getTaskId();
                         }
 
-                        String[] split1 = s.split("\\[|\\]");
+                        // 提取 code
                         String code = s.split("%E5%9D%8A%E5%B8%82%E8%B4%AD%E4%B9%B0|&")[1];
-                        double price = Double.MAX_VALUE;
+//                        ProductPrice last = productPriceResponse.findTopByCodeOrderByTimeDesc(code);
+//                        if (last != null && last.getTime().isAfter(now.minusSeconds(30))) {
+//                            // 30 秒内已有相同 code，直接 return，不保存
+//                            logger.info("30 秒内已有相同 code，直接 return，不保存");
+//                            return;
+//                        }else{
+//                            logger.info("保存商品价格");
+//                        }
+
+                        // 提取物品名
+                        String[] split1 = s.split("\\[|\\]");
                         String itemName = split1[1].trim();
                         StringBuilder result = new StringBuilder();
-                        char[] var17 = itemName.toCharArray();
-                        int var18 = var17.length;
-
-                        for(int var19 = 0; var19 < var18; ++var19) {
-                            char c = var17[var19];
+                        for (char c : itemName.toCharArray()) {
                             if (Character.toString(c).matches("[\\u4e00-\\u9fa5()（）]")) {
                                 result.append(c);
                             }
                         }
-
                         itemName = result.toString();
-                        String[] split2;
+
+                        // 提取价格
+                        double price = Double.MAX_VALUE;
                         if (s.contains("万 [")) {
-                            split2 = s.split("价格:|万");
+                            String[] split2 = s.split("价格:|万");
                             price = Double.parseDouble(split2[1]);
                         } else if (s.contains("亿 [")) {
-                            split2 = s.split("价格:|亿");
+                            String[] split2 = s.split("价格:|亿");
                             price = Double.parseDouble(split2[1]) * 10000.0;
                         }
 
+                        // 构造 ProductPrice
                         ProductPrice productPrice = new ProductPrice();
                         productPrice.setName(itemName);
-                        productPrice.setPrice((int)price);
+                        productPrice.setPrice((int) price);
                         productPrice.setCode(code);
                         productPrice.setTime(now);
-                        Map<String, ProductPrice> productMap = (Map)this.groupManager.autoBuyProductMap.computeIfAbsent(bot.getBotId()+"", (k) -> {
-                            return new ConcurrentHashMap();
-                        });
-                        ProductPrice existingProduct = (ProductPrice)productMap.get(itemName);
-                        ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(productPrice.getName());
-                        if (first != null) {
-                            if ((double)first.getPrice() != price) {
-                                first.setPrice((int)price);
-                                first.setCode(code);
-                                first.setTime(LocalDateTime.now());
-                            }
+
+
+                        // 查询数据库最新记录（按 code）
+//                        ProductPrice latest = this.productPriceResponse.findTopByCodeOrderByTimeDesc(code);
+                        ProductPrice latest = this.productPriceResponse.getFirstByNameOrderByTimeDesc(productPrice.getName());
+
+                        // 如果数据库没有，直接保存
+                        if (latest == null) {
+                            this.productPriceResponse.save(productPrice);
                         } else {
-                            first = productPrice;
+                            if (latest.getPrice() != (int) price) {
+                                latest.setPrice((int)price);
+                                latest.setCode(code);
+                                latest.setTime(LocalDateTime.now());
+                                this.productPriceResponse.save(latest);
+                            }
+                            // 如果价格没变，就跳过，不保存
                         }
-
-                        this.productPriceResponse.save(first);
-//                        if (existingProduct != null && price <= (double)existingProduct.getPrice()) {
-//                            if (botConfig.isStop()) {
-//                                botConfig.setStop(false);
-//                                return;
-//                            }
-//
-//                            if (group.getGroupId() == groupId) {
-//                                group.sendMessage((new MessageChain()).at("3889001741").text(" 坊市购买 " + code));
-//                            }
-//
-//                        }
-
-//                        if (botConfig.isEnableAutoBuyLowPrice() && price < (double)ProductLowPrice.getLowPrice(itemName)) {
-//                            if (botConfig.isStop()) {
-//                                botConfig.setStop(false);
-//                                return;
-//                            }
-//                            group.sendMessage((new MessageChain()).at("3889001741").text(" 坊市购买 " + code));
-//                        }
                     }
                 }
-
             });
         }
-
     }
+
 }

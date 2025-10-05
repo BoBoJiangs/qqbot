@@ -29,7 +29,7 @@ public class SchedulerTask {
         if (message.startsWith("设置定时任务")) {
             String qq = String.valueOf(bot.getBotId()); // 使用发送消息用户 QQ
 //            TaskStore.taskMap.get(qq).clear();
-            TaskStore.taskMap.computeIfAbsent(qq, k -> new ArrayList<>()).clear();
+//            TaskStore.taskMap.computeIfAbsent(qq, k -> new ArrayList<>()).clear();
             String[] lines = message.split("\n");
             for (int i = 1; i < lines.length; i++) {
                 String line = lines[i].trim();
@@ -56,7 +56,28 @@ public class SchedulerTask {
                 }
                 group.sendMessage(new MessageChain().text(sb.toString()));
             }
+        }else if (message.startsWith("移除定时任务")) {
+            String qq = String.valueOf(bot.getBotId());
+            String[] parts = message.split(" ", 2);
+            if (parts.length < 2) {
+                group.sendMessage(new MessageChain().text("⚠️ 请指定要移除的任务时间，例如：移除定时任务 12:30"));
+                return;
+            }
+            String time = parts[1].trim();
+            boolean removed = TaskStore.removeTask(qq, time);
+            if (removed) {
+                group.sendMessage(new MessageChain().text("🗑️ 已成功移除定时任务：" + time));
+            } else {
+                group.sendMessage(new MessageChain().text("❌ 没有找到该时间的定时任务：" + time));
+            }
+        }else if (message.startsWith("清空定时任务")) {
+            String qq = String.valueOf(bot.getBotId()); // 使用发送消息用户 QQ
+            TaskStore.taskMap.computeIfAbsent(qq, k -> new ArrayList<>()).clear();
+
+            group.sendMessage(new MessageChain().text("✅ 已成功清空定时任务！"));
         }
+
+
     }
 
     /** 每分钟执行一次检查任务 */

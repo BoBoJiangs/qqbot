@@ -1,0 +1,944 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QQ Bot 配置管理</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .bot-selector {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #4facfe;
+        }
+
+        .bot-selector h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .bot-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .bot-card {
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 8px;
+            padding: 15px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .bot-card:hover {
+            border-color: #4facfe;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.2);
+        }
+
+        .bot-card.active {
+            border-color: #4facfe;
+            background: #f0f8ff;
+        }
+
+        .bot-name {
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .bot-info {
+            color: #666;
+            font-size: 0.9em;
+        }
+
+        .config-section {
+            display: none;
+        }
+
+        .config-section.active {
+            display: block;
+        }
+
+        .config-tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background: #f8f9fa;
+            border: none;
+            cursor: pointer;
+            border-radius: 8px 8px 0 0;
+            margin-right: 5px;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            background: #4facfe;
+            color: white;
+        }
+
+        .tab-content {
+            padding: 20px;
+            background: white;
+            border-radius: 0 0 8px 8px;
+            min-height: 400px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s ease;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #4facfe;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            width: auto;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: #4facfe;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #3d8bfe;
+            transform: translateY(-2px);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-2px);
+        }
+
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+
+        .btn-warning:hover {
+            background: #e0a800;
+            transform: translateY(-2px);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+
+        .status-online {
+            background: #28a745;
+        }
+
+        .status-offline {
+            background: #dc3545;
+        }
+
+        .status-busy {
+            background: #ffc107;
+        }
+
+        .runtime-status {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .runtime-status h4 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+
+        .status-item {
+            background: white;
+            padding: 15px;
+            border-radius: 6px;
+            border-left: 4px solid #4facfe;
+        }
+
+        .status-label {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border: 1px solid #c3e6cb;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 80%;
+            max-width: 600px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .close {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close:hover {
+            color: black;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+            
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .bot-list {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 QQ Bot 配置管理</h1>
+            <p>可视化配置管理界面 - 轻松管理你的Bot设置</p>
+        </div>
+
+        <div class="content">
+            <!-- Bot选择器 -->
+            <div class="bot-selector">
+                <h3>选择要配置的Bot</h3>
+                <div class="bot-list" id="botList">
+                    <div class="loading">正在加载Bot列表...</div>
+                </div>
+            </div>
+
+            <!-- 配置区域 -->
+            <div class="config-section" id="configSection">
+                <div class="config-tabs">
+                    <button class="tab active" onclick="showTab('basic')">基础配置</button>
+                    <button class="tab" onclick="showTab('reward')">悬赏令配置</button>
+                    <button class="tab" onclick="showTab('cultivation')">修炼配置</button>
+                    <button class="tab" onclick="showTab('sect')">宗门配置</button>
+                    <button class="tab" onclick="showTab('query')">查询功能</button>
+                    <button class="tab" onclick="showTab('control')">控制配置</button>
+                    <button class="tab" onclick="showTab('runtime')">运行时状态</button>
+                </div>
+
+                <!-- 基础配置 -->
+                <div id="basic" class="tab-content">
+                    <h3>基础配置</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Bot编号</label>
+                            <input type="number" id="botNumber" placeholder="设置Bot编号">
+                        </div>
+                        <div class="form-group">
+                            <label>验证模式</label>
+                            <select id="autoVerifyModel">
+                                <option value="0">手动验证</option>
+                                <option value="1">半自动验证</option>
+                                <option value="2">全自动验证</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="enableAutoTask">
+                            <label for="enableAutoTask">启用定时任务</label>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="enableAutomaticReply">
+                            <label for="enableAutomaticReply">启用群消息自动回复</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 悬赏令配置 -->
+                <div id="reward" class="tab-content" style="display: none;">
+                    <h3>悬赏令配置</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>悬赏令模式</label>
+                            <select id="rewardMode">
+                                <option value="1">手动模式</option>
+                                <option value="2">半自动模式</option>
+                                <option value="3">全自动价值优先</option>
+                                <option value="4">全自动时长最短</option>
+                                <option value="5">全自动修为最高</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>价格限制 (万)</label>
+                            <input type="number" id="xslPriceLimit" placeholder="悬赏令价格限制">
+                        </div>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="enableXslPriceQuery">
+                        <label for="enableXslPriceQuery">启用悬赏令价格查询</label>
+                    </div>
+                </div>
+
+                <!-- 修炼配置 -->
+                <div id="cultivation" class="tab-content" style="display: none;">
+                    <h3>修炼配置</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>修炼模式</label>
+                            <select id="cultivationMode">
+                                <option value="0">无</option>
+                                <option value="1">修炼</option>
+                                <option value="2">普通闭关</option>
+                                <option value="3">宗门闭关</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="enableAutoRepair">
+                        <label for="enableAutoRepair">启用无偿双修</label>
+                    </div>
+                </div>
+
+                <!-- 宗门配置 -->
+                <div id="sect" class="tab-content" style="display: none;">
+                    <h3>宗门配置</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>宗门任务模式</label>
+                            <select id="sectMode">
+                                <option value="1">邪修查抄</option>
+                                <option value="2">所有任务</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="enableSectMission">
+                            <label for="enableSectMission">启用宗门任务</label>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="enableAutoField">
+                            <label for="enableAutoField">启用自动灵田结算</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 查询功能 -->
+                <div id="query" class="tab-content" style="display: none;">
+                    <h3>查询功能</h3>
+                    <div class="form-row">
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="enableCheckPrice">
+                            <label for="enableCheckPrice">启用价格查询</label>
+                        </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="enableGuessTheIdiom">
+                            <label for="enableGuessTheIdiom">启用猜成语查询</label>
+                        </div>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="enableAutoSecret">
+                        <label for="enableAutoSecret">启用自动秘境结算</label>
+                    </div>
+                </div>
+
+                <!-- 控制配置 -->
+                <div id="control" class="tab-content" style="display: none;">
+                    <h3>控制配置</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>主号QQ</label>
+                            <input type="text" id="controlQQ" placeholder="控制QQ号，多个用&分隔">
+                        </div>
+                        <div class="form-group">
+                            <label>提醒群号</label>
+                            <input type="text" id="groupQQ" placeholder="提醒群号，多个用&分隔">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>赠送灵石群号</label>
+                        <input type="number" id="lingShiQQ" placeholder="赠送灵石的群号">
+                    </div>
+                </div>
+
+                <!-- 运行时状态 -->
+                <div id="runtime" class="tab-content" style="display: none;">
+                    <h3>运行时状态</h3>
+                    <div class="runtime-status">
+                        <h4>当前状态</h4>
+                        <div class="status-grid" id="runtimeStatus">
+                            <div class="loading">正在加载状态信息...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div style="margin-top: 30px; text-align: center;">
+                    <button class="btn btn-primary" onclick="saveConfig()">💾 保存配置</button>
+                    <button class="btn btn-success" onclick="loadConfig()">🔄 刷新配置</button>
+                    <button class="btn btn-warning" onclick="resetConfig()">🔄 重置配置</button>
+                    <button class="btn btn-primary" onclick="exportConfig()">📤 导出配置</button>
+                    <button class="btn btn-primary" onclick="showImportModal()">📥 导入配置</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 导入配置模态框 -->
+    <div id="importModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeImportModal()">&times;</span>
+            <h3>导入配置</h3>
+            <textarea id="importConfig" rows="10" placeholder="请粘贴配置JSON内容..."></textarea>
+            <div style="margin-top: 20px; text-align: center;">
+                <button class="btn btn-primary" onclick="importConfig()">导入</button>
+                <button class="btn btn-danger" onclick="closeImportModal()">取消</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentBotId = null;
+        let bots = {};
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            loadBots();
+        });
+
+        // 加载Bot列表
+        async function loadBots() {
+            try {
+                const response = await fetch('/api/bot-config/bots');
+                const data = await response.json();
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                bots = data.bots;
+                renderBotList();
+            } catch (error) {
+                showError('加载Bot列表失败: ' + error.message);
+            }
+        }
+
+        // 渲染Bot列表
+        function renderBotList() {
+            const botList = document.getElementById('botList');
+            botList.innerHTML = '';
+
+            Object.values(bots).forEach(bot => {
+                const botCard = document.createElement('div');
+                botCard.className = 'bot-card';
+                botCard.onclick = () => selectBot(bot.botId);
+                
+                botCard.innerHTML = `
+                    <div class="bot-name">
+                        <span class="status-indicator status-online"></span>
+                        ${bot.botName}
+                    </div>
+                    <div class="bot-info">
+                        Bot ID: ${bot.botId}<br>
+                        群号: ${bot.groupId}
+                    </div>
+                `;
+                
+                botList.appendChild(botCard);
+            });
+        }
+
+        // 选择Bot
+        async function selectBot(botId) {
+            currentBotId = botId;
+            
+            // 更新UI
+            document.querySelectorAll('.bot-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            event.target.closest('.bot-card').classList.add('active');
+            
+            document.getElementById('configSection').classList.add('active');
+            
+            // 加载配置
+            await loadConfig();
+        }
+
+        // 加载配置
+        async function loadConfig() {
+            if (!currentBotId) return;
+
+            try {
+                const response = await fetch(`/api/bot-config/${currentBotId}`);
+                const config = await response.json();
+                
+                if (response.status === 404) {
+                    showError('Bot不存在');
+                    return;
+                }
+
+                // 填充表单
+                fillForm(config);
+                
+                // 加载运行时状态
+                await loadRuntimeStatus();
+                
+            } catch (error) {
+                showError('加载配置失败: ' + error.message);
+            }
+        }
+
+        // 填充表单
+        function fillForm(config) {
+            document.getElementById('botNumber').value = config.botNumber || '';
+            document.getElementById('autoVerifyModel').value = config.autoVerifyModel || 0;
+            document.getElementById('enableAutoTask').checked = config.enableAutoTask || false;
+            document.getElementById('enableAutomaticReply').checked = config.enableAutomaticReply || false;
+            
+            document.getElementById('rewardMode').value = config.rewardMode || 5;
+            document.getElementById('xslPriceLimit').value = config.xslPriceLimit || 1000;
+            document.getElementById('enableXslPriceQuery').checked = config.enableXslPriceQuery || false;
+            
+            document.getElementById('cultivationMode').value = config.cultivationMode || 0;
+            document.getElementById('enableAutoRepair').checked = config.enableAutoRepair || false;
+            
+            document.getElementById('sectMode').value = config.sectMode || 1;
+            document.getElementById('enableSectMission').checked = config.enableSectMission || false;
+            document.getElementById('enableAutoField').checked = config.enableAutoField || false;
+            
+            document.getElementById('enableCheckPrice').checked = config.enableCheckPrice || false;
+            document.getElementById('enableGuessTheIdiom').checked = config.enableGuessTheIdiom || false;
+            document.getElementById('enableAutoSecret').checked = config.enableAutoSecret || false;
+            
+            document.getElementById('controlQQ').value = config.controlQQ || '';
+            document.getElementById('groupQQ').value = config.groupQQ || '';
+            document.getElementById('lingShiQQ').value = config.lingShiQQ || '';
+        }
+
+        // 加载运行时状态
+        async function loadRuntimeStatus() {
+            if (!currentBotId) return;
+
+            try {
+                const response = await fetch(`/api/bot-config/${currentBotId}/status`);
+                const status = await response.json();
+                
+                if (status.error) {
+                    showError(status.error);
+                    return;
+                }
+
+                renderRuntimeStatus(status);
+            } catch (error) {
+                showError('加载运行时状态失败: ' + error.message);
+            }
+        }
+
+        // 渲染运行时状态
+        function renderRuntimeStatus(status) {
+            const statusGrid = document.getElementById('runtimeStatus');
+            statusGrid.innerHTML = '';
+
+            const statusItems = [
+                { label: '停止状态', value: status.isStop ? '已停止' : '运行中', color: status.isStop ? '#dc3545' : '#28a745' },
+                { label: '定时任务', value: status.isStartScheduled ? '启用' : '禁用', color: status.isStartScheduled ? '#28a745' : '#dc3545' },
+                { label: '当前命令', value: status.command || '无', color: '#333' },
+                { label: '验证状态', value: status.verificationStatus || '正常', color: '#333' },
+                { label: '挑战模式', value: status.challengeMode || '0', color: '#333' },
+                { label: '最后发送时间', value: status.lastSendTime ? new Date(status.lastSendTime).toLocaleString() : '无', color: '#333' }
+            ];
+
+            statusItems.forEach(item => {
+                const statusItem = document.createElement('div');
+                statusItem.className = 'status-item';
+                statusItem.innerHTML = `
+                    <div class="status-label">${item.label}</div>
+                    <div class="status-value" style="color: ${item.color}">${item.value}</div>
+                `;
+                statusGrid.appendChild(statusItem);
+            });
+        }
+
+        // 保存配置
+        async function saveConfig() {
+            if (!currentBotId) {
+                showError('请先选择一个Bot');
+                return;
+            }
+
+            const config = {
+                botNumber: parseInt(document.getElementById('botNumber').value) || 0,
+                autoVerifyModel: parseInt(document.getElementById('autoVerifyModel').value),
+                enableAutoTask: document.getElementById('enableAutoTask').checked,
+                enableAutomaticReply: document.getElementById('enableAutomaticReply').checked,
+                rewardMode: parseInt(document.getElementById('rewardMode').value),
+                xslPriceLimit: parseInt(document.getElementById('xslPriceLimit').value) || 1000,
+                enableXslPriceQuery: document.getElementById('enableXslPriceQuery').checked,
+                cultivationMode: parseInt(document.getElementById('cultivationMode').value),
+                enableAutoRepair: document.getElementById('enableAutoRepair').checked,
+                sectMode: parseInt(document.getElementById('sectMode').value),
+                enableSectMission: document.getElementById('enableSectMission').checked,
+                enableAutoField: document.getElementById('enableAutoField').checked,
+                enableCheckPrice: document.getElementById('enableCheckPrice').checked,
+                enableGuessTheIdiom: document.getElementById('enableGuessTheIdiom').checked,
+                enableAutoSecret: document.getElementById('enableAutoSecret').checked,
+                controlQQ: document.getElementById('controlQQ').value,
+                groupQQ: document.getElementById('groupQQ').value,
+                lingShiQQ: document.getElementById('lingShiQQ').value ? parseInt(document.getElementById('lingShiQQ').value) : null
+            };
+
+            try {
+                const response = await fetch(`/api/bot-config/${currentBotId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(config)
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showSuccess('配置保存成功！');
+                } else {
+                    showError(result.error || '保存失败');
+                }
+            } catch (error) {
+                showError('保存配置失败: ' + error.message);
+            }
+        }
+
+        // 重置配置
+        async function resetConfig() {
+            if (!currentBotId) {
+                showError('请先选择一个Bot');
+                return;
+            }
+
+            if (!confirm('确定要重置配置为默认值吗？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/bot-config/${currentBotId}/reset`, {
+                    method: 'POST'
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showSuccess('配置重置成功！');
+                    await loadConfig();
+                } else {
+                    showError(result.error || '重置失败');
+                }
+            } catch (error) {
+                showError('重置配置失败: ' + error.message);
+            }
+        }
+
+        // 导出配置
+        async function exportConfig() {
+            if (!currentBotId) {
+                showError('请先选择一个Bot');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/bot-config/${currentBotId}/export`);
+                const result = await response.json();
+                
+                if (result.error) {
+                    showError(result.error);
+                    return;
+                }
+
+                // 创建下载链接
+                const blob = new Blob([result.config], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `bot-${currentBotId}-config.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                showSuccess('配置导出成功！');
+            } catch (error) {
+                showError('导出配置失败: ' + error.message);
+            }
+        }
+
+        // 显示导入模态框
+        function showImportModal() {
+            document.getElementById('importModal').style.display = 'block';
+        }
+
+        // 关闭导入模态框
+        function closeImportModal() {
+            document.getElementById('importModal').style.display = 'none';
+            document.getElementById('importConfig').value = '';
+        }
+
+        // 导入配置
+        async function importConfig() {
+            if (!currentBotId) {
+                showError('请先选择一个Bot');
+                return;
+            }
+
+            const configJson = document.getElementById('importConfig').value.trim();
+            if (!configJson) {
+                showError('请输入配置JSON内容');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/bot-config/${currentBotId}/import`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ config: configJson })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showSuccess('配置导入成功！');
+                    closeImportModal();
+                    await loadConfig();
+                } else {
+                    showError(result.error || '导入失败');
+                }
+            } catch (error) {
+                showError('导入配置失败: ' + error.message);
+            }
+        }
+
+        // 显示标签页
+        function showTab(tabName) {
+            // 隐藏所有标签页内容
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.style.display = 'none';
+            });
+            
+            // 移除所有标签的active类
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // 显示选中的标签页内容
+            document.getElementById(tabName).style.display = 'block';
+            
+            // 添加active类到选中的标签
+            event.target.classList.add('active');
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            
+            const content = document.querySelector('.content');
+            content.insertBefore(errorDiv, content.firstChild);
+            
+            setTimeout(() => {
+                errorDiv.remove();
+            }, 5000);
+        }
+
+        // 显示成功信息
+        function showSuccess(message) {
+            const successDiv = document.createElement('div');
+            successDiv.className = 'success';
+            successDiv.textContent = message;
+            
+            const content = document.querySelector('.content');
+            content.insertBefore(successDiv, content.firstChild);
+            
+            setTimeout(() => {
+                successDiv.remove();
+            }, 3000);
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('importModal');
+            if (event.target === modal) {
+                closeImportModal();
+            }
+        }
+    </script>
+</body>
+</html>
+

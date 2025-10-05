@@ -248,6 +248,7 @@ public class GroupManager {
             MESSAGE_NUMBER_MAP.put(bot.getBotId() + "", new MessageNumber(0, System.currentTimeMillis()));
 
         });
+        saveTasksToFile();
     }
 
     @Scheduled(cron = "0 0 4 * * *")
@@ -551,6 +552,8 @@ public class GroupManager {
                 if (messageNumber.isCrossResetTime()) {
                     messageNumber.setNumber(1);
                     messageNumber.setTime(System.currentTimeMillis());
+                    logger.info("----------发言统计重置------------");
+                    saveTasksToFile();
                 } else {
                     messageNumber.setNumber(messageNumber.getNumber() + 1);
                     messageNumber.setTime(System.currentTimeMillis());
