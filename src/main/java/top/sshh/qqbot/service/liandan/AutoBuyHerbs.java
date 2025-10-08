@@ -1,8 +1,3 @@
-//
-// Source code recreated from a .class file by IntelliJ IDEA
-// (powered by FernFlower decompiler)
-//
-
 package top.sshh.qqbot.service.liandan;
 
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
@@ -48,17 +43,23 @@ public class AutoBuyHerbs {
     private static final long SENDER_ID = 3889001741L;
     private static final String BUY_COMMAND = "坊市购买";
     private static final String MARKET_COMMAND = "查看坊市药材";
-    public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_HERBS = new ConcurrentHashMap();
+
+    /** 保持原有的按 botId 隔离的采购价格表 */
+    public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_HERBS = new ConcurrentHashMap<>();
+
     private final ExecutorService customPool = Executors.newCachedThreadPool();
-    private final List<ProductPrice> autoBuyList = new CopyOnWriteArrayList();
-    private List<String> medicinalList = new ArrayList();
-    public int page = 1;
-    private Map<String, ProductPrice> herbPackMap = new ConcurrentHashMap();
+
+    // 将原来的共享字段改为按 botId 隔离
+    private final Map<Long, CopyOnWriteArrayList<ProductPrice>> autoBuyListMap = new ConcurrentHashMap<>();
+    private final Map<Long, List<String>> medicinalListMap = new ConcurrentHashMap<>();
+    private final Map<Long, Map<String, ProductPrice>> herbPackMapMap = new ConcurrentHashMap<>();
+    private final Map<Long, Integer> pageMap = new ConcurrentHashMap<>();
+    private final Map<Long, Integer> noQueriedCountMap = new ConcurrentHashMap<>();
+    private final Map<Long, List<Integer>> makeDrugIndexListMap = new ConcurrentHashMap<>();
+    private final Map<Long, Integer> drugIndexMap = new ConcurrentHashMap<>();
+
     @Autowired
     public DanCalculator danCalculator;
-    private int noQueriedCount = 0;
-    private List<Integer> makeDrugIndexList = new ArrayList<>();
-    private int drugIndex = 0;
     @Autowired
     public GroupManager groupManager;
 
@@ -74,11 +75,13 @@ public class AutoBuyHerbs {
             return;
         }
         message = message.trim();
+        long botId = bot.getBotId();
+
         if (!message.contains("可用命令")) {
             switch (message) {
                 case "丹药炼金完成":
                     if(botConfig.isStartAuto()){
-                        resetPram(botConfig);
+                        resetPram(bot, botConfig);
                         botConfig.setStop(true);
                         botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
                         group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
@@ -87,7 +90,7 @@ public class AutoBuyHerbs {
                     }
                     break;
                 case "开始采购药材":
-                    resetPram(botConfig);
+                    resetPram(bot, botConfig);
                     botConfig.setStop(true);
                     botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
                     botConfig.setAutoBuyHerbsMode(1);
@@ -95,14 +98,14 @@ public class AutoBuyHerbs {
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     break;
                 case "一键采购药材":
-                    resetPram(botConfig);
+                    resetPram(bot, botConfig);
                     botConfig.setStop(true);
                     botConfig.setAutoBuyHerbsMode(2);
                     botConfig.setStartAuto(false);
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     break;
                 case "停止采购药材":
-                    resetPram(botConfig);
+                    resetPram(bot, botConfig);
                     botConfig.setAutoBuyHerbsMode(0);
                     group.sendMessage((new MessageChain()).reply(messageId).text("停止采购"));
                     break;
@@ -114,26 +117,31 @@ public class AutoBuyHerbs {
 
         if (message.startsWith("刷新指定药材坊市")) {
             String[] indexs = message.substring(message.indexOf("刷新指定药材坊市") + 8).trim().split("&");
-//            logger.info(indexs);
+            List<Integer> list = makeDrugIndexListMap.computeIfAbsent(botId, k -> new ArrayList<>());
             for (String s : indexs) {
-                makeDrugIndexList.add(Integer.parseInt(s));
+                try{
+                    list.add(Integer.parseInt(s));
+                }catch (NumberFormatException ignore){}
             }
             group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
         }
 
         if ("取消刷新指定药材坊市".startsWith(message)) {
-            makeDrugIndexList.clear();
+            makeDrugIndexListMap.put(botId, new ArrayList<>());
             group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
         }
 
     }
 
-    private void resetPram(BotConfig botConfig) {
-        this.page = 1;
-        noQueriedCount = 0;
-        drugIndex = 0;
-        this.herbPackMap.clear();
-        this.autoBuyList.clear();
+    private void resetPram(Bot bot, BotConfig botConfig) {
+        long botId = bot.getBotId();
+        pageMap.put(botId, 1);
+        noQueriedCountMap.put(botId, 0);
+        drugIndexMap.put(botId, 0);
+        herbPackMapMap.put(botId, new ConcurrentHashMap<>());
+        autoBuyListMap.put(botId, new CopyOnWriteArrayList<>());
+        medicinalListMap.put(botId, new ArrayList<>());
+        makeDrugIndexListMap.putIfAbsent(botId, new ArrayList<>());
         botConfig.setTaskStatusHerbs(1);
     }
 
@@ -142,6 +150,7 @@ public class AutoBuyHerbs {
     )
     public void 药材背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
         BotConfig botConfig = bot.getBotConfig();
+        long botId = bot.getBotId();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
         if (isGroup && (message.contains("上一页") || message.contains("下一页") || message.contains("药材背包")) && botConfig.getAutoBuyHerbsMode()!=0) {
             List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
@@ -149,50 +158,52 @@ public class AutoBuyHerbs {
             TextMessage textMessage = null;
             if (textMessages.size() > 1) {
                 textMessage = (TextMessage)textMessages.get(textMessages.size()-1);
-            } else {
+            } else if(!textMessages.isEmpty()) {
                 textMessage = (TextMessage)textMessages.get(0);
             }
 
             if (textMessage != null) {
                 String msg = textMessage.getText();
                 if (message.contains("炼金") && message.contains("坊市数据")) {
+                    List<String> list = medicinalListMap.computeIfAbsent(botId, k -> new ArrayList<>());
                     String[] lines = msg.split("\n");
-                    this.medicinalList.addAll(Arrays.asList(lines));
+                    list.addAll(Arrays.asList(lines));
                     if (msg.contains("下一页")) {
                         hasNextPage = true;
                     }
                 }
 
                 if (hasNextPage) {
-                    ++this.page;
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包" + this.page));
+                    int nextPage = pageMap.getOrDefault(botId, 1) + 1;
+                    pageMap.put(botId, nextPage);
+                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包" + nextPage));
                 } else {
                     botConfig.setStop(false);
-                    this.parseHerbList();
+                    this.parseHerbList(bot);
                     this.refreshHerbsIndex(bot);
                 }
-            } else {
-//                System.out.println("message==" + message);
             }
         }
 
     }
 
-    public void parseHerbList() throws Exception {
+    public void parseHerbList(Bot bot) throws Exception {
+        long botId = bot.getBotId();
+        List<String> medicinalList = medicinalListMap.getOrDefault(botId, Collections.emptyList());
         String currentHerb = null;
-        Iterator var2 = this.medicinalList.iterator();
 
-        while(var2.hasNext()) {
-            String line = (String)var2.next();
+        for (String line : medicinalList) {
             line = line.trim();
             if (line.contains("名字：")) {
                 currentHerb = line.replaceAll("名字：", "");
             } else if (currentHerb != null && line.contains("拥有数量:")) {
-                int count = Integer.parseInt(line.split("拥有数量:|炼金")[1]);
-                ProductPrice productPrice = new ProductPrice();
-                productPrice.setName(currentHerb);
-                productPrice.setHerbCount(count);
-                this.herbPackMap.put(currentHerb, productPrice);
+                try{
+                    int count = Integer.parseInt(line.split("拥有数量:|炼金")[1]);
+                    ProductPrice productPrice = new ProductPrice();
+                    productPrice.setName(currentHerb);
+                    productPrice.setHerbCount(count);
+                    herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).put(currentHerb, productPrice);
+                }catch (Exception ignore){}
                 currentHerb = null;
             }
         }
@@ -200,9 +211,8 @@ public class AutoBuyHerbs {
     }
 
     private void handlePurchaseCommands(Bot bot, Group group, String message, Integer messageId) {
-        Map<String, ProductPrice> productMap = (Map)AUTO_BUY_HERBS.computeIfAbsent(bot.getBotId(), (k) -> {
-            return new ConcurrentHashMap();
-        });
+        long botId = bot.getBotId();
+        Map<String, ProductPrice> productMap = AUTO_BUY_HERBS.computeIfAbsent(botId, (k) -> new ConcurrentHashMap<>());
         if (message.startsWith("取消采购药材")) {
             String productName = message.substring("取消采购药材".length()).trim();
             productMap.remove(productName);
@@ -211,7 +221,7 @@ public class AutoBuyHerbs {
         } else if (message.startsWith("批量取消采购药材")) {
             productMap.clear();
             try {
-                updateMedicinePrices(new ArrayList<>(),bot.getBotId());
+                updateMedicinePrices(new ArrayList<>(),botId);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -251,6 +261,7 @@ public class AutoBuyHerbs {
     }
 
     private void addProductsToMap(Bot bot, Group group, String message, Integer messageId, Map<String, ProductPrice> productMap) {
+        long botId = bot.getBotId();
         try {
             String[] lines = message.split("\n");
             List<ProductPrice> priceList = new ArrayList<>();
@@ -268,8 +279,8 @@ public class AutoBuyHerbs {
                 }
             }
 
-            this.updateMedicinePrices(priceList,bot.getBotId());
-            if(AutoAlchemyTask.isCreateDan){
+            this.updateMedicinePrices(priceList,botId);
+            if(AutoAlchemyTask.MATCHING.compareAndSet(false, true)){
                 group.sendMessage((new MessageChain()).text("添加成功,开始同步炼丹配方"));
             }else{
                 group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
@@ -355,7 +366,7 @@ public class AutoBuyHerbs {
             boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
             //出验证码跳过本页购买
             if(botConfig.getAutoBuyHerbsMode()!=0 && isGroup){
-                this.autoBuyList.clear();
+                autoBuyListMap.computeIfAbsent(bot.getBotId(), k -> new CopyOnWriteArrayList<>()).clear();
 
             }
 
@@ -367,6 +378,7 @@ public class AutoBuyHerbs {
     )
     public void 成功购买药材(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
+        long botId = bot.getBotId();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         boolean isAtSelf = isAtSelf(group,bot);
         if (isGroup && isAtSelf && botConfig.getAutoBuyHerbsMode()!=0 && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
@@ -374,18 +386,21 @@ public class AutoBuyHerbs {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
 
             if (message.contains("道友成功购买")) {
-                if(!this.autoBuyList.isEmpty()){
-                    ProductPrice price = this.herbPackMap.get(((ProductPrice)this.autoBuyList.get(0)).getName());
-                    price.setHerbCount(price.getHerbCount() + 1);
-                    this.herbPackMap.put(price.getName(), price);
+                CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>());
+                if(!autoBuyList.isEmpty()){
+                    ProductPrice price = herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).get(autoBuyList.get(0).getName());
+                    if(price!=null){
+                        price.setHerbCount(price.getHerbCount() + 1);
+                        herbPackMapMap.get(botId).put(price.getName(), price);
+                    }
                 }else{
                     String[] parts = message.split("成功购买|，消耗");
                     if(parts.length >= 2){
                         String herbName = parts[1].trim();
-                        ProductPrice price = herbPackMap.get(herbName);
+                        ProductPrice price = herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).get(herbName);
                         if(price!=null){
                             price.setHerbCount(price.getHerbCount() + 1);
-                            this.herbPackMap.put(price.getName(), price);
+                            herbPackMapMap.get(botId).put(price.getName(), price);
                         }
 
                     }
@@ -410,20 +425,22 @@ public class AutoBuyHerbs {
             }
 
             if(message.contains("未查询")){
-                noQueriedCount = noQueriedCount + 1;
-                if(noQueriedCount >= 3){
-                    this.autoBuyList.clear();
-                    noQueriedCount = 0;
+                int cnt = noQueriedCountMap.getOrDefault(botId,0)+1;
+                noQueriedCountMap.put(botId,cnt);
+                if(cnt >= 3){
+                    autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
+                    noQueriedCountMap.put(botId,0);
                 }
             }
 
-            if (!this.autoBuyList.isEmpty()) {
-                this.autoBuyList.remove(0);
+            CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>());
+            if (!autoBuyList.isEmpty()) {
+                autoBuyList.remove(0);
             }
-            if(this.autoBuyList.isEmpty()){
+            if(autoBuyList.isEmpty()){
                 refreshHerbsIndex(bot);
             }else{
-                this.buyHerbs(group, bot.getBotConfig());
+                this.buyHerbs(group, bot);
             }
 
         }
@@ -431,7 +448,6 @@ public class AutoBuyHerbs {
     }
 
     private boolean isAtSelf(Group group,Bot bot){
-//        return message.contains("@" + bot.getBotId()) || message.contains("@" +bot.getBotName()) ;
         return group.getGroupId() == bot.getBotConfig().getGroupId();
     }
 
@@ -442,6 +458,7 @@ public class AutoBuyHerbs {
     )
     public void 自动购买药材(Bot bot, Group group, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
+        long botId = bot.getBotId();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
         if (isGroup && message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架")) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
@@ -453,6 +470,7 @@ public class AutoBuyHerbs {
     }
 
     private void processMarketMessage(Bot bot, Group group, String message) {
+        long botId = bot.getBotId();
         String[] split = message.split("\n");
         String[] var5 = split;
         int var6 = split.length;
@@ -471,37 +489,39 @@ public class AutoBuyHerbs {
                 String code = s.split("%E5%9D%8A%E5%B8%82%E8%B4%AD%E4%B9%B0|&")[1];
                 double price = this.extractPrice(s);
                 String itemName = this.extractItemName(split1[1].trim());
-                Map<String, ProductPrice> productMap = (Map)AUTO_BUY_HERBS.computeIfAbsent(bot.getBotId(), (k) -> {
-                    return new ConcurrentHashMap();
+                Map<String, ProductPrice> productMap = AUTO_BUY_HERBS.computeIfAbsent(bot.getBotId(), (k) -> {
+                    return new ConcurrentHashMap<>();
                 });
-                ProductPrice existingProduct = (ProductPrice)productMap.get(itemName);
+                ProductPrice existingProduct = productMap.get(itemName);
                 if (existingProduct != null && price <= (double)existingProduct.getPrice()) {
-                    if (this.herbPackMap.get(itemName) == null) {
+                    if (herbPackMapMap.get(botId) == null) {
                         ProductPrice productPrice = new ProductPrice();
                         productPrice.setName(itemName);
                         productPrice.setHerbCount(0);
-                        this.herbPackMap.put(itemName, productPrice);
+                        herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).put(itemName, productPrice);
                     }
 
-                    if (((ProductPrice)this.herbPackMap.get(itemName)).getHerbCount() > config.getLimitHerbsCount()) {
+                    ProductPrice packPrice = herbPackMapMap.get(botId).get(itemName);
+                    if (packPrice != null && packPrice.getHerbCount() > config.getLimitHerbsCount()) {
                         if (price <= (double)existingProduct.getPrice() - (double)config.getAddPrice()) {
                             existingProduct.setCode(code);
                             existingProduct.setPriceDiff((int) (existingProduct.getPrice() - price));
-                            this.autoBuyList.add(existingProduct);
+                            autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).add(existingProduct);
                         }
                     } else {
                         existingProduct.setCode(code);
                         existingProduct.setPriceDiff((int) (existingProduct.getPrice() - price));
-                        this.autoBuyList.add(existingProduct);
+                        autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).add(existingProduct);
                     }
                 }
             }
         }
 
-        this.autoBuyList.sort(Comparator.comparingLong(ProductPrice::getId));
-        this.autoBuyList.sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
-        if(!this.autoBuyList.isEmpty()){
-            this.buyHerbs(group, bot.getBotConfig());
+        CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>());
+        autoBuyList.sort(Comparator.comparingLong(ProductPrice::getId));
+        autoBuyList.sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
+        if(!autoBuyList.isEmpty()){
+            this.buyHerbs(group, bot);
         }else{
             this.refreshHerbsIndex(bot);
         }
@@ -536,11 +556,11 @@ public class AutoBuyHerbs {
         return result.toString();
     }
 
-    private void buyHerbs(Group group, BotConfig botConfig) {
-        Iterator var3 = this.autoBuyList.iterator();
-
-        while(var3.hasNext()) {
-            ProductPrice productPrice = (ProductPrice)var3.next();
+    private void buyHerbs(Group group, Bot bot) {
+        BotConfig botConfig = bot.getBotConfig();
+        long botId = bot.getBotId();
+        CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>());
+        for (ProductPrice productPrice : autoBuyList) {
 
             try {
                 if (botConfig.getAutoBuyHerbsMode()!=0) {
@@ -559,9 +579,10 @@ public class AutoBuyHerbs {
     public void 定时查询坊市() {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
+            long botId = bot.getBotId();
             if(botConfig.getAutoBuyHerbsMode() != 0 && !botConfig.isStop() &&
                     System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L){
-                this.autoBuyList.clear();
+                autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
                 botConfig.setStop(false);
                 this.refreshHerbsIndex(bot);
             }
@@ -572,14 +593,17 @@ public class AutoBuyHerbs {
 
     private void refreshHerbsIndex(Bot bot) {
         BotConfig botConfig = bot.getBotConfig();
+        long botId = bot.getBotId();
         if (botConfig.getAutoBuyHerbsMode() != 0) {
             long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
+            List<Integer> makeDrugIndexList = makeDrugIndexListMap.computeIfAbsent(botId, k -> new ArrayList<>());
             if(!makeDrugIndexList.isEmpty()){
+                int drugIndex = drugIndexMap.getOrDefault(botId,0);
                 bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + makeDrugIndexList.get(drugIndex)));
                 if(drugIndex == makeDrugIndexList.size() - 1){
-                    drugIndex = 0;
+                    drugIndexMap.put(botId,0);
                 }else{
-                    drugIndex = drugIndex + 1;
+                    drugIndexMap.put(botId,drugIndex + 1);
                 }
             }else{
                 if (botConfig.getTaskStatusHerbs() >= 8) {
@@ -590,7 +614,7 @@ public class AutoBuyHerbs {
                     try {
                         bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
                         botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
-                        noQueriedCount = 0;
+                        noQueriedCountMap.put(botId,0);
                     } catch (Exception var6) {
                         logger.error("定时查询坊市失败");
                         Thread.currentThread().interrupt();

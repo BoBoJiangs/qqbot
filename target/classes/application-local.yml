@@ -102,22 +102,21 @@ bot:
 #    enableAlchemy: true
 
 #  - type: ws
-#    url: ws://115.120.199.227:8091
+#    url: ws://113.45.9.127:8083
 #    accessToken: 1024*1024*1024
 #    #    修炼群号
-#    groupId: 1045024671
+#    groupId: 1051327161
 #    # 控制小号的QQ
-#    #    大号qq
-#    controlQQ: 2135212677&819463350
-#    masterQQ: 2135212677
+#    controlQQ: 717638461&819463350&3379875593&1018454301
+#    masterQQ: 819463350
 #    # 是否开启查价格
 #    enableCheckPrice: true
 #    # 是否开启猜成语
-#    enableGuessTheIdiom: false
+#    enableGuessTheIdiom: true
 #    # 是否开启查行情
-#    enableCheckMarket: false
+#    enableCheckMarket: true
 #    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
-#    enableXslPriceQuery: false
+#    enableXslPriceQuery: true
 #    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
 #    cultivationMode: 3
 #    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认）
@@ -130,9 +129,25 @@ bot:
 #    enableAutoSecret: true
 #    #无偿双修
 #    enableAutoRepair: true
+#    #群管提醒
+#    enableGroupManager: true
 #    enableXiaoBei: false
-#    forwardMode: 0
+#    #设置编号
+#    botNumber: 13
+#    #设置爱称
+#    aiCheng: 花
+#    enableSelfTitle: true
+#    #每日送灵石数量
+#    lingshiNum: 8700
+#     #每日送灵石群号（在这个群收到有人发接收码接会自动送灵石）
+#    lingShiQQ: 690933736
+#    enableAutomaticReply: false
+#    enableAutoTask: true
+#    enableAutoVerify: true
 #    autoVerifyModel: 2
+#    #挑战模式 0:不自动执行 1：一口气打完9层 2：3，7，8层打完回血
+#    challengeMode: 1
+#    enableAlchemy: true
 
 server:
   port: 8080

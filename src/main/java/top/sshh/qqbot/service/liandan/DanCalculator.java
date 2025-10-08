@@ -148,7 +148,6 @@ public class DanCalculator {
             loadHerbPricesData(botId);
             bindAdditionalData();
         } catch (Exception e) {
-            AutoAlchemyTask.isCreateDan = false;
             logger.error("加载数据失败", e);
         }
     }
@@ -344,7 +343,6 @@ public class DanCalculator {
             logger.info("配方已生成至：{}", new File(targetFilePath).getAbsolutePath());
         } catch (IOException e) {
             logger.error("文件写入失败", e);
-            AutoAlchemyTask.isCreateDan = true;
         }
     }
 

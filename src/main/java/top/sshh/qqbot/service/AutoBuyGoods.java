@@ -114,13 +114,7 @@ public class AutoBuyGoods {
                     if(!autoBuyMap.get(bot.getBotId()).isEmpty()){
                         
                         ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
-                        if(productPrice.getName().contains("无罪")){
-                            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备2")));
-                        }
-                        if(productPrice.getName().contains("原罪") || productPrice.getName().contains("东皇") ||
-                         productPrice.getName().contains("天罪")){
-                            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备1")));
-                        }
+                        changeBuyIndex(productPrice,bot);
                         Random random = new Random();
                         String[] successMsgs = getSuccessMsgs(productPrice);
                         sendBuyMessage(bot, random, successMsgs);
@@ -139,13 +133,7 @@ public class AutoBuyGoods {
                     if(!autoBuyMap.get(bot.getBotId()).isEmpty()){
                         
                         ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
-                        if(productPrice.getName().contains("无罪")){
-                            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备2")));
-                        }
-                        if(productPrice.getName().contains("原罪") || productPrice.getName().contains("东皇") ||
-                         productPrice.getName().contains("天罪")){
-                            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备1")));
-                        }
+                        changeBuyIndex(productPrice,bot);
                         Random random = new Random();
                         String[] failMsgs = getFailMsgs(productPrice);
                         sendBuyMessage(bot, random, failMsgs);
@@ -175,6 +163,25 @@ public class AutoBuyGoods {
             } else {
                 this.buyHerbs(group, bot);
             }
+        }
+    }
+
+    private void changeBuyIndex(ProductPrice productPrice,Bot bot){
+        if(productPrice.getName().contains("无罪")){
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备2")));
+        }
+        if(productPrice.getName().contains("原罪") || productPrice.getName().contains("东皇") ||
+         productPrice.getName().contains("天罪")){
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备1")));
+        }
+        if(productPrice.getName().contains("日月双华")){
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "技能4")));
+        }
+        if(productPrice.getName().contains("灭剑")){
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "技能5")));
+        }
+        if(productPrice.getName().contains("阴阳")){
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "技能7")));
         }
     }
 
