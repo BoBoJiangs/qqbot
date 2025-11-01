@@ -606,7 +606,7 @@ public class AutoBuyHerbs {
                     drugIndexMap.put(botId,drugIndex + 1);
                 }
             }else{
-                if (botConfig.getTaskStatusHerbs() >= 8) {
+                if (botConfig.getTaskStatusHerbs() >= 9) {
                     botConfig.setTaskStatusHerbs(1);
                 }
 

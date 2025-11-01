@@ -94,18 +94,59 @@ public class XiaoYueItemClass {
 
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append("道友成功出售：\n");
+
+        // 计算七品、八品、九品的数量（应用乘除规则）
+        int sevenCount = gradeCount.getOrDefault("七品药材", 0);
+        int sevenSpecial = gradeSpecialCount.getOrDefault("七品药材", 0);
+        int eightCount = gradeCount.getOrDefault("八品药材", 0);
+        int eightSpecial = gradeSpecialCount.getOrDefault("八品药材", 0);
+        int nineCount = gradeCount.getOrDefault("九品药材", 0);
+        int nineSpecial = gradeSpecialCount.getOrDefault("九品药材", 0);
+
+        // 应用规则：七品除2，九品乘2
+        int adjustedSevenCount = sevenCount / 2;
+        int adjustedSevenSpecial = sevenSpecial / 2;
+        int adjustedSevenNormal = adjustedSevenCount - adjustedSevenSpecial;
+
+        int adjustedEightNormal = eightCount - eightSpecial;
+
+        int adjustedNineCount = nineCount * 2;
+        int adjustedNineSpecial = nineSpecial * 2;
+        int adjustedNineNormal = adjustedNineCount - adjustedNineSpecial;
+
+        // 计算总计（只包含七品、八品、九品的调整后数量）
+        int totalNormal = adjustedSevenNormal + adjustedEightNormal + adjustedNineNormal;
+        int totalSpecial = adjustedSevenSpecial + eightSpecial + adjustedNineSpecial;
+
         for (String grade : gradeOrder) {
             int count = gradeCount.getOrDefault(grade, 0);
             if (count > 0) {
                 int special = gradeSpecialCount.getOrDefault(grade, 0);
-                int normalCount = count - special;
-                stringBuilder.append(grade).append(" ").append(normalCount);
-                if (special > 0) {
-                    stringBuilder.append(" 特殊").append(special);
+
+                // 对七品和九品应用特殊规则
+                if ("七品药材".equals(grade)) {
+                    stringBuilder.append(grade).append(" ").append(adjustedSevenNormal);
+                    if (adjustedSevenSpecial > 0) {
+                        stringBuilder.append(" 特殊").append(adjustedSevenSpecial);
+                    }
+                } else if ("九品药材".equals(grade)) {
+                    stringBuilder.append(grade).append(" ").append(adjustedNineNormal);
+                    if (adjustedNineSpecial > 0) {
+                        stringBuilder.append(" 特殊").append(adjustedNineSpecial);
+                    }
+                } else {
+                    int normalCount = count - special;
+                    stringBuilder.append(grade).append(" ").append(normalCount);
+                    if (special > 0) {
+                        stringBuilder.append(" 特殊").append(special);
+                    }
                 }
                 stringBuilder.append("\n");
             }
         }
+
+        // 添加总计
+        stringBuilder.append("普通总计 ").append(totalNormal).append(" 特殊总计 ").append(totalSpecial);
 
         group.sendMessage((new MessageChain()).reply(messageId).text(stringBuilder.toString()));
     }

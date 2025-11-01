@@ -91,7 +91,7 @@ public class RemoteVerifyCode {
         boolean isSelfGroup = Utils.isAtSelf(bot, group, message,xxGroupId);
 
 
-        if (bot.getBotConfig().getAutoVerifyModel() != 0 && isSelfGroup && buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13) {
+        if (bot.getBotConfig().getAutoVerifyModel() != 0 && isSelfGroup && buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 5) {
             String verifyQQ = message.split("at_tinyid=")[1].split("\\)")[0];
             if (bot.getBotId() == Long.parseLong(verifyQQ)) {
                 String regex = "https?://[^\\s\\)]+";
