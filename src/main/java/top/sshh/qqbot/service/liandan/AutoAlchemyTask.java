@@ -54,7 +54,8 @@ public class AutoAlchemyTask {
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
 
     // 控制并发匹配，和原来一样为全局
-    public static final AtomicBoolean MATCHING = new AtomicBoolean(false);
+//    public static final AtomicBoolean MATCHING = new AtomicBoolean(false);
+    public static final ReentrantLock matchingLock = new ReentrantLock();
 
     // 每个 bot 的文件锁，避免同 bot 并发读写文件冲突
     private final Map<Long, ReentrantLock> botLockMap = new ConcurrentHashMap<>();
@@ -174,20 +175,20 @@ public class AutoAlchemyTask {
 
         if (message.equals("添加成功,开始同步炼丹配方")) {
             customPool.submit(() -> {
+                // 尝试获取锁，非阻塞方式
+                if (!matchingLock.tryLock()) {
+                    group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
+                    return;
+                }
+
                 try {
-                    if (MATCHING.compareAndSet(false, true)) {
-                        try {
-                            danCalculator.loadData(botId);
-                            danCalculator.calculateAllDans(botId);
-                            group.sendMessage((new MessageChain()).text("已同步炼丹配方！"));
-                        } finally {
-                            MATCHING.set(false);
-                        }
-                    } else {
-                        group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
-                    }
+                    danCalculator.loadData(botId);
+                    danCalculator.calculateAllDans(botId);
+                    group.sendMessage((new MessageChain()).text("已同步炼丹配方！"));
                 } catch (Exception e) {
-                    MATCHING.set(false);
+                    group.sendMessage((new MessageChain()).text("同步失败：" + e.getMessage()));
+                } finally {
+                    matchingLock.unlock();
                 }
             });
         }
@@ -214,26 +215,41 @@ public class AutoAlchemyTask {
                         (config.getAlchemyQQ() != (Long.parseLong(matcher.group(6))))) {
 
                     customPool.submit(() -> {
-                        try {
-                            if (MATCHING.compareAndSet(false, true)) {
-                                try {
-                                    setConfig(matcher, config);
-                                    danCalculator.saveConfig(config, botId);
-                                    group.sendMessage((new MessageChain()).text("丹方配置已更新，正在重新匹配丹方！"));
-                                    danCalculator.loadData(botId);
-                                    danCalculator.calculateAllDans(botId);
-                                    group.sendMessage((new MessageChain()).text("丹方匹配成功！"));
-                                    danCalculator.addAutoBuyHerbs(botId);
-                                } finally {
-                                    MATCHING.set(false);
-                                }
-                            } else {
-                                group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
-                            }
-                        } catch (Exception e) {
-                            MATCHING.set(false);
-                            group.sendMessage((new MessageChain()).text("配置更新失败！！！"));
+
+                        // 尝试获取锁，非阻塞方式
+                        if (!matchingLock.tryLock()) {
+                            group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
+                            return;
                         }
+
+                        try {
+                            setConfig(matcher, config);
+                            danCalculator.saveConfig(config, botId);
+                            group.sendMessage((new MessageChain()).text("丹方配置已更新，正在重新匹配丹方！"));
+                            danCalculator.loadData(botId);
+                            danCalculator.calculateAllDans(botId);
+                            group.sendMessage((new MessageChain()).text("丹方匹配成功！"));
+                            danCalculator.addAutoBuyHerbs(botId);
+                        } catch (Exception e) {
+                            group.sendMessage((new MessageChain()).text("同步失败：" + e.getMessage()));
+                        } finally {
+                            matchingLock.unlock();
+                        }
+
+//                        try {
+//                            if (MATCHING.compareAndSet(false, true)) {
+//                                try {
+//
+//                                } finally {
+//                                    MATCHING.set(false);
+//                                }
+//                            } else {
+//                                group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
+//                            }
+//                        } catch (Exception e) {
+//                            MATCHING.set(false);
+//                            group.sendMessage((new MessageChain()).text("配置更新失败！！！"));
+//                        }
                     });
                 } else {
                     setConfig(matcher, config);

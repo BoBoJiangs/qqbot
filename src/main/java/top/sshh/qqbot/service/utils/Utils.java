@@ -27,6 +27,9 @@ public class Utils {
         }
         return group.getGroupId() == bot.getBotConfig().getGroupId() || message.contains(""+bot.getBotId()) ;
     }
+    public static boolean isAtSelf(Bot bot, String message) {
+        return message.contains(""+bot.getBotId());
+    }
     public static Group getRemindGroup(Bot bot,long xxGroupId) {
         long groupId = bot.getBotConfig().getGroupId();
         long taskId = bot.getBotConfig().getTaskId();
@@ -37,6 +40,15 @@ public class Utils {
             groupId = xxGroupId;
         }
         return bot.getGroup(groupId);
+    }
+
+    // 计算手续费率
+    public static double calculateFeeRate(int price) {
+        if (price <= 500) return 0.05;
+        if (price <= 1000) return 0.1;
+        if (price <= 1500) return 0.15;
+        if (price <= 2000) return 0.2;
+        return 0.3;
     }
 
 //    public static void forwardMessage(Bot bot,long xxGroupId, String message){
@@ -122,5 +134,20 @@ public class Utils {
         }
 
         return resultText; // 如果没有找到"请点击"，返回原字符串
+    }
+
+    /**
+     * 更灵活的格式化，自动选择单位
+     */
+    public static String formatNumberWithUnit(long number) {
+        if (number < 10000) {
+            return number + "";
+        } else if (number < 100000000) {
+            double tenThousand = number / 10000.0;
+            return String.format("%.2f万", tenThousand);
+        } else {
+            double hundredMillion = number / 100000000.0;
+            return String.format("%.2f亿", hundredMillion);
+        }
     }
 }

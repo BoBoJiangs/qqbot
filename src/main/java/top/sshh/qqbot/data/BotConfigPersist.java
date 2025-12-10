@@ -27,6 +27,8 @@ public class BotConfigPersist implements Serializable {
     private int xslPriceLimit = 1000;
     //编号设置
     private int botNumber;
+    //编号设置
+    private String aiCheng;
     //赠送灵石的Q群
     private Long lingShiQQ;
     //群消息自动回复
@@ -39,6 +41,34 @@ public class BotConfigPersist implements Serializable {
     private String groupQQ;
     //宗门任务
     private boolean enableSectMission = true;
+
+    private long lingShiTotal;
+
+    private boolean enableAlchemy;
+
+    public boolean isEnableAlchemy() {
+        return enableAlchemy;
+    }
+
+    public void setEnableAlchemy(boolean enableAlchemy) {
+        this.enableAlchemy = enableAlchemy;
+    }
+
+    public long getLingShiTotal() {
+        return lingShiTotal;
+    }
+
+    public void setLingShiTotal(long lingShiTotal) {
+        this.lingShiTotal = lingShiTotal;
+    }
+
+    public String getAiCheng() {
+        return aiCheng;
+    }
+
+    public void setAiCheng(String aiCheng) {
+        this.aiCheng = aiCheng;
+    }
 
     public boolean isEnableSectMission() {
         return enableSectMission;

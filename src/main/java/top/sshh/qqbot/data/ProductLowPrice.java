@@ -5,16 +5,20 @@
 
 package top.sshh.qqbot.data;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.HashMap;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ProductLowPrice {
     private static final Logger log = LoggerFactory.getLogger(ProductLowPrice.class);
     public static final Map<String, String> PRODUCT_LEVEL_CACHE = new HashMap();
     public static final Map<String, Integer> PRODUCT_LOW_PRICE_CACHE = new HashMap();
+    public static final Map<String, String> PRODUCT_INDEX_CACHE = new HashMap();
+
+    public static String getProduceIndex(String name){
+        return PRODUCT_INDEX_CACHE.get(name);
+    }
 
     public static int getLowPrice(String name) {
         Integer price = (Integer)PRODUCT_LOW_PRICE_CACHE.get(name);
@@ -23,9 +27,6 @@ public class ProductLowPrice {
         }
 
         return price == null ? 0 : price;
-    }
-
-    public ProductLowPrice() {
     }
 
     public boolean equals(Object o) {
@@ -549,5 +550,19 @@ public class ProductLowPrice {
         PRODUCT_LOW_PRICE_CACHE.put("陨铁炉", 200);
         PRODUCT_LOW_PRICE_CACHE.put("雕花紫铜炉", 300);
         PRODUCT_LOW_PRICE_CACHE.put("寒铁铸心炉", 400);
+
+        PRODUCT_INDEX_CACHE.put("太虚乾元诀","技能3");
+        PRODUCT_INDEX_CACHE.put("袖里乾坤","技能8");
+        PRODUCT_INDEX_CACHE.put("五指拳心剑","技能");
+        PRODUCT_INDEX_CACHE.put("真龙九变","技能7");
+        PRODUCT_INDEX_CACHE.put("坐忘论","技能2");
+        PRODUCT_INDEX_CACHE.put("东皇钟","装备");
+        PRODUCT_INDEX_CACHE.put("天罪","装备");
+        PRODUCT_INDEX_CACHE.put("原罪（残缺）","装备");
+        PRODUCT_INDEX_CACHE.put("无罪（残缺）","装备2");
+        PRODUCT_INDEX_CACHE.put("日月双华","技能5");
+        PRODUCT_INDEX_CACHE.put("阴阳玄鉴","药材8");
+        PRODUCT_INDEX_CACHE.put("离火梧桐芝","药材6");
+        PRODUCT_INDEX_CACHE.put("尘磊岩麟果","药材3");
     }
 }

@@ -58,12 +58,13 @@ public class TaskStore {
     }
 
     /** 添加任务 */
-    public static void addTask(String qq, String time, String taskName) {
+    public static void addTask(String qq, String time, String taskName, Long group) {
         taskMap.computeIfAbsent(qq, k -> Collections.synchronizedList(new ArrayList<>()));
         TaskInfo task = new TaskInfo();
         task.setTime(time);
         task.setTaskName(taskName);
         task.setExecuted(false);
+        task.setExecuteGroup(group);
         taskMap.get(qq).add(task);
         saveTasks();
     }
@@ -98,11 +99,11 @@ public class TaskStore {
                                     if (matcher.matches()) {
                                         String atQQ = matcher.group(1);        // 3889001741
                                         String command = matcher.group(2);   // 灵石
-                                        bot.getGroup(botConfig.getGroupId()).sendMessage(new MessageChain().at(atQQ).text(command));
+                                        bot.getGroup(task.getExecuteGroup()).sendMessage(new MessageChain().at(atQQ).text(command));
                                     } else {
-                                        bot.getGroup(botConfig.getGroupId()).sendMessage(new MessageChain().text(task.getTaskName()));
+                                        bot.getGroup(task.getExecuteGroup()).sendMessage(new MessageChain().text(task.getTaskName()));
                                     }
-
+                                    Thread.sleep(1000);
                                 }
                             } catch (Exception e) {
                                 throw new RuntimeException(e);

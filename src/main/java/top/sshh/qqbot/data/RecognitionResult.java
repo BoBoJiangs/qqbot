@@ -11,6 +11,8 @@ public class RecognitionResult implements Serializable {
     public String answer;
     public String url;
     public String title;
+    private int lastClickIndex;
+
 
     public RecognitionResult(List<String> list, String r) {
         this.emojiList = list;
@@ -24,6 +26,14 @@ public class RecognitionResult implements Serializable {
     }
 
     public RecognitionResult() {
+    }
+
+    public int getLastClickIndex() {
+        return lastClickIndex;
+    }
+
+    public void setLastClickIndex(int lastClickIndex) {
+        this.lastClickIndex = lastClickIndex;
     }
 
     public String getTitle() {

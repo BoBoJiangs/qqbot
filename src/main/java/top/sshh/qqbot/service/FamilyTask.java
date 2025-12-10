@@ -291,7 +291,7 @@ public class FamilyTask {
                 boolean hpFound = false;
                 Pattern daoHaoPattern = Pattern.compile("道号\\s*：\\s*(\\S+)");
 //                Pattern hpPattern = Pattern.compile("气血\\s*:\\s*([\\d\\.]+)(?:亿)?\\s*/\\s*([\\d\\.]+)(?:亿)?");
-                Pattern hpPattern = Pattern.compile("气血\\s*[:：]\\s*([\\d\\.]+)(?:[亿万兆]?)\\s*/\\s*([\\d\\.]+)(?:[亿万兆]?)");
+                Pattern hpPattern = Pattern.compile("气血\\s*[:：]\\s*([\\d\\.]+)(?:[亿万兆京]?)\\s*/\\s*([\\d\\.]+)(?:[亿万兆京]?)");
                 Pattern zyPattern = Pattern.compile("真元\\s*:\\s*([\\d\\.]+)%");
 
                 for(String line : lines) {

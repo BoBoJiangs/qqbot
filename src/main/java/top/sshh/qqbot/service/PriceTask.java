@@ -27,6 +27,7 @@ import top.sshh.qqbot.data.BountyInfo;
 import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
+import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PostConstruct;
 import java.io.*;
@@ -360,8 +361,7 @@ public class PriceTask {
 
             // 定义需要特殊提醒的功法列表
             Set<String> specialSkills = new HashSet<>(Arrays.asList(
-                    "五指拳心剑", "袖里乾坤", "真龙九变", "灭剑血胧",
-                    "万剑归宗", "华光猎影", "千慄鬼噬"
+                    "坐忘论","五指拳心剑", "袖里乾坤", "真龙九变","无暇七绝剑", "灭剑血胧", "万剑归宗"
             ));
 
             for (TextMessage textMessage : messageChain.getMessageByType(TextMessage.class)) {
@@ -650,11 +650,7 @@ public class PriceTask {
 
     // 计算手续费率
     private double calculateFeeRate(int price) {
-        if (price <= 500) return 0.05;
-        if (price <= 1000) return 0.1;
-        if (price <= 1500) return 0.15;
-        if (price <= 2000) return 0.2;
-        return 0.3;
+        return Utils.calculateFeeRate(price);
     }
 
     // 应用价格调整规则
@@ -913,7 +909,9 @@ public class PriceTask {
         if (message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架")) {
             String[] split = message.split("\n");
             LocalDateTime now = LocalDateTime.now();
-
+            if(bot.getBotConfig().isEnableAutoBuyLowPrice()){
+                return;
+            }
             customPool.submit(() -> {
                 for (String s : split) {
                     if (s.startsWith("价格") && s.contains("mqqapi")) {

@@ -10,8 +10,11 @@ import com.zhuangxv.bot.message.support.ForwardNodeMessage;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.*;
+import top.sshh.qqbot.service.ProductPriceResponse;
+import top.sshh.qqbot.service.utils.Utils;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -40,6 +43,17 @@ public class DanCalculator {
     private Map<String, Integer> danAlchemyValues = new LinkedHashMap<>();
 //    public Config config = new Config();
     public Map<Long, Config> configMap = new ConcurrentHashMap<>();
+    @Autowired
+    private ProductPriceResponse productPriceResponse;
+
+    public DanCalculator() {
+        try {
+            loadDanMarketData();
+            loadDanAlchemyData();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     // ======================= 事件入口 =======================
     @OnQQConnected
@@ -241,40 +255,143 @@ public class DanCalculator {
 
         if (!recipes.contains("未找到对应的丹方记录")) {
             StringBuilder sb = new StringBuilder();
+
+            // 存储所有配方的收益信息用于排序
+            List<RecipeProfitInfo> recipeProfitList = new ArrayList<>();
+
             for (String recipe : recipes.split("\n")) {
                 if (recipe.endsWith("配方")) {
                     if (MAKE_DAN_SET.contains(recipeName)) {
+                       ProductPrice danPrice =  productPriceResponse.getFirstByNameOrderByTimeDesc(recipeName);
                         sb.append(recipeName)
                                 .append(" 坊市价格：")
-                                .append(danMarketValues.getOrDefault(recipeName, 0))
-                                .append("万/个\n\n");
+                                .append(danPrice == null? 0 : danPrice.getPrice())
+                                .append("万/个\n").append("成丹数:").append(danNum).append("\n\n");
                     } else {
                         sb.append(recipeName)
                                 .append(" 炼金价格：")
                                 .append(danAlchemyValues.getOrDefault(recipeName, 0))
-                                .append("万/个\n\n");
+                                .append("万/个\n").append("成丹数:").append(danNum).append("\n\n");
                     }
                     continue;
                 }
 
-                recipe = recipe.replaceAll("-", "");
-                String[] parts = recipe.split(" ");
-                int price = 0;
-                for (String part : parts) {
-                    if (part.startsWith("花费")) {
-                        price = danMarketValues.getOrDefault(recipeName, 0) - Integer.parseInt(part.substring(2));
-                    }
-                }
-                sb.append(recipe).append(" 收益").append(price).append(" ").append(danNum).append("丹\n\n");
+                String item = extractMedicineInfo(recipe, recipeName, !MAKE_DAN_SET.contains(recipeName), danNum);
+
+                // 提取收益信息用于排序
+                int profit = extractProfitFromItem(item);
+                recipeProfitList.add(new RecipeProfitInfo(recipe, item, profit));
+            }
+
+            // 按收益从高到低排序
+            recipeProfitList.sort((r1, r2) -> Integer.compare(r2.getProfit(), r1.getProfit()));
+
+            // 只取前20条
+            int limit = Math.min(recipeProfitList.size(), 20);
+
+            // 重新构建输出，按排序后的顺序
+            for (int i = 0; i < limit; i++) {
+                RecipeProfitInfo info = recipeProfitList.get(i);
+                sb.append("配方" + (i + 1) + " (收益：" + info.getProfit() + "w)\n");
+                sb.append(info.getItem());
             }
 
             List<ForwardNodeMessage> forwardNodes = new ArrayList<>();
             forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方查询助手",
                     new MessageChain().text(sb.toString())));
             forwardNodes.add(new ForwardNodeMessage(String.valueOf(bot.getBotId()), "丹方查询助手",
-                    new MessageChain().text("ps：仅输出利润前20条！\n药材价格仅供参考，以实际坊市价格为准！")));
+                    new MessageChain().text("已按收益从高到低排序，仅输出利润前20条！\n药材价格仅供参考，以实际坊市价格为准！")));
             group.sendGroupForwardMessage(forwardNodes);
         }
+    }
+
+    // 添加辅助类来存储配方收益信息
+    class RecipeProfitInfo {
+        private String recipe;
+        private String item;
+        private int profit;
+
+        public RecipeProfitInfo(String recipe, String item, int profit) {
+            this.recipe = recipe;
+            this.item = item;
+            this.profit = profit;
+        }
+
+        public String getRecipe() { return recipe; }
+        public String getItem() { return item; }
+        public int getProfit() { return profit; }
+    }
+
+    // 修改 extractMedicineInfo 方法，使其能返回完整的收益信息
+    private String extractMedicineInfo(String input, String danName, boolean isAlchemy, int danNum) {
+        // 移除前缀
+        // 主药的正则：匹配"主药"开头，然后是中文和数字组成的名称，接着是"-数量&价格"
+        Pattern mainPattern = Pattern.compile("主药([\\u4e00-\\u9fa5\\d]+)-(\\d+)&\\d+");
+        Matcher mainMatcher = mainPattern.matcher(input);
+        ProductPrice productPrice;
+        int costPrice = 0;
+        StringBuilder stringBuilder = new StringBuilder();
+        StringBuilder stringBuilder2 = new StringBuilder();
+        stringBuilder.append("配方主药");
+        if (mainMatcher.find()) {
+            productPrice = this.productPriceResponse.getFirstByNameOrderByTimeDesc(mainMatcher.group(1));
+            costPrice = productPrice.getPrice() * Integer.parseInt(mainMatcher.group(2));
+            stringBuilder.append(mainMatcher.group(1) + mainMatcher.group(2));
+            stringBuilder2.append("主药:" + productPrice.getPrice() + "w");
+        }
+
+        // 药引的正则
+        Pattern guidePattern = Pattern.compile("药引([\\u4e00-\\u9fa5\\d]+)-(\\d+)&\\d+");
+        Matcher guideMatcher = guidePattern.matcher(input);
+        if (guideMatcher.find()) {
+            productPrice = this.productPriceResponse.getFirstByNameOrderByTimeDesc(guideMatcher.group(1));
+            costPrice = costPrice + productPrice.getPrice() * Integer.parseInt(guideMatcher.group(2));
+            stringBuilder.append("药引" + guideMatcher.group(1) + guideMatcher.group(2));
+            stringBuilder2.append("药引:" + productPrice.getPrice() + "w");
+        }
+
+        // 辅药的正则
+        Pattern auxiliaryPattern = Pattern.compile("辅药([\\u4e00-\\u9fa5\\d]+)-(\\d+)&\\d+");
+        Matcher auxiliaryMatcher = auxiliaryPattern.matcher(input);
+        if (auxiliaryMatcher.find()) {
+            productPrice = this.productPriceResponse.getFirstByNameOrderByTimeDesc(auxiliaryMatcher.group(1));
+            costPrice = costPrice + productPrice.getPrice() * Integer.parseInt(auxiliaryMatcher.group(2));
+            stringBuilder.append("辅药" + auxiliaryMatcher.group(1) + auxiliaryMatcher.group(2));
+            stringBuilder2.append("辅药:" + productPrice.getPrice() + "w");
+        }
+
+        String item = "";
+        int profit = 0;
+
+        if (isAlchemy) {
+            int alchemyValue = danAlchemyValues.get(danName) == null ? 0 : danAlchemyValues.get(danName);
+            profit = alchemyValue * danNum - costPrice;
+            item = stringBuilder + "\n" + stringBuilder2 + "\n" + "成本:" + costPrice + "w 收益:" + profit + "w";
+        } else {
+            productPrice = this.productPriceResponse.getFirstByNameOrderByTimeDesc(danName);
+            int adjustedPrice = productPrice == null ? 0 : productPrice.getPrice();
+            double feeRate = 1 - Utils.calculateFeeRate(adjustedPrice);
+            int endPrice = (int) (adjustedPrice * feeRate * danNum);
+            profit = endPrice - costPrice;
+            item = stringBuilder + "\n" + stringBuilder2 + "\n" + "成本:" + costPrice + "w 收益:" + profit + "w";
+        }
+
+        return item + "\n\n";
+    }
+
+    // 新增方法：从item字符串中提取收益数值
+    private int extractProfitFromItem(String item) {
+        // 匹配 "收益:数字w" 的模式
+        Pattern pattern = Pattern.compile("收益:(\\d+)w");
+        Matcher matcher = pattern.matcher(item);
+        if (matcher.find()) {
+            try {
+                return Integer.parseInt(matcher.group(1));
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return 0;
     }
 
     private Map<String, String> parseAlchemyRecipes(String fileContent) {

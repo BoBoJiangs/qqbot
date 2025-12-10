@@ -20,6 +20,7 @@ import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.MessageNumber;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.GroupManager;
+import top.sshh.qqbot.service.ProductPriceResponse;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -33,6 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 import static top.sshh.qqbot.constant.Constant.targetDir;
 
@@ -48,6 +50,9 @@ public class AutoBuyHerbs {
     public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_HERBS = new ConcurrentHashMap<>();
 
     private final ExecutorService customPool = Executors.newCachedThreadPool();
+
+    @Autowired
+    private ProductPriceResponse productPriceResponse;
 
     // 将原来的共享字段改为按 botId 隔离
     private final Map<Long, CopyOnWriteArrayList<ProductPrice>> autoBuyListMap = new ConcurrentHashMap<>();
@@ -280,11 +285,12 @@ public class AutoBuyHerbs {
             }
 
             this.updateMedicinePrices(priceList,botId);
-            if(AutoAlchemyTask.MATCHING.compareAndSet(false, true)){
-                group.sendMessage((new MessageChain()).text("添加成功,开始同步炼丹配方"));
-            }else{
-                group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
-            }
+            group.sendMessage((new MessageChain()).text("添加成功,开始同步炼丹配方"));
+//            if(!AutoAlchemyTask.matchingLock.tryLock()){
+//                group.sendMessage((new MessageChain()).text("添加成功,开始同步炼丹配方"));
+//            }else{
+//                group.sendMessage((new MessageChain()).text("正在匹配丹方，请稍后操作！"));
+//            }
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -343,12 +349,33 @@ public class AutoBuyHerbs {
     }
 
     private void queryPurchasedProducts(Group group, Integer messageId, Map<String, ProductPrice> productMap) {
+//        StringBuilder result = new StringBuilder();
+//        Iterator var5 = productMap.values().iterator();
+//
+//        while(var5.hasNext()) {
+//            ProductPrice value = (ProductPrice)var5.next();
+//            ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(value.getName().trim());
+//            result.append(value.getName()).append(" ").append(value.getPrice()).append("万 坊市:").append(first.getPrice()).append("万\n");
+//        }
+//
+//        if (result.length() > 0) {
+//            group.sendMessage((new MessageChain()).reply(messageId).text(result.toString()));
+//        }
         StringBuilder result = new StringBuilder();
-        Iterator var5 = productMap.values().iterator();
 
-        while(var5.hasNext()) {
-            ProductPrice value = (ProductPrice)var5.next();
-            result.append("名称：").append(value.getName()).append(" 价格:").append(value.getPrice()).append("万\n");
+        // 按价格从高到低排序
+        List<ProductPrice> sortedProducts = productMap.values().stream()
+                .sorted((p1, p2) -> Double.compare(p2.getPrice(), p1.getPrice())) // 降序排序
+                .collect(Collectors.toList());
+
+        for (ProductPrice value : sortedProducts) {
+            ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(value.getName().trim());
+            result.append(value.getName())
+                    .append(" ")
+                    .append(value.getPrice())
+                    .append("万 坊市:")
+                    .append(first!=null?first.getPrice():0)
+                    .append("万\n");
         }
 
         if (result.length() > 0) {
@@ -365,10 +392,10 @@ public class AutoBuyHerbs {
             BotConfig botConfig = bot.getBotConfig();
             boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
             //出验证码跳过本页购买
-            if(botConfig.getAutoBuyHerbsMode()!=0 && isGroup){
-                autoBuyListMap.computeIfAbsent(bot.getBotId(), k -> new CopyOnWriteArrayList<>()).clear();
-
-            }
+//            if(botConfig.getAutoBuyHerbsMode()!=0 && isGroup){
+//                autoBuyListMap.computeIfAbsent(bot.getBotId(), k -> new CopyOnWriteArrayList<>()).clear();
+//
+//            }
 
         }
     }
@@ -460,7 +487,7 @@ public class AutoBuyHerbs {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        if (isGroup && message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架")) {
+        if (isGroup && message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架") && botConfig.getAutoBuyHerbsMode()!=0) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             this.customPool.submit(() -> {
                 this.processMarketMessage(bot, group, message);
@@ -610,7 +637,7 @@ public class AutoBuyHerbs {
                     botConfig.setTaskStatusHerbs(1);
                 }
 
-                if (botConfig.getTaskStatusHerbs() < 8) {
+                if (botConfig.getTaskStatusHerbs() < 9) {
                     try {
                         bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
                         botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);

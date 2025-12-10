@@ -4,6 +4,15 @@ public class TaskInfo {
     private String time; // HH:mm
     private String taskName;
     private boolean executed; // 是否已执行
+    private Long executeGroup;
+
+    public Long getExecuteGroup() {
+        return executeGroup;
+    }
+
+    public void setExecuteGroup(Long executeGroup) {
+        this.executeGroup = executeGroup;
+    }
 
     public String getTime() {
         return time;

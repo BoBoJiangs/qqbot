@@ -1,75 +1,17 @@
 xbGroupId: 690933736
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
-#xxGroupId: 690933736
+xxGroupId: 690933736
 captcha:
 #   shitu-api-url: http://113.45.9.127:8000/
    shitu-api-url: http://116.205.232.32:8848/
 
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，
-  - type: ws
-    url: ws://127.0.0.1:8082
-    #修炼+任务群
-    groupId: 971327442
-    accessToken: 1024*1024*1024
-    #    大号qq
-    controlQQ: 819463350
-    #    大号qq
-    masterQQ: 819463350
-    # 是否开启查价格
-    enableCheckPrice: true
-    # 是否开启猜成语
-    enableGuessTheIdiom: false
-    # 是否开启查行情
-    enableCheckMarket: false
-    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
-    enableXslPriceQuery: false
-    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-    cultivationMode: 0
-    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认） 4时长最短 5修为最高
-    rewardMode: 5
-    #宗门任务1：邪修和查抄（默认） 2：所有任务
-    sectMode: 2
-    #自动灵田结算（默认 true）
-    enableAutoField: true
-    #自动秘境结算 （默认 true）
-    enableAutoSecret: true
-    #无偿双修
-    enableAutoRepair: false
-    #群管提醒
-    enableGroupManager: false
-    #悬赏令价格限制（超过这个价格会优先接取）
-    xslPriceLimit: 1000
-    botNumber: 5
-    enableSelfTitle: false
-    #开启小北脚本
-    enableXiaoBei: true
-    #赠送灵石的数量 或者自己发送我要灵石**
-    lingShiNum: 100
-    #赠送灵石的QQ群 不要设置大群 不然看到有接收码就会自己送哈
-    lingShiQQ: 1011466037
-    #群管提醒
-    enableAutomaticReply: false
-    #0:不转发 1转发部分消息
-    forwardMode: 1
-    #保存图片到本地
-    enableSavePic: false
-    enableAutoVerify: false
-    #自动验证模式 0：不验证 1：自动验证(失败停止验证) 2:自动验证（不停止验证）
-    autoVerifyModel: 2
-    #定时自动任务 7:30 修仙签到 宗门丹药领取 宗门任务 8：05 悬赏令 12:35 秘境
-    enableAutoTask: true
-    #挑战模式 0:不自动执行 1：一口气打完9层 2：3，7，8层打完回血
-    challengeMode: 1
-    enableXyHerbClass: false
-    #启用炼丹模块
-    enableAlchemy: true
-
 #  - type: ws
-#    url: ws://192.168.62.136:8900
-#    accessToken: 1024*1024*1024
-#    #    修炼群号
+#    url: ws://127.0.0.1:8082
+#    #修炼+任务群
 #    groupId: 971327442
+#    accessToken: 1024*1024*1024
 #    #    大号qq
 #    controlQQ: 819463350
 #    #    大号qq
@@ -83,7 +25,7 @@ bot:
 #    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
 #    enableXslPriceQuery: false
 #    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-#    cultivationMode: 3
+#    cultivationMode: 0
 #    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认） 4时长最短 5修为最高
 #    rewardMode: 5
 #    #宗门任务1：邪修和查抄（默认） 2：所有任务
@@ -93,61 +35,48 @@ bot:
 #    #自动秘境结算 （默认 true）
 #    enableAutoSecret: true
 #    #无偿双修
-#    enableAutoRepair: true
+#    enableAutoRepair: false
 #    #群管提醒
 #    enableGroupManager: false
-#    #0:不转发 1转发部分消息
-#    forwardMode: 0
-#    autoVerifyModel: 2
-#    enableAlchemy: true
-
-#  - type: ws
-#    url: ws://113.45.9.127:8083
-#    accessToken: 1024*1024*1024
-#    #    修炼群号
-#    groupId: 1051327161
-#    # 控制小号的QQ
-#    controlQQ: 717638461&819463350&3379875593&1018454301
-#    masterQQ: 819463350
-#    # 是否开启查价格
-#    enableCheckPrice: true
-#    # 是否开启猜成语
-#    enableGuessTheIdiom: true
-#    # 是否开启查行情
-#    enableCheckMarket: true
-#    #  悬赏令价格查询 注意：这个为true会自动查询悬赏令价格
-#    enableXslPriceQuery: true
-#    # 修炼模式：0什么都不干，1修炼，2普通闭关，3宗门闭关
-#    cultivationMode: 3
-#    #悬赏令模式 1：手动 2：手动接取自动结算 3：全自动价值优先（默认）
-#    rewardMode: 4
-#    #宗门任务1：邪修和查抄（默认） 2：所有任务
-#    sectMode: 2
-#    #自动灵田结算（默认 true）
-#    enableAutoField: true
-#    #自动秘境结算 （默认 true）
-#    enableAutoSecret: true
-#    #无偿双修
-#    enableAutoRepair: true
+#    #悬赏令价格限制（超过这个价格会优先接取）
+#    xslPriceLimit: 1000
+#    botNumber: 5
+#    enableSelfTitle: false
+#    #开启小北脚本
+#    enableXiaoBei: true
+#    #赠送灵石的数量 或者自己发送我要灵石**
+#    lingShiNum: 100
+#    #赠送灵石的QQ群 不要设置大群 不然看到有接收码就会自己送哈
+#    lingShiQQ: 1011466037
 #    #群管提醒
-#    enableGroupManager: true
-#    enableXiaoBei: false
-#    #设置编号
-#    botNumber: 13
-#    #设置爱称
-#    aiCheng: 花
-#    enableSelfTitle: true
-#    #每日送灵石数量
-#    lingshiNum: 8700
-#     #每日送灵石群号（在这个群收到有人发接收码接会自动送灵石）
-#    lingShiQQ: 690933736
 #    enableAutomaticReply: false
-#    enableAutoTask: true
-#    enableAutoVerify: true
+#    #0:不转发 1转发部分消息
+#    forwardMode: 1
+#    #保存图片到本地
+#    enableSavePic: false
+#    enableAutoVerify: false
+#    #自动验证模式 0：不验证 1：自动验证(失败停止验证) 2:自动验证（不停止验证）
 #    autoVerifyModel: 2
+#    #定时自动任务 7:30 修仙签到 宗门丹药领取 宗门任务 8：05 悬赏令 12:35 秘境
+#    enableAutoTask: true
 #    #挑战模式 0:不自动执行 1：一口气打完9层 2：3，7，8层打完回血
 #    challengeMode: 1
+#    enableXyHerbClass: false
+#    #启用炼丹模块
 #    enableAlchemy: true
+#
+  - type: ws
+    url: ws://117.72.213.211:8082
+    accessToken: 1024*1024*1024
+    #    修炼群号
+    groupId: 971327442
+    # 控制小号的QQ
+    controlQQ: 819463350
+    masterQQ: 819463350
+    enableAlchemy: true
+    challengeMode: 2
+
+
 
 server:
   port: 8080

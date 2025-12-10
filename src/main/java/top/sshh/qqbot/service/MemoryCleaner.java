@@ -346,7 +346,7 @@ public class MemoryCleaner {
         if ((member.getUserId() == bot.getBotId() || isControlQQ && msg.contains("" + bot.getBotId()) || member.getUserId() == 2013363413L && msg.contains("" + bot.getBotId())) && !msg.contains("调试功能")) {
             Exception var18;
             int num;
-            if (msg.contains("/清理内存")) {
+            if (msg.contains("*清理内存")) {
                 try {
                     logger.info("由主人QQ或自身发起的缓存手动清理：{}", member.getUserId());
                     num = bot.cleanCacheMessageChain(100);
@@ -373,7 +373,7 @@ public class MemoryCleaner {
                 }
             }
 
-            if (msg.contains("/系统状态")) {
+            if (msg.contains("*系统状态")) {
                 try {
                     String status = this.getSystemStatus();
                     group.sendMessage((new MessageChain()).reply(msgId).text("====>>>Java Bot<<<====\n" + status));
@@ -384,11 +384,11 @@ public class MemoryCleaner {
                 }
             }
 
-            if (msg.contains("/版本号")) {
+            if (msg.contains("*版本号")) {
                 group.sendMessage((new MessageChain()).reply(msgId).text("Java Bot：1.2（内存清理）"));
             }
 
-            if (msg.contains("/清理聊天记录保留最近") && msg.contains("条")) {
+            if (msg.contains("*清理聊天记录保留最近") && msg.contains("条")) {
                 num = 0;
                 Pattern pattern = Pattern.compile("保留最近\\s*(\\d+)\\s*条");
                 Matcher matcher = pattern.matcher(msg);
@@ -406,12 +406,12 @@ public class MemoryCleaner {
 
                 int removedCount = bot.cleanCacheMessageChain(num);
                 group.sendMessage((new MessageChain()).reply(msgId).text(String.format("共清理:%s条聊天记录,保留最近%s条", removedCount, num)));
-            } else if (msg.contains("/清理聊天记录")) {
+            } else if (msg.contains("*清理聊天记录")) {
                 num = bot.cleanCacheMessageChain(100);
                 group.sendMessage((new MessageChain()).reply(msgId).text(String.format("共清理:%s条聊天记录,保留最近100条", num)));
             }
 
-            if (msg.contains("/重启自身")) {
+            if (msg.contains("*重启自身")) {
                 try {
                     long groupId = group.getGroupId();
                     this.groupManager.loadTasksFromFile();

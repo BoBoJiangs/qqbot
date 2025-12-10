@@ -13,6 +13,8 @@ import top.sshh.qqbot.service.impl.TaskStore;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class SchedulerTask {
@@ -28,15 +30,21 @@ public class SchedulerTask {
         message = message.trim();
         if (message.startsWith("设置定时任务")) {
             String qq = String.valueOf(bot.getBotId()); // 使用发送消息用户 QQ
-//            TaskStore.taskMap.get(qq).clear();
-//            TaskStore.taskMap.computeIfAbsent(qq, k -> new ArrayList<>()).clear();
             String[] lines = message.split("\n");
             for (int i = 1; i < lines.length; i++) {
                 String line = lines[i].trim();
                 if (line.isEmpty()) continue;
-                String[] parts = line.split(" ", 2);
-                if (parts.length == 2) {
-                    TaskStore.addTask(qq, parts[0], parts[1]);
+                Pattern pattern = Pattern.compile("(\\d{1,2}:\\d{2})\\s*(.+)");
+                Matcher matcher = pattern.matcher(line);
+
+                if (matcher.find()) {
+                    String time = matcher.group(1); // "23:30"
+                    String content = matcher.group(2); // "@819463349 开始捡漏 频率1"
+
+//                    System.out.println("时间: " + time);
+//                    System.out.println("内容: " + content);
+
+                    TaskStore.addTask(qq, time, content,group.getGroupId());
                 }
             }
             group.sendMessage(new MessageChain().text("✅ 已为你成功设置定时任务!"));

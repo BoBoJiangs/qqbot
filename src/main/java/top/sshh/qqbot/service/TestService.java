@@ -83,7 +83,7 @@ public class TestService {
     @Value("${custom.shitu-api-url:#{null}}")
     private String shituApiUrl;
     private boolean isFirst = true;
-    private static final List<String> KEYWORDS = Arrays.asList("烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后", "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困", "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得", "从腐朽道袍中滑落");
+    private static final List<String> KEYWORDS = Arrays.asList("机缘巧合", "古洞深处", "烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后", "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困", "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得", "从腐朽道袍中滑落");
     private static final List<String> commandWords = Arrays.asList("悬赏令", "秘境", "宗门任务", "宗门丹药", "灵田", "灵石");
     private static final List<String> forwardWords = Arrays.asList("稍等一会", "宗门系统繁忙", "宗门闭关室", "当前灵石", "探索需要花费时间", "探索耗时", "道友成功领取到丹药", "道友已经领取过了", "不需要验证", "验证码已过期", "道友今天已经很努力了");
     @Autowired
@@ -262,14 +262,14 @@ public class TestService {
 
             if (message.startsWith("设置主号")) {
                 String typeString = message.substring(message.indexOf("设置主号") + 4).trim();
-                botConfig.setControlQQ(typeString);
+                botConfig.setControlQQ(typeString.replace("@",""));
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
                 saveBotConfig(bot);
             }
 
             if (message.startsWith("添加主号")) {
                 String typeString = message.substring(message.indexOf("添加主号") + 4).trim();
-                botConfig.setControlQQ(botConfig.getControlQQ() + "&" + typeString);
+                botConfig.setControlQQ(botConfig.getControlQQ() + "&" + typeString.replace("@",""));
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
                 saveBotConfig(bot);
             }
@@ -339,7 +339,7 @@ public class TestService {
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
                 saveBotConfig(bot);
             }
-            if ("开启妖塔挑战".equals(message) && (
+            if (("开启妖塔挑战".equals(message) || "开始妖塔挑战".equals(message)) && (
                     botConfig.getChallengeMode() == 1 || botConfig.getChallengeMode() == 2)) {
                 bot.sendGroupMessage(botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("我的状态"));
                 if (botConfig.getChallengeMode() == 1) {
@@ -393,6 +393,29 @@ public class TestService {
             if ("停止挑战苍穹秘境".equals(message)) {
                 botConfig.setEnableAutoCqMj(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+            }
+            if ("重置赠送灵石".equals(message)) {
+                botConfig.setLingShiTotal(0L);
+                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
+            }
+            if (message.startsWith("更新赠送灵石")) {
+                String total = message.substring(message.indexOf("更新赠送灵石") + 6).trim();
+                botConfig.setLingShiTotal(Long.parseLong(total));
+                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
+            }
+            if ("查询赠送灵石".equals(message)) {
+                group.sendMessage((new MessageChain()).reply(messageId)
+                        .text("已赠送灵石："+Utils.formatNumberWithUnit(botConfig.getLingShiTotal())));
+            }else if ("启用炼丹模块".equals(message)) {
+                botConfig.setEnableAlchemy(true);
+                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
+            } else if ("关闭炼丹模块".equals(message)) {
+                botConfig.setEnableAlchemy(false);
+                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
             }
 
             if ("开始自动修炼".equals(message)) {
@@ -643,6 +666,8 @@ public class TestService {
             persist.setSectMode(botConfig.getSectMode());
             persist.setXslPriceLimit(botConfig.getXslPriceLimit());
             persist.setLingShiQQ(botConfig.getLingShiQQ());
+            persist.setLingShiTotal(botConfig.getLingShiTotal());
+            persist.setEnableAlchemy(botConfig.isEnableAlchemy());
 
             Path path = Paths.get("./config/bot-" + bot.getBotId() + ".json");
             Files.createDirectories(path.getParent());
@@ -673,6 +698,7 @@ public class TestService {
             botConfig.setEnableGuessTheIdiom(persist.isEnableGuessTheIdiom());
             botConfig.setEnableAutomaticReply(persist.isEnableAutomaticReply());
             botConfig.setBotNumber(persist.getBotNumber());
+            botConfig.setAiCheng(persist.getAiCheng());
             botConfig.setEnableAutoTask(persist.isEnableAutoTask());
             botConfig.setAutoVerifyModel(persist.getAutoVerifyModel());
             botConfig.setEnableAutoField(persist.isEnableAutoField());
@@ -681,7 +707,8 @@ public class TestService {
             botConfig.setSectMode(persist.getSectMode());
             botConfig.setXslPriceLimit(persist.getXslPriceLimit());
             botConfig.setLingShiQQ(persist.getLingShiQQ());
-
+            botConfig.setLingShiTotal(persist.getLingShiTotal());
+            botConfig.setEnableAlchemy(persist.isEnableAlchemy());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -699,7 +726,7 @@ public class TestService {
                 customPool.submit(() -> {
                     try {
                         for (Bot bot1 : BotFactory.getBots().values()) {
-                            if (bot1.getBotConfig().getCultivationMode() == 3) {
+                            if (bot1.getBotConfig().getCultivationMode() == 3 && bot1.getBotConfig().isEnableAutoTask()) {
                                 Group group = bot1.getGroup(bot1.getBotConfig().getGroupId());
                                 group.sendMessage((new MessageChain()).at("3889001741").text("宗门出关"));
                                 TimeUnit.SECONDS.sleep(3L);
@@ -975,6 +1002,8 @@ public class TestService {
                 if (bot.getBotId() == 3860863656L) {
                     sb.append(Constant.padRight("提醒群号", 3) + ": " + botConfig.getGroupQQ() + "\n");
                 }
+                sb.append(Constant.padRight("当前编号", 3) + ": " + botConfig.getBotNumber() + "\n");
+                sb.append(Constant.padRight("当前爱称", 3) + ": " + botConfig.getAiCheng() + "\n");
             }
 
             return sb.toString();
@@ -1219,10 +1248,27 @@ public class TestService {
     )
     public void 识别大号接收码(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        if (message.contains("您的接收码为") && botConfig.getLingShiNum() > 0 && botConfig.getLingShiQQ() == group.getGroupId()) {
-            String code = message.split("您的接收码为：| ")[1];
-            group.sendMessage((new MessageChain()).at("3889001741").text("赠送灵石 ").text(code + " ").text(botConfig.getLingShiNum() * 10000 + ""));
+        if(botConfig.getLingShiNum() > 0 && botConfig.getLingShiQQ() == group.getGroupId()){
+            if (message.contains("您的接收码为") ) {
+                String code = message.split("您的接收码为：| ")[1];
+                group.sendMessage((new MessageChain()).at("3889001741").text("赠送灵石 ").text(code + " ").text(botConfig.getLingShiNum() * 10000 + ""));
+            }
+            if (message.contains("共赠送") && message.contains("手续费")) {
+                message = messageChain.get(messageChain.size()-1).toString();
+                Pattern pattern = Pattern.compile("\\d+");
+                Matcher matcher = pattern.matcher(message);
+                long sum = 0;
+                while (matcher.find()) {
+                    sum += Long.parseLong(matcher.group());
+                }
+                botConfig.setLingShiTotal(botConfig.getLingShiTotal()+sum);
+                group.sendMessage((new MessageChain()).reply(messageId)
+                        .text("已赠送灵石："+Utils.formatNumberWithUnit(botConfig.getLingShiTotal())));
+                saveBotConfig(bot);
+            }
         }
+
+
 
     }
 
@@ -1276,7 +1322,7 @@ public class TestService {
         long groupId = this.getRemindGroupId(bot);
         Bot remindBot = this.getRemindAtQQ(bot);
         if (remindBot != null) {
-            if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 13) {
+            if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 5) {
                 String regex = "https?://[^\\s\\)]+";
                 Pattern pattern = Pattern.compile(regex);
                 Matcher matcher = pattern.matcher(message);
@@ -1715,6 +1761,7 @@ public class TestService {
                 int Nid = Integer.parseInt(aichengStr);
                 bot.getBotConfig().setBotNumber(Nid);
                 group.sendMessage((new MessageChain()).text("好耶！我的编号是" + String.valueOf(Nid)));
+                saveBotConfig(bot);
             }
 
             if (processedMessage.startsWith("我命你为我的")) {
@@ -1722,6 +1769,7 @@ public class TestService {
                 String newaicheng = bot.getBotConfig().getAiCheng() + "&" + aichengStr;
                 bot.getBotConfig().setAiCheng(newaicheng);
                 group.sendMessage((new MessageChain()).text("好耶！现在起我就是你的" + aichengStr));
+                saveBotConfig(bot);
             }
         }
 
@@ -1811,7 +1859,21 @@ public class TestService {
                 this.forSendMessage(bot, group, messageChain, count, time, 1);
             }
         } else if (command.startsWith("听令1")) {
-            messageChain.set(0, new TextMessage(command.substring(3)));
+            if(command.contains("@")){
+                command = command.substring(3);
+                Pattern pattern = Pattern.compile("@(\\d+)\\s+(.+)");
+                Matcher matcher = pattern.matcher(command);
+                if (matcher.find()) {
+                    String userId = matcher.group(1);    // 819463349
+                    String content = matcher.group(2);   // 开始捡漏 频率1
+                    messageChain = new MessageChain();
+                    messageChain.at(userId).text(content);
+                }
+
+            }else{
+                messageChain.set(0, new TextMessage(command.substring(3)));
+            }
+
             group.sendMessage(messageChain);
         } else if (command.startsWith("听令2")) {
             messageChain.set(0, new TextMessage(command.substring(3)));
@@ -2317,7 +2379,7 @@ public class TestService {
         BotConfig botConfig = bot.getBotConfig();
         boolean isAtSelf = Utils.isAtSelf(bot, group, message, xxGroupId);
         if ((botConfig.getRewardMode() == 3 || botConfig.getRewardMode() == 4 || botConfig.getRewardMode() == 5) && isAtSelf && (message.contains("道友的个人悬赏令") || message.contains("天机悬赏令"))) {
-            List<String> prioritySkills = Arrays.asList("五指拳心剑", "袖里乾坤", "真龙九变", "灭剑血胧", "万剑归宗", "千慄鬼噬", "华光猎影");
+            List<String> prioritySkills = Arrays.asList("坐忘论","五指拳心剑", "袖里乾坤", "真龙九变","无暇七绝剑", "灭剑血胧", "万剑归宗");
             Set<String> specialSkills = new HashSet(prioritySkills);
             boolean isSpecialSkill = false;
             int highestPriorityIndex = -1;

@@ -49,7 +49,7 @@ import static top.sshh.qqbot.service.GroupManager.customPool;
 @Component
 //@ConditionalOnProperty(name = "captcha.enabled", havingValue = "true", matchIfMissing = false)
 public class RemoteVerifyCode {
-    private static final Logger logger = LoggerFactory.getLogger(TestService.class);
+    private static final Logger logger = LoggerFactory.getLogger(RemoteVerifyCode.class);
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
     //用来判断其他QQ是否出现相同验证码，用来判断是否验证失败
@@ -61,6 +61,7 @@ public class RemoteVerifyCode {
     @Value("${captcha.shitu-api-url:#{null}}")
     private String shituApiUrl;
     public Map<Long, Buttons> botButtonMap = new ConcurrentHashMap();
+    public Map<Long, Integer> lastClickIndex = new ConcurrentHashMap();
     private static final Map<String, Integer> CHINESE_NUMBERS = new HashMap<>();
 
     static {
@@ -203,7 +204,7 @@ public class RemoteVerifyCode {
                 buttontextBuilder.append(button.getLabel()).append("|");
             }
 
-            RecognitionResult recognitionResult = recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText());
+            RecognitionResult recognitionResult = recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText(),bot);
             if (StringUtils.isNotBlank(verifyQQ)) {
                 codeUrlMap.put(Long.parseLong(verifyQQ), recognitionResult);
             } else {
@@ -282,8 +283,8 @@ public class RemoteVerifyCode {
     /**
      * 识别错误后尝试随机点击一个按钮
      */
-    private void errorClickButton(Buttons buttons, Bot bot, Group group, String resultText, String verifyQQ) {
-
+    private void errorClickButton(Buttons buttons, Bot bot, Group group, RecognitionResult result, String verifyQQ) {
+        String resultText = result.getResult();
         if (resultText.contains("加") && (resultText.length() == 11 || resultText.length() == 10)) {
             Button maxNumberButton = null;
             for (Button button : buttons.getButtonList()) {
@@ -314,6 +315,32 @@ public class RemoteVerifyCode {
 
             }
 
+        }else if(!result.getEmojiList().isEmpty() && result.getEmojiList().size()>1){
+            String text;
+            if("电脑".equals(result.getEmojiList().get(result.getLastClickIndex()))){
+                text = "苹果";
+            }else if(result.getLastClickIndex() == 0){
+                logger.info("上次点击："+result.getLastClickIndex() +"本次点击：1");
+                text = result.getEmojiList().get(1);
+            }else{
+                logger.info("上次点击："+result.getLastClickIndex() +"本次点击："+(result.getLastClickIndex() - 1));
+                text = result.getEmojiList().get(result.getLastClickIndex() - 1);
+            }
+            String emojiText = GuessIdiom.getEmoji(text);
+            String matchText = StringUtils.isNotBlank(emojiText) ? emojiText : text;
+
+            for (Button button : buttons.getButtonList()) {
+                if (matchText.equals(button.getLabel())){
+                    bot.clickKeyboardButton(
+                            group.getGroupId(),
+                            buttons.getBotAppid(),
+                            button.getId(),
+                            button.getData(),
+                            buttons.getMsgSeq());
+                    break;
+                }
+
+            }
         }else{
             if(bot.getBotConfig().getAutoVerifyModel() == 2 && StringUtils.isEmpty(verifyQQ)){
                 bot.clickKeyboardButton(
@@ -330,14 +357,14 @@ public class RemoteVerifyCode {
     }
 
 
-    public RecognitionResult recognizeVerifyCode(String imageUrl, String title) {
+    public RecognitionResult recognizeVerifyCode(String imageUrl, String title,Bot bot) {
         System.out.println("开始识别验证码: " + imageUrl);
 
         String answer = "";
         String resultText = "";
         RecognitionResult recognitionResult = new RecognitionResult();
         try {
-            if ("http://113.45.9.127:8000/".equals(shituApiUrl)) {
+            if ("http://113.44.42.139:8000/".equals(shituApiUrl)) {
                 recognitionResult = callShituAPI(shituApiUrl, imageUrl);
             } else {
                 recognitionResult = callShituAPI(shituApiUrl, imageUrl, title, "", "1");
@@ -347,8 +374,11 @@ public class RemoteVerifyCode {
             resultText = recognitionResult.result;
 
             resultText = Utils.extractAfterPleaseClick(resultText);
-            if (StringUtils.isNotBlank(title) && StringUtils.isNotBlank(resultText)) {
-                if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
+            if (StringUtils.isNotBlank(title) ) {
+                if(title.contains("请点击图中第") && title.contains("表情") && !recognitionResult.emojiList.isEmpty()){
+                    answer = getEmojiAnswer(title, recognitionResult);
+
+                }else if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
                     Character targetChar = extractTargetChar(title);
                     if (targetChar != null) {
                         answer = String.valueOf(countCharOccurrences(resultText, targetChar));
@@ -404,20 +434,8 @@ public class RemoteVerifyCode {
                             answer = resultText.substring("请点击".length()).trim();
                             if (answer.equals("漏萄")) answer = "葡萄";
                         }
-                    } else if (recognitionResult.emojiList.size() == 3) {
-                        int idx = 0;
-                        Matcher matcher = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(resultText);
-                        if (matcher.find()) {
-                            if (Integer.parseInt(matcher.group()) < 4) {
-                                idx = Integer.parseInt(matcher.group()) - 1;
-                            }
-                            if (Integer.parseInt(matcher.group()) == 4 || Integer.parseInt(matcher.group()) == 7) {
-                                idx = 0;
-                            }
-                        }
-                        if (idx < recognitionResult.emojiList.size()) {
-                            answer = recognitionResult.emojiList.get(idx);
-                        }
+                    } else if (!recognitionResult.emojiList.isEmpty() && !StringUtils.isEmpty(resultText)) {
+                        answer = getEmojiAnswer(resultText, recognitionResult);
                     } else if (resultText.contains("表") && resultText.contains("情")) {
                         int idx = 1;
                         Matcher matcher = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(resultText);
@@ -478,6 +496,23 @@ public class RemoteVerifyCode {
         }
     }
 
+    private String getEmojiAnswer(String title, RecognitionResult recognitionResult) {
+        String answer;
+        int idx = 0;
+        Matcher matcher1 = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(title);
+        if (matcher1.find()) {
+            String matched = matcher1.group();
+            idx = Integer.parseInt(matched) - 1;
+        }
+        logger.info("列表大小: " + recognitionResult.emojiList.size());
+        if (idx >= recognitionResult.emojiList.size()) {
+            idx = recognitionResult.emojiList.size()-1;
+        }
+        recognitionResult.setLastClickIndex(idx);
+        answer = recognitionResult.emojiList.get(idx);
+        return answer;
+    }
+
 
     private void verifyFailSendMessage(Bot bot, Group group, MessageChain messageChain, String message, Integer messageId, Buttons buttons, String verifyQQ, RecognitionResult recognitionResult) {
 //        saveErrorImage(buttons.getImageUrl());
@@ -507,7 +542,7 @@ public class RemoteVerifyCode {
                 }
 
             } else {
-                errorClickButton(buttons, bot, group, recognitionResult.result,"");
+                errorClickButton(buttons, bot, group, recognitionResult,"");
             }
             RecognitionResult codeData = codeUrlMap.get(bot.getBotId());
             saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult());
@@ -748,15 +783,22 @@ public class RemoteVerifyCode {
 //            return new String[] { message, data };
             List<String> emojiList = new ArrayList();
             if (data != null && !data.equals("空")) {
-                if (data.length() >= 6) {
-                    String segment1 = data.substring(0, 2);
-                    String segment2 = data.substring(2, 4);
-                    String segment3 = data.substring(4, 6);
-                    emojiList.add(segment1);
-                    emojiList.add(segment2);
-                    emojiList.add(segment3);
+                int length = data.length();
+                for (int i = 0; i < length; i += 2) {
+                    int end = Math.min(i + 2, length);
+                    emojiList.add(data.substring(i, end));
                 }
             }
+//            if (data != null && !data.equals("空")) {
+//                if (data.length() >= 6) {
+//                    String segment1 = data.substring(0, 2);
+//                    String segment2 = data.substring(2, 4);
+//                    String segment3 = data.substring(4, 6);
+//                    emojiList.add(segment1);
+//                    emojiList.add(segment2);
+//                    emojiList.add(segment3);
+//                }
+//            }
             return new RecognitionResult(emojiList, message);
         } catch (SocketTimeoutException ste) {
             logger.warn("API读取超时: {}", ste.getMessage());
