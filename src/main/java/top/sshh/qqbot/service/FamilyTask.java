@@ -5,12 +5,14 @@
 
 package top.sshh.qqbot.service;
 
+import com.zhuangxv.bot.annotation.BotOfflineHandler;
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.core.component.BotFactory;
+import com.zhuangxv.bot.event.notice.BotOfflineEvent;
 import com.zhuangxv.bot.message.MessageChain;
 import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
@@ -114,6 +116,23 @@ public class FamilyTask {
         } else {
             dataFile.mkdirs();
             logger.info("未找到序列化文件: {}", "./cache/field_remind_data.ser");
+        }
+
+    }
+
+    @BotOfflineHandler
+    public void handleBotOffline(Bot bot, BotOfflineEvent event) {
+        logger.info("Bot offline: {}",  bot.getBotName()+event.getMessage());
+        long botId = bot.getBotId();
+
+        long maserId = bot.getBotConfig().getMasterQQ();
+
+        for(Bot bot2 : BotFactory.getBots().values()) {
+            BotConfig botConfig2 = bot2.getBotConfig();
+            if (botConfig2.getMasterQQ() == maserId && bot2.getBotId() != botId) {
+                bot2.sendPrivateMessage(maserId, (new MessageChain()).text("账号：" + botId +"(" + bot.getBotName()+ ")掉线啦\n\n" + event.getMessage()));
+                break;
+            }
         }
 
     }

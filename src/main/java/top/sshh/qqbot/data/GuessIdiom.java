@@ -308,6 +308,22 @@ public class GuessIdiom {
         EMOJI_MAP.put("汽车", "\ud83d\ude97");
         EMOJI_MAP.put("书", "\ud83d\udcd6");
         EMOJI_MAP.put("书本", "\ud83d\udcd6");
+        EMOJI_MAP.put("马","\uD83D\uDC0E");
+        EMOJI_MAP.put("企鹅","\uD83D\uDC27");
+        EMOJI_MAP.put("猪","\uD83D\uDC16");
+        EMOJI_MAP.put("树","\uD83C\uDF32");
+        EMOJI_MAP.put("青蛙","\uD83D\uDC38");
+        EMOJI_MAP.put("薯条","\uD83C\uDF5F");
+        EMOJI_MAP.put("汉堡","\uD83C\uDF54");
+        EMOJI_MAP.put("螃蟹","\uD83E\uDD80");
+        EMOJI_MAP.put("龙虾","\uD83E\uDD90");
+        EMOJI_MAP.put("大象","\uD83D\uDC18");
+        EMOJI_MAP.put("兔子","\uD83D\uDC07");
+        EMOJI_MAP.put("锚钩","⚓");
+        EMOJI_MAP.put("摩托车","🏍️");
+        EMOJI_MAP.put("雨伞","☂️");
+        EMOJI_MAP.put("直升机","\uD83D\uDE81");
+        EMOJI_MAP.put("飞机","✈️");
 
         EMOJI_MAP.put("⌛", "沙漏");
         EMOJI_MAP.put("\ud83d\udc33", "鲸鱼");
@@ -320,5 +336,25 @@ public class GuessIdiom {
         EMOJI_MAP.put("\ud83d\udcbb", "电脑");
         EMOJI_MAP.put("\ud83d\ude97", "汽车");
         EMOJI_MAP.put("\ud83d\udcd6", "书");
+
+        EMOJI_MAP.put("\uD83D\uDC0E","马");
+        EMOJI_MAP.put("\uD83D\uDC27","企鹅");
+        EMOJI_MAP.put("\uD83D\uDC16","猪");
+        EMOJI_MAP.put("\uD83C\uDF32","树");
+        EMOJI_MAP.put("\uD83D\uDC38","青蛙");
+        EMOJI_MAP.put("\uD83C\uDF5F","薯条");
+        EMOJI_MAP.put("\uD83C\uDF54","汉堡");
+        EMOJI_MAP.put("\uD83E\uDD80","螃蟹");
+        EMOJI_MAP.put("\uD83E\uDD90","龙虾");
+        EMOJI_MAP.put("\uD83D\uDC18","大象");
+        EMOJI_MAP.put("\uD83D\uDC07","兔子");
+
+        EMOJI_MAP.put("⚓","锚钩");
+        EMOJI_MAP.put("🏍️","摩托车");
+        EMOJI_MAP.put("☂️","雨伞");
+        EMOJI_MAP.put("\uD83D\uDE81","直升机");
+        EMOJI_MAP.put("✈️","飞机");
     }
+
+
 }

@@ -773,7 +773,6 @@ public class GroupManager {
                     long recordTime = (Long)record.getOrDefault("timestamp", 0L);
                     if (System.currentTimeMillis() - recordTime < 120000L) {
                         userId = (Long)record.get("userId");
-                        logger.info("使用悬赏令记录用户：{}", userId);
                     } else {
                         this.taskRecords.remove(taskKey);
                     }
@@ -898,7 +897,6 @@ public class GroupManager {
                     long recordTime = (Long)record.getOrDefault("timestamp", 0L);
                     if (System.currentTimeMillis() - recordTime < 120000L) {
                         userId = (Long)record.get("userId");
-                        logger.info("使用灵田记录用户：{}", userId);
                     } else {
                         this.taskRecords.remove(taskKey);
                     }

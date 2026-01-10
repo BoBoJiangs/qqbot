@@ -48,13 +48,13 @@ public class VerifyCount implements Serializable {
 
     public double getAccuracy() {
         double accuracy = (double) correctCount / (correctCount + errorCount);
-        return Math.round(accuracy * 100.0);  // 保留两位
+        return Double.parseDouble(String.format("%.2f", accuracy * 100.0));
     }
 
     public double getTodayAccuracy() {
         if (todayCorrectCount + todayErrorCount == 0) return 0.0;
         double accuracy = (double) todayCorrectCount / (todayCorrectCount + todayErrorCount);
-        return Math.round(accuracy * 100.0);
+        return Double.parseDouble(String.format("%.2f", accuracy * 100.0));
     }
 
     public String getVerifyCountString() {

@@ -46,6 +46,16 @@ public class BotConfigPersist implements Serializable {
 
     private boolean enableAlchemy;
 
+    private int lingShiNum;
+
+    public int getLingShiNum() {
+        return lingShiNum;
+    }
+
+    public void setLingShiNum(int lingShiNum) {
+        this.lingShiNum = lingShiNum;
+    }
+
     public boolean isEnableAlchemy() {
         return enableAlchemy;
     }
