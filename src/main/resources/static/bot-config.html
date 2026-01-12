@@ -564,18 +564,51 @@
     </div>
 
     <script>
+        function redirectToLogin() {
+            const next = window.location.pathname + (window.location.search || '');
+            window.location.href = '/login.html?next=' + encodeURIComponent(next);
+        }
+
+        async function ensureAuthed() {
+            try {
+                const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+                const data = await res.json();
+                if (!data || !data.authenticated) {
+                    redirectToLogin();
+                    return false;
+                }
+                return true;
+            } catch (e) {
+                redirectToLogin();
+                return false;
+            }
+        }
+
+        async function authFetch(url, options) {
+            const opts = options || {};
+            opts.credentials = 'same-origin';
+            const res = await fetch(url, opts);
+            if (res.status === 401) {
+                redirectToLogin();
+                throw new Error('Unauthorized');
+            }
+            return res;
+        }
+
         let currentBotId = null;
         let bots = {};
 
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
-            loadBots();
+            ensureAuthed().then(ok => {
+                if (ok) loadBots();
+            });
         });
 
         // 加载Bot列表
         async function loadBots() {
             try {
-                const response = await fetch('/api/bot-config/bots');
+                const response = await authFetch('/api/bot-config/bots');
                 const data = await response.json();
                 
                 if (data.error) {
@@ -636,7 +669,7 @@
             if (!currentBotId) return;
 
             try {
-                const response = await fetch(`/api/bot-config/${currentBotId}`);
+                const response = await authFetch(`/api/bot-config/${currentBotId}`);
                 const config = await response.json();
                 
                 if (response.status === 404) {
@@ -687,7 +720,7 @@
             if (!currentBotId) return;
 
             try {
-                const response = await fetch(`/api/bot-config/${currentBotId}/status`);
+                const response = await authFetch(`/api/bot-config/${currentBotId}/status`);
                 const status = await response.json();
                 
                 if (status.error) {
@@ -755,7 +788,7 @@
             };
 
             try {
-                const response = await fetch(`/api/bot-config/${currentBotId}`, {
+                const response = await authFetch(`/api/bot-config/${currentBotId}`, {
                     method: 'PUT',
                     headers: {
                         'Content-Type': 'application/json'
@@ -787,7 +820,7 @@
             }
 
             try {
-                const response = await fetch(`/api/bot-config/${currentBotId}/reset`, {
+                const response = await authFetch(`/api/bot-config/${currentBotId}/reset`, {
                     method: 'POST'
                 });
 
@@ -812,7 +845,7 @@
             }
 
             try {
-                const response = await fetch(`/api/bot-config/${currentBotId}/export`);
+                const response = await authFetch(`/api/bot-config/${currentBotId}/export`);
                 const result = await response.json();
                 
                 if (result.error) {
@@ -862,7 +895,7 @@
             }
 
             try {
-                const response = await fetch(`/api/bot-config/${currentBotId}/import`, {
+                const response = await authFetch(`/api/bot-config/${currentBotId}/import`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -941,4 +974,3 @@
     </script>
 </body>
 </html>
-

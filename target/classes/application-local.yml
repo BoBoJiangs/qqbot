@@ -2,7 +2,7 @@ xbGroupId: 690933736
 # 小小的总群（用来接收验证码提醒 和给所有小号发自动任务命令）
 xxGroupId: 690933736
 captcha:
-   shitu-api-url: http://113.44.42.139:8001/
+   shitu-api-url: http://113.44.42.139:8000/
 #   shitu-api-url: http://116.205.232.32:8848/
 
 bot:
@@ -66,7 +66,7 @@ bot:
 #    enableAlchemy: true
 #
   - type: ws
-    url: ws://117.72.213.211:8082
+    url: ws://117.72.213.211:8091
     accessToken: 1024*1024*1024
     #    修炼群号
     groupId: 971327442
@@ -79,7 +79,10 @@ bot:
 
 
 server:
-  port: 8080
+  port: 6001
+
+botcore:
+  enabled: true
 
 spring:
   datasource:
@@ -102,3 +105,10 @@ spring:
     scheduling:
       pool:
         size: 10
+
+docker:
+  host: auto
+
+napcat:
+  image: docker.1ms.run/mlikiowa/napcat-docker:latest
+  data-root: /home/user/JavaBot

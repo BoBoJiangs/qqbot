@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bot后台管理页面</title>
+    <script src="js/jquery-3.3.1.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 18px; }
+        .card { width: 100%; max-width: 420px; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); overflow: hidden; }
+        .header { padding: 22px 20px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
+        .header h1 { font-size: 1.6em; }
+        .body { padding: 22px 20px; }
+        .row { margin-bottom: 14px; }
+        .row label { display: block; color: #333; font-weight: 700; margin-bottom: 8px; }
+        .row input { width: 100%; border: 1px solid #d9d9d9; border-radius: 10px; padding: 10px 12px; font-size: 1em; outline: none; }
+        .row input:focus { border-color: #4facfe; box-shadow: 0 0 0 4px rgba(79,172,254,0.14); }
+        .actions { display: flex; gap: 10px; margin-top: 8px; }
+        .btn { flex: 1; padding: 10px 12px; border: none; border-radius: 10px; cursor: pointer; color: white; font-weight: 800; font-size: 1em; }
+        .btn-login { background: #0d6efd; }
+        .hint { margin-top: 12px; color: #666; font-size: 0.92em; line-height: 1.45; }
+        .error { margin-top: 10px; color: #b00020; font-weight: 700; display: none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="header">
+            <h1>Bot后台管理页面</h1>
+        </div>
+        <div class="body">
+            <div class="row">
+                <label for="username">账号</label>
+                <input id="username" value="admin" autocomplete="username" />
+            </div>
+            <div class="row">
+                <label for="password">密码</label>
+                <input id="password" type="password" value="admin" autocomplete="current-password" />
+            </div>
+            <div class="actions">
+                <button class="btn btn-login" onclick="doLogin()">登录</button>
+            </div>
+            <div id="err" class="error"></div>
+            <div class="hint">
+                默认账号密码：admin/admin（建议登录后立即修改密码）。
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            $('#password').on('keydown', function(e) {
+                if (e.key === 'Enter') doLogin();
+            });
+            $.get('/api/auth/me').done(function(res) {
+                if (res && res.authenticated) redirectNext();
+            });
+        });
+
+        function getNext() {
+            var params = new URLSearchParams(window.location.search);
+            return params.get('next') || '/container-manager.html';
+        }
+
+        function redirectNext() {
+            window.location.href = getNext();
+        }
+
+        function showError(msg) {
+            $('#err').text(msg || '登录失败').show();
+        }
+
+        function doLogin() {
+            $('#err').hide();
+            var username = String($('#username').val() || '').trim();
+            var password = String($('#password').val() || '');
+            $.ajax({
+                url: '/api/auth/login',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ username: username, password: password }),
+                success: function(res) {
+                    if (res && res.success) {
+                        redirectNext();
+                        return;
+                    }
+                    showError(res && res.message ? res.message : '登录失败');
+                },
+                error: function(err) {
+                    var msg = err && err.responseJSON && err.responseJSON.message ? err.responseJSON.message : (err.statusText || 'error');
+                    showError(msg);
+                }
+            });
+        }
+    </script>
+</body>
+</html>
+

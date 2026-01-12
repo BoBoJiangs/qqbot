@@ -237,6 +237,17 @@ public class TestService {
                 saveBotConfig(bot);
             }
 
+            if ("启用结算提醒".equals(message)) {
+                botConfig.setEnableAutomaticReply(true);
+                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
+            }
+            if ("关闭结算提醒".equals(message)) {
+                botConfig.setEnableAutomaticReply(false);
+                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+                saveBotConfig(bot);
+            }
+
             if ("悬赏优先价值".equals(message)) {
                 botConfig.setRewardMode(3);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
@@ -346,11 +357,7 @@ public class TestService {
                 group.sendMessage((new MessageChain()).reply(messageId).text(typeString));
             }
 
-            if ("开启群管提醒".equals(message)) {
-                botConfig.setEnableAutomaticReply(true);
-                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
-                saveBotConfig(bot);
-            }
+
             if (("开启妖塔挑战".equals(message) || "开始妖塔挑战".equals(message)) && (
                     botConfig.getChallengeMode() == 1 || botConfig.getChallengeMode() == 2)) {
                 bot.sendGroupMessage(botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("我的状态"));
@@ -371,11 +378,7 @@ public class TestService {
             }
 
 
-            if ("关闭群管提醒".equals(message)) {
-                botConfig.setEnableAutomaticReply(false);
-                group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
-                saveBotConfig(bot);
-            }
+
 
             if ("开启自助头衔".equals(message)) {
                 botConfig.setEnableSelfTitle(true);
@@ -961,6 +964,7 @@ public class TestService {
             sb.append("悬赏优先价值/修为/时长最短\n");
             sb.append("启用/关闭价格查询\n");
             sb.append("启用/关闭猜成语查询\n");
+            sb.append("启用/关闭结算提醒\n");
             sb.append("开始/停止更新坊市\n");
             sb.append("自动购买××(物品 价格单位：万)\n");
             sb.append("取消自动购买××\n");
