@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>容器管理</title>
+    <script src="js/jquery-3.3.1.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Microsoft YaHei', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 1400px; margin: 0 auto; background: white; border-radius: 15px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; padding: 30px; text-align: center; }
+        .header h1 { font-size: 2.5em; margin-bottom: 10px; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        .header p { font-size: 1.2em; opacity: 0.9; }
+        .content { padding: 30px; }
+        .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+        .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; margin-right: 5px; font-size: 0.9em; transition: opacity 0.2s; }
+        .btn:hover { opacity: 0.8; }
+        .btn-restart { background-color: #28a745; }
+        .btn-stop { background-color: #ffc107; color: black; }
+        .btn-delete { background-color: #dc3545; }
+        .btn-refresh { background-color: #17a2b8; margin-bottom: 20px; font-size: 1em; padding: 10px 20px; }
+        .btn-add { background-color: #6f42c1; margin-bottom: 20px; font-size: 1em; padding: 10px 20px; }
+        .btn-webui { background-color: #0d6efd; }
+        .btn-password { background-color: #495057; margin-bottom: 20px; font-size: 1em; padding: 10px 20px; }
+        .btn-logout { background-color: #212529; margin-bottom: 20px; font-size: 1em; padding: 10px 20px; }
+        .status-running { color: #28a745; font-weight: bold; }
+        .status-exited { color: #dc3545; }
+        .loading { text-align: center; padding: 20px; color: #666; }
+
+        .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; margin-top: 10px; }
+        .card { border: 1px solid #eef0f2; border-radius: 14px; padding: 16px; box-shadow: 0 10px 24px rgba(0,0,0,0.06); background: white; }
+        .card-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        .card-title { font-weight: 700; font-size: 1.05em; color: #222; line-height: 1.3; }
+        .card-sub { margin-top: 6px; color: #666; font-size: 0.92em; }
+        .chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; font-weight: 700; font-size: 0.85em; }
+        .chip-running { background: rgba(40, 167, 69, 0.12); color: #1c7c33; }
+        .chip-exited { background: rgba(220, 53, 69, 0.12); color: #a51e2c; }
+        .card-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+        .card-actions .btn { margin-right: 0; }
+        .empty { text-align: center; padding: 30px; color: #666; border: 1px dashed #d9d9d9; border-radius: 12px; background: #fafafa; }
+        .error { text-align: center; padding: 30px; color: #b00020; border: 1px dashed rgba(176,0,32,0.35); border-radius: 12px; background: rgba(176,0,32,0.04); }
+
+        .modal-mask { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; padding: 18px; }
+        .modal { width: 100%; max-width: 520px; background: white; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); overflow: hidden; }
+        .modal-header { padding: 16px 18px; background: #f8f9fa; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .modal-title { font-weight: 800; color: #222; }
+        .modal-close { border: none; background: transparent; font-size: 20px; cursor: pointer; color: #666; }
+        .modal-body { padding: 18px; }
+        .form-row { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-items: center; margin-bottom: 12px; }
+        .form-row label { color: #333; font-weight: 700; font-size: 0.95em; }
+        .form-row input { width: 100%; border: 1px solid #d9d9d9; border-radius: 10px; padding: 10px 12px; font-size: 1em; outline: none; }
+        .form-row input:focus { border-color: #6f42c1; box-shadow: 0 0 0 4px rgba(111,66,193,0.12); }
+        .hint { color: #666; font-size: 0.92em; margin-top: 10px; line-height: 1.45; }
+        .modal-actions { padding: 16px 18px; display: flex; justify-content: flex-end; gap: 10px; background: #fafafa; }
+        .btn-secondary { background: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Docker 容器管理</h1>
+            <p>管理服务器上的 Docker 容器</p>
+        </div>
+        <div class="content">
+            <div class="toolbar">
+                <button class="btn btn-refresh" onclick="loadContainers()">🔄 刷新列表</button>
+                <button class="btn btn-add" onclick="openAddBotModal()">➕ 添加机器人</button>
+                <button class="btn btn-password" onclick="openPasswordModal()">🔑 修改密码</button>
+                <button class="btn btn-logout" onclick="logout()">退出</button>
+            </div>
+            <div id="containerCards" class="cards"></div>
+        </div>
+    </div>
+
+    <div id="addBotMask" class="modal-mask">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">添加机器人</div>
+                <button class="modal-close" onclick="closeAddBotModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label for="botAccount">QQ号</label>
+                    <input id="botAccount" placeholder="例如：123456789" inputmode="numeric" />
+                </div>
+                <div class="form-row">
+                    <label for="botPort">WebUI端口</label>
+                    <input id="botPort" placeholder="例如：8916" inputmode="numeric" />
+                </div>
+                <div class="hint">
+                    容器名将自动生成：QQ号-端口。<br/>
+                    端口会映射为：本机端口 -> 6099。
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeAddBotModal()">取消</button>
+                <button class="btn btn-add" onclick="submitAddBot()">确认创建</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="passwordMask" class="modal-mask">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">修改密码</div>
+                <button class="modal-close" onclick="closePasswordModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-row">
+                    <label for="oldPassword">原密码</label>
+                    <input id="oldPassword" type="password" autocomplete="current-password" />
+                </div>
+                <div class="form-row">
+                    <label for="newPassword">新密码</label>
+                    <input id="newPassword" type="password" autocomplete="new-password" />
+                </div>
+                <div class="form-row">
+                    <label for="newPassword2">确认新密码</label>
+                    <input id="newPassword2" type="password" autocomplete="new-password" />
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closePasswordModal()">取消</button>
+                <button class="btn btn-password" onclick="submitChangePassword()">确认修改</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        $(document).ready(function() {
+            ensureAuthed(function() {
+                loadContainers();
+            });
+        });
+
+        function ensureAuthed(cb) {
+            $.get('/api/auth/me').done(function(res) {
+                if (res && res.authenticated) {
+                    if (cb) cb();
+                    return;
+                }
+                redirectToLogin();
+            }).fail(function() {
+                redirectToLogin();
+            });
+        }
+
+        function redirectToLogin() {
+            var next = window.location.pathname + (window.location.search || '');
+            window.location.href = '/login.html?next=' + encodeURIComponent(next);
+        }
+
+        function safeName(container) {
+            if (container.names && container.names.length) {
+                return container.names.join(', ').replace(/\//g, '');
+            }
+            if (container.name) return String(container.name).replace(/\//g, '');
+            return '未命名容器';
+        }
+
+        function formatPorts(ports) {
+            if (!ports || !ports.length) return '—';
+            var seen = {};
+            var out = [];
+            ports.forEach(function(p) {
+                var privatePort = p.privatePort != null ? p.privatePort : p.PrivatePort;
+                var publicPort = p.publicPort != null ? p.publicPort : p.PublicPort;
+                if (privatePort == null) return;
+                var key = String(privatePort) + '|' + (publicPort == null ? '' : String(publicPort));
+                if (seen[key]) return;
+                seen[key] = true;
+                if (publicPort != null) out.push(privatePort + '->' + publicPort);
+                else out.push(String(privatePort));
+            });
+            return out.join(', ');
+        }
+
+        function findNapcatWebUiPort(ports) {
+            if (!ports || !ports.length) return null;
+            for (var i = 0; i < ports.length; i++) {
+                var p = ports[i];
+                var privatePort = p.privatePort != null ? p.privatePort : p.PrivatePort;
+                var publicPort = p.publicPort != null ? p.publicPort : p.PublicPort;
+                var type = p.type != null ? p.type : p.Type;
+                if (Number(privatePort) === 6099 && publicPort != null && (!type || String(type).toLowerCase() === 'tcp')) {
+                    return Number(publicPort);
+                }
+            }
+            return null;
+        }
+
+        function openNapcatWebUi(port) {
+            if (!port) return;
+            var protocol = window.location.protocol || 'http:';
+            var host = window.location.hostname;
+            var url = protocol + '//' + host + ':' + port + '/';
+            window.open(url, '_blank', 'noopener,noreferrer');
+        }
+
+        function loadContainers() {
+            $('#containerCards').html('<div class="loading">加载中...</div>');
+            $.ajax({
+                url: '/api/docker/containers',
+                method: 'GET',
+                success: function(containers) {
+                    var html = '';
+                    if (!containers || containers.length === 0) {
+                        $('#containerCards').html('<div class="empty">没有找到容器</div>');
+                        return;
+                    }
+                    containers.forEach(function(container) {
+                        var id = container.id || container.Id || '';
+                        var state = container.state || container.State || '';
+                        var status = container.status || container.Status || '';
+                        var portsText = formatPorts(container.ports);
+                        var napcatWebUiPort = findNapcatWebUiPort(container.ports);
+                        var chipClass = state === 'running' ? 'chip-running' : 'chip-exited';
+                        var title = safeName(container);
+
+                        html += '<div class="card">';
+                        html +=   '<div class="card-top">';
+                        html +=     '<div>';
+                        html +=       '<div class="card-title">' + title + '</div>';
+                        html +=       '<div class="card-sub">端口：' + portsText + '</div>';
+                        html +=     '</div>';
+                        html +=     '<div class="chip ' + chipClass + '">' + (state || 'unknown') + '</div>';
+                        html +=   '</div>';
+                        html +=   '<div class="card-sub">' + (status || '') + '</div>';
+                        html +=   '<div class="card-actions">';
+                        if (napcatWebUiPort) {
+                            html += '<button class="btn btn-webui" onclick="openNapcatWebUi(' + napcatWebUiPort + ')">WebUI</button>';
+                        }
+                        html +=     '<button class="btn btn-restart" onclick="restartContainer(\'' + id + '\')">重启</button>';
+                        if (state === 'running') {
+                            html += '<button class="btn btn-stop" onclick="stopContainer(\'' + id + '\')">停止</button>';
+                        }
+                        html +=     '<button class="btn btn-delete" onclick="removeContainer(\'' + id + '\')">删除</button>';
+                        html +=   '</div>';
+                        html += '</div>';
+                    });
+                    $('#containerCards').html(html);
+                },
+                error: function(err) {
+                    console.error(err);
+                    var errMsg = '未知错误';
+                    if (err.responseJSON) {
+                        if (err.responseJSON.message) {
+                            errMsg = err.responseJSON.message;
+                        } 
+                        else if (err.responseJSON.error) {
+                            errMsg = err.responseJSON.error;
+                        }
+                    } else if (err.statusText && err.statusText !== 'error') {
+                        errMsg = err.statusText;
+                    }
+                    $('#containerCards').html('<div class="error">加载失败：' + errMsg + '<br/><small style="color:gray">(请尝试重启应用以加载最新修复代码)</small></div>');
+                }
+            });
+        }
+
+        function openAddBotModal() {
+            $('#botAccount').val('');
+            $('#botPort').val('');
+            $('#addBotMask').css('display', 'flex');
+        }
+
+        function closeAddBotModal() {
+            $('#addBotMask').hide();
+        }
+
+        function submitAddBot() {
+            var account = String($('#botAccount').val() || '').trim();
+            var portStr = String($('#botPort').val() || '').trim();
+            if (!/^\d{5,12}$/.test(account)) {
+                alert('QQ号格式不正确');
+                return;
+            }
+            if (!/^\d+$/.test(portStr)) {
+                alert('端口格式不正确');
+                return;
+            }
+            var hostPort = parseInt(portStr, 10);
+            if (hostPort < 1 || hostPort > 65535) {
+                alert('端口范围应为 1-65535');
+                return;
+            }
+            $.ajax({
+                url: '/api/docker/napcat',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ account: account, hostPort: hostPort }),
+                success: function(res) {
+                    alert('创建成功：' + (res.containerName || ''));
+                    closeAddBotModal();
+                    loadContainers();
+                },
+                error: function(err) {
+                    if (err && err.status === 401) {
+                        redirectToLogin();
+                        return;
+                    }
+                    var msg = err && err.responseJSON && err.responseJSON.message ? err.responseJSON.message : (err.statusText || 'error');
+                    alert('创建失败: ' + msg);
+                }
+            });
+        }
+
+        function openPasswordModal() {
+            $('#oldPassword').val('');
+            $('#newPassword').val('');
+            $('#newPassword2').val('');
+            $('#passwordMask').css('display', 'flex');
+        }
+
+        function closePasswordModal() {
+            $('#passwordMask').hide();
+        }
+
+        function submitChangePassword() {
+            var oldPassword = String($('#oldPassword').val() || '');
+            var newPassword = String($('#newPassword').val() || '');
+            var newPassword2 = String($('#newPassword2').val() || '');
+            if (!newPassword || newPassword.length < 4) {
+                alert('新密码至少 4 位');
+                return;
+            }
+            if (newPassword !== newPassword2) {
+                alert('两次新密码不一致');
+                return;
+            }
+            $.ajax({
+                url: '/api/auth/change-password',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ oldPassword: oldPassword, newPassword: newPassword }),
+                success: function(res) {
+                    alert(res && res.message ? res.message : '密码已更新');
+                    closePasswordModal();
+                },
+                error: function(err) {
+                    if (err && err.status === 401) {
+                        redirectToLogin();
+                        return;
+                    }
+                    var msg = err && err.responseJSON && err.responseJSON.message ? err.responseJSON.message : (err.statusText || 'error');
+                    alert('修改失败: ' + msg);
+                }
+            });
+        }
+
+        function logout() {
+            $.ajax({
+                url: '/api/auth/logout',
+                method: 'POST',
+                success: function() {
+                    redirectToLogin();
+                },
+                error: function() {
+                    redirectToLogin();
+                }
+            });
+        }
+
+        function restartContainer(id) {
+            if(!confirm('确定要重启该容器吗？')) return;
+            $.ajax({
+                url: '/api/docker/containers/' + id + '/restart',
+                method: 'POST',
+                success: function(res, textStatus, xhr) {
+                    var statusCode = xhr && xhr.status ? xhr.status : 200;
+                    var msg = (res && res.message) ? res.message : '重启请求已提交';
+                    alert(msg);
+                    if (statusCode === 202) {
+                        waitForServiceRecovery(60);
+                    } else {
+                        loadContainers();
+                    }
+                },
+                error: function(err) {
+                    if (err && err.status === 401) {
+                        redirectToLogin();
+                        return;
+                    }
+                    alert('重启失败: ' + (err.responseJSON ? err.responseJSON.message : err.statusText));
+                }
+            });
+        }
+
+        function waitForServiceRecovery(maxSeconds) {
+            var startedAt = Date.now();
+            function poll() {
+                var elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+                if (elapsedSeconds >= maxSeconds) {
+                    return;
+                }
+                $.ajax({
+                    url: '/api/docker/diagnose',
+                    method: 'GET',
+                    success: function(res) {
+                        if (res && res.ping === 'OK') {
+                            loadContainers();
+                            return;
+                        }
+                        setTimeout(poll, 1000);
+                    },
+                    error: function() {
+                        setTimeout(poll, 1000);
+                    }
+                });
+            }
+            setTimeout(poll, 1000);
+        }
+
+        function stopContainer(id) {
+            if(!confirm('确定要停止该容器吗？')) return;
+            $.ajax({
+                url: '/api/docker/containers/' + id + '/stop',
+                method: 'POST',
+                success: function(res) {
+                    alert('停止成功');
+                    loadContainers();
+                },
+                error: function(err) {
+                    if (err && err.status === 401) {
+                        redirectToLogin();
+                        return;
+                    }
+                    alert('停止失败: ' + (err.responseJSON ? err.responseJSON.message : err.statusText));
+                }
+            });
+        }
+
+        function removeContainer(id) {
+            if(!confirm('确定要删除该容器吗？此操作不可逆！')) return;
+            $.ajax({
+                url: '/api/docker/containers/' + id,
+                method: 'DELETE',
+                success: function(res) {
+                    alert('删除成功');
+                    loadContainers();
+                },
+                error: function(err) {
+                    if (err && err.status === 401) {
+                        redirectToLogin();
+                        return;
+                    }
+                    alert('删除失败: ' + (err.responseJSON ? err.responseJSON.message : err.statusText));
+                }
+            });
+        }
+    </script>
+</body>
+</html>
