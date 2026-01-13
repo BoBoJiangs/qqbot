@@ -248,11 +248,11 @@ public class TestService {
                 saveBotConfig(bot);
             }
 
-            if ("启用本群悬赏价格查询".equals(message)) {
+            if ("启用本群悬赏令价格查询".equals(message)) {
                 this.groupManager.setGroupXslPriceQueryEnabled(group.getGroupId(), true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("已启用本群悬赏价格查询"));
             }
-            if ("关闭本群悬赏价格查询".equals(message)) {
+            if ("关闭本群悬赏令价格查询".equals(message)) {
                 this.groupManager.setGroupXslPriceQueryEnabled(group.getGroupId(), false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("已关闭本群悬赏价格查询"));
             }
@@ -970,7 +970,7 @@ public class TestService {
         if (message.equals("命令")) {
             sb.append("－－－－－功能设置－－－－－\n");
             sb.append("启用/关闭悬赏令价格查询\n");
-            sb.append("启用/关闭本群悬赏价格查询\n");
+            sb.append("启用/关闭本群悬赏令价格查询\n");
             sb.append("启用/关闭自动秘境\n");
             sb.append("启用/关闭无偿双修\n");
             sb.append("开始/停止捡漏\n");

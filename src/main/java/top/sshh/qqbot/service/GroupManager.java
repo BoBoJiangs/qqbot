@@ -460,7 +460,10 @@ public class GroupManager {
 
     public boolean isGroupXslPriceQueryEnabled(Long groupId) {
         Boolean enabled = this.groupXslPriceQueryMap.get(groupId + "");
-        return enabled == null || enabled;
+        if(enabled == null){
+            return false;
+        }
+        return enabled;
     }
 
     public void setGroupXslPriceQueryEnabled(Long groupId, boolean enabled) {
@@ -470,7 +473,10 @@ public class GroupManager {
 
     public boolean isGroupSettlementReminderEnabled(Long groupId) {
         Boolean enabled = this.groupSettlementReminderMap.get(groupId + "");
-        return enabled == null || enabled;
+        if(enabled == null){
+            return false;
+        }
+        return enabled;
     }
 
     public void setGroupSettlementReminderEnabled(Long groupId, boolean enabled) {

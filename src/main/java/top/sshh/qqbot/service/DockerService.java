@@ -45,7 +45,7 @@ public class DockerService {
     @Value("${napcat.image:docker.1ms.run/mlikiowa/napcat-docker:latest}")
     private String napcatImage;
 
-    @Value("${napcat.data-root:/home/user/JavaBot}")
+    @Value("${napcat.data-root:/root}")
     private String napcatDataRoot;
 
     private volatile DockerClient dockerClient;
@@ -212,8 +212,8 @@ public class DockerService {
 
         String base = napcatDataRoot == null ? "" : napcatDataRoot.trim();
         if (base.isEmpty()) throw new RuntimeException("napcat.data-root 未配置");
-        String hostQqData = base + "/napcat/" + containerName + "/qq_data";
-        String hostNapcatConfig = base + "/napcat/" + containerName + "/napcat_config";
+        String hostQqData = base + "/napcat/qq_data";
+        String hostNapcatConfig = base + "/napcat/napcat_config";
 
         ExposedPort containerPort = ExposedPort.tcp(6099);
         Ports portBindings = new Ports();
