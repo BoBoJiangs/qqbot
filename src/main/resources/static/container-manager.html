@@ -16,14 +16,15 @@
         .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .btn { padding: 6px 12px; border: none; border-radius: 4px; cursor: pointer; color: white; margin-right: 5px; font-size: 0.9em; transition: opacity 0.2s; }
         .btn:hover { opacity: 0.8; }
+        .toolbar .btn { display: inline-flex; align-items: center; justify-content: center; height: 42px; padding: 0 16px; font-size: 1em; margin-right: 0; }
         .btn-restart { background-color: #28a745; }
         .btn-stop { background-color: #ffc107; color: black; }
         .btn-delete { background-color: #dc3545; }
-        .btn-refresh { background-color: #17a2b8; margin-bottom: 20px; font-size: 1em; padding: 10px 20px; }
-        .btn-add { background-color: #6f42c1; margin-bottom: 20px; font-size: 1em; padding: 10px 20px; }
+        .btn-refresh { background-color: #17a2b8; }
+        .btn-add { background-color: #6f42c1; }
         .btn-webui { background-color: #0d6efd; }
-        .btn-password { background-color: #495057; margin-bottom: 20px; font-size: 1em; padding: 10px 20px; }
-        .btn-logout { background-color: #212529; margin-bottom: 20px; font-size: 1em; padding: 10px 20px; }
+        .btn-password { background-color: #495057; }
+        .btn-logout { background-color: #212529; }
         .status-running { color: #28a745; font-weight: bold; }
         .status-exited { color: #dc3545; }
         .loading { text-align: center; padding: 20px; color: #666; }
@@ -86,11 +87,32 @@
                 </div>
                 <div class="form-row">
                     <label for="botPort">WebUI端口</label>
-                    <input id="botPort" placeholder="例如：8916" inputmode="numeric" />
+                    <input id="botPort" placeholder="例如：6099" inputmode="numeric" />
+                </div>
+                <div class="form-row">
+                    <label for="wsPort">WS端口</label>
+                    <input id="wsPort" placeholder="例如：8081" inputmode="numeric" />
+                </div>
+                <div class="form-row">
+                    <label for="serverIp">服务器IP</label>
+                    <input id="serverIp" placeholder="输入你的公网IP地址" />
+                </div>
+                <div class="form-row">
+                    <label for="accessToken">Token</label>
+                    <input id="accessToken" value="1024*1024*1024" />
+                </div>
+                <div class="form-row">
+                    <label for="groupId">修炼群号</label>
+                    <input id="groupId" placeholder="例如：971297429" inputmode="numeric" />
+                </div>
+                <div class="form-row">
+                    <label for="controlQQ">主号QQ</label>
+                    <input id="controlQQ" placeholder="例如：819463350" inputmode="numeric" />
                 </div>
                 <div class="hint">
-                    容器名将自动生成：QQ号-端口。<br/>
-                    端口会映射为：本机端口 -> 6099。
+                    容器名将自动生成：QQ号-WebUI端口。<br/>
+                    WebUI端口会映射为：本机端口 -> 6099。<br/>
+                    WS端口用于反向WebSocket连接。
                 </div>
             </div>
             <div class="modal-actions">
@@ -128,11 +150,31 @@
     </div>
 
     <script>
+        var selfContainerIdPrefix = '';
+
         $(document).ready(function() {
             ensureAuthed(function() {
-                loadContainers();
+                initSelfContainerPrefix(function() {
+                    loadContainers();
+                });
             });
         });
+
+        function initSelfContainerPrefix(cb) {
+            $.ajax({
+                url: '/api/docker/diagnose',
+                method: 'GET',
+                success: function(res) {
+                    if (res && res.selfContainerIdPrefix) {
+                        selfContainerIdPrefix = String(res.selfContainerIdPrefix || '');
+                    }
+                    if (cb) cb();
+                },
+                error: function() {
+                    if (cb) cb();
+                }
+            });
+        }
 
         function ensureAuthed(cb) {
             $.get('/api/auth/me').done(function(res) {
@@ -157,6 +199,13 @@
             }
             if (container.name) return String(container.name).replace(/\//g, '');
             return '未命名容器';
+        }
+
+        function isPinnedContainer(container) {
+            var id = container.id || container.Id || '';
+            if (selfContainerIdPrefix && id && String(id).indexOf(selfContainerIdPrefix) === 0) return true;
+            var name = safeName(container).toLowerCase();
+            return name.indexOf('java-bot') >= 0 || name.indexOf('javabot') >= 0;
         }
 
         function formatPorts(ports) {
@@ -209,6 +258,12 @@
                         $('#containerCards').html('<div class="empty">没有找到容器</div>');
                         return;
                     }
+                    containers = containers.slice().sort(function(a, b) {
+                        var ap = isPinnedContainer(a);
+                        var bp = isPinnedContainer(b);
+                        if (ap === bp) return 0;
+                        return ap ? -1 : 1;
+                    });
                     containers.forEach(function(container) {
                         var id = container.id || container.Id || '';
                         var state = container.state || container.State || '';
@@ -262,6 +317,11 @@
         function openAddBotModal() {
             $('#botAccount').val('');
             $('#botPort').val('');
+            $('#wsPort').val('');
+            $('#serverIp').val('');
+            $('#accessToken').val('1024*1024*1024');
+            $('#groupId').val('');
+            $('#controlQQ').val('');
             $('#addBotMask').css('display', 'flex');
         }
 
@@ -272,24 +332,61 @@
         function submitAddBot() {
             var account = String($('#botAccount').val() || '').trim();
             var portStr = String($('#botPort').val() || '').trim();
+            var wsPortStr = String($('#wsPort').val() || '').trim();
+            var serverIp = String($('#serverIp').val() || '').trim();
+            var accessToken = String($('#accessToken').val() || '').trim();
+            var groupId = String($('#groupId').val() || '').trim();
+            var controlQQ = String($('#controlQQ').val() || '').trim();
+
             if (!/^\d{5,12}$/.test(account)) {
                 alert('QQ号格式不正确');
                 return;
             }
             if (!/^\d+$/.test(portStr)) {
-                alert('端口格式不正确');
+                alert('WebUI端口格式不正确');
                 return;
             }
+            if (!/^\d+$/.test(wsPortStr)) {
+                alert('WS端口格式不正确');
+                return;
+            }
+            if (!serverIp) {
+                alert('请输入服务器IP');
+                return;
+            }
+            if (!groupId) {
+                alert('请输入修炼群号');
+                return;
+            }
+            if (!controlQQ) {
+                alert('请输入主号QQ');
+                return;
+            }
+
             var hostPort = parseInt(portStr, 10);
             if (hostPort < 1 || hostPort > 65535) {
-                alert('端口范围应为 1-65535');
+                alert('WebUI端口范围应为 1-65535');
                 return;
             }
+            var wsPort = parseInt(wsPortStr, 10);
+            if (wsPort < 1 || wsPort > 65535) {
+                alert('WS端口范围应为 1-65535');
+                return;
+            }
+
             $.ajax({
                 url: '/api/docker/napcat',
                 method: 'POST',
                 contentType: 'application/json',
-                data: JSON.stringify({ account: account, hostPort: hostPort }),
+                data: JSON.stringify({ 
+                    account: account, 
+                    hostPort: hostPort,
+                    wsPort: wsPort,
+                    serverIp: serverIp,
+                    accessToken: accessToken,
+                    groupId: groupId,
+                    controlQQ: controlQQ
+                }),
                 success: function(res) {
                     alert('创建成功：' + (res.containerName || ''));
                     closeAddBotModal();

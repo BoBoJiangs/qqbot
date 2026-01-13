@@ -248,6 +248,24 @@ public class TestService {
                 saveBotConfig(bot);
             }
 
+            if ("启用本群悬赏价格查询".equals(message)) {
+                this.groupManager.setGroupXslPriceQueryEnabled(group.getGroupId(), true);
+                group.sendMessage((new MessageChain()).reply(messageId).text("已启用本群悬赏价格查询"));
+            }
+            if ("关闭本群悬赏价格查询".equals(message)) {
+                this.groupManager.setGroupXslPriceQueryEnabled(group.getGroupId(), false);
+                group.sendMessage((new MessageChain()).reply(messageId).text("已关闭本群悬赏价格查询"));
+            }
+
+            if ("启用本群结算提醒".equals(message)) {
+                this.groupManager.setGroupSettlementReminderEnabled(group.getGroupId(), true);
+                group.sendMessage((new MessageChain()).reply(messageId).text("已启用本群结算提醒"));
+            }
+            if ("关闭本群结算提醒".equals(message)) {
+                this.groupManager.setGroupSettlementReminderEnabled(group.getGroupId(), false);
+                group.sendMessage((new MessageChain()).reply(messageId).text("已关闭本群结算提醒"));
+            }
+
             if ("悬赏优先价值".equals(message)) {
                 botConfig.setRewardMode(3);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
@@ -952,6 +970,7 @@ public class TestService {
         if (message.equals("命令")) {
             sb.append("－－－－－功能设置－－－－－\n");
             sb.append("启用/关闭悬赏令价格查询\n");
+            sb.append("启用/关闭本群悬赏价格查询\n");
             sb.append("启用/关闭自动秘境\n");
             sb.append("启用/关闭无偿双修\n");
             sb.append("开始/停止捡漏\n");
@@ -965,6 +984,7 @@ public class TestService {
             sb.append("启用/关闭价格查询\n");
             sb.append("启用/关闭猜成语查询\n");
             sb.append("启用/关闭结算提醒\n");
+            sb.append("启用/关闭本群结算提醒\n");
             sb.append("开始/停止更新坊市\n");
             sb.append("自动购买××(物品 价格单位：万)\n");
             sb.append("取消自动购买××\n");

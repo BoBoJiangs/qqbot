@@ -20,8 +20,15 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.PostConstruct;
 import java.time.Duration;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -165,11 +172,15 @@ public class DockerService {
         requireClient().removeContainerCmd(containerId).exec();
     }
 
-    public Map<String, Object> createNapcatBot(String account, int hostPort) {
+    public Map<String, Object> createNapcatBot(String account, int hostPort, int wsPort, String serverIp, String accessToken, String groupId, String controlQQ) {
         if (account == null) throw new RuntimeException("QQ号不能为空");
         String qq = account.trim();
         if (!qq.matches("\\d{5,12}")) throw new RuntimeException("QQ号格式不正确");
-        if (hostPort < 1 || hostPort > 65535) throw new RuntimeException("端口范围应为 1-65535");
+        if (hostPort < 1 || hostPort > 65535) throw new RuntimeException("WebUI端口范围应为 1-65535");
+        if (wsPort < 1 || wsPort > 65535) throw new RuntimeException("WS端口范围应为 1-65535");
+        if (serverIp == null || serverIp.trim().isEmpty()) throw new RuntimeException("服务器IP不能为空");
+        if (groupId == null || groupId.trim().isEmpty()) throw new RuntimeException("修炼群号不能为空");
+        if (controlQQ == null || controlQQ.trim().isEmpty()) throw new RuntimeException("主号QQ不能为空");
 
         String containerName = qq + "-" + hostPort;
         List<Container> all = listContainers(true);
@@ -186,11 +197,13 @@ public class DockerService {
                 for (ContainerPort p : c.getPorts()) {
                     Integer publicPort = p.getPublicPort();
                     if (publicPort != null && publicPort == hostPort) {
-                        throw new RuntimeException("端口已被占用: " + hostPort);
+                        throw new RuntimeException("WebUI端口已被占用: " + hostPort);
                     }
                 }
             }
         }
+
+        writeConfigFileToHostNapcatConfigDir(qq, wsPort, serverIp.trim(), accessToken.trim());
 
         String uid = System.getenv("NAPCAT_UID");
         String gid = System.getenv("NAPCAT_GID");
@@ -219,7 +232,9 @@ public class DockerService {
                 .withEnv(
                         "ACCOUNT=" + qq,
                         "NAPCAT_UID=" + uid,
-                        "NAPCAT_GID=" + gid
+                        "NAPCAT_GID=" + gid,
+                        "WS_ENABLE=true",
+                        "WS_URL=ws://host.docker.internal:" + wsPort
                 )
                 .withExposedPorts(containerPort)
                 .withHostConfig(hostConfig)
@@ -227,6 +242,12 @@ public class DockerService {
                 .getId();
 
         requireClient().startContainerCmd(id).exec();
+
+        try {
+            appendBotConfigToYaml(wsPort, accessToken, groupId.trim(), controlQQ.trim(), controlQQ.trim());
+        } catch (Exception e) {
+            logger.error("Failed to append config to application-local.yml", e);
+        }
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -236,6 +257,140 @@ public class DockerService {
         result.put("account", qq);
         result.put("dataDir", base + "/napcat/" + containerName);
         return result;
+    }
+
+    private void writeConfigFileToHostNapcatConfigDir(String qq, int wsPort, String serverIp, String token) {
+        String fileName = "onebot11_" + qq + ".json";
+        String jsonContent = "{\n" +
+                "  \"network\": {\n" +
+                "    \"httpServers\": [],\n" +
+                "    \"httpSseServers\": [],\n" +
+                "    \"httpClients\": [],\n" +
+                "    \"websocketServers\": [],\n" +
+                "    \"websocketClients\": [\n" +
+                "      {\n" +
+                "        \"enable\": false,\n" +
+                "        \"name\": \"" + wsPort + "\",\n" +
+                "        \"url\": \"ws://" + serverIp + ":" + wsPort + "\",\n" +
+                "        \"reportSelfMessage\": true,\n" +
+                "        \"messagePostFormat\": \"array\",\n" +
+                "        \"token\": \"" + token + "\",\n" +
+                "        \"debug\": true,\n" +
+                "        \"heartInterval\": 30000,\n" +
+                "        \"reconnectInterval\": 30000\n" +
+                "      }\n" +
+                "    ],\n" +
+                "    \"plugins\": []\n" +
+                "  },\n" +
+                "  \"musicSignUrl\": \"\",\n" +
+                "  \"enableLocalFile2Url\": false,\n" +
+                "  \"parseMultMsg\": false\n" +
+                "}";
+
+        String writerContainerId = null;
+        try {
+            HostConfig hostConfig = HostConfig.newHostConfig()
+                    .withBinds(new Bind("/root/napcat_config", new Volume("/mnt")));
+
+            writerContainerId = requireClient()
+                    .createContainerCmd(napcatImage)
+                    .withHostConfig(hostConfig)
+                    .exec()
+                    .getId();
+
+            try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+                 TarArchiveOutputStream tarOut = new TarArchiveOutputStream(bos)) {
+
+                byte[] contentBytes = jsonContent.getBytes(StandardCharsets.UTF_8);
+
+                TarArchiveEntry entry = new TarArchiveEntry(fileName);
+                entry.setSize(contentBytes.length);
+                entry.setMode(0644);
+
+                tarOut.putArchiveEntry(entry);
+                tarOut.write(contentBytes);
+                tarOut.closeArchiveEntry();
+                tarOut.finish();
+
+                try (InputStream tarInputStream = new ByteArrayInputStream(bos.toByteArray())) {
+                    requireClient().copyArchiveToContainerCmd(writerContainerId)
+                            .withTarInputStream(tarInputStream)
+                            .withRemotePath("/mnt")
+                            .exec();
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("写入宿主机 /root/napcat_config 失败: " + e.getMessage(), e);
+        } finally {
+            if (writerContainerId != null) {
+                try {
+                    requireClient().removeContainerCmd(writerContainerId).withForce(true).exec();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    private void appendBotConfigToYaml(int wsPort, String accessToken, String groupId, String controlQQ, String masterQQ) throws java.io.IOException {
+        Path configPath = Path.of("config/application-local.yml");
+        if (!Files.exists(configPath)) {
+            Files.createDirectories(configPath.getParent());
+            Path srcPath = Path.of("src/main/resources/application-local.yml");
+            if (Files.exists(srcPath)) {
+                Files.copy(srcPath, configPath);
+            } else {
+                Files.writeString(configPath, "bot:\n");
+            }
+        }
+
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(configPath);
+        } catch (java.io.IOException e) {
+            lines = new java.util.ArrayList<>();
+        }
+
+        boolean botKeyFound = false;
+        int botLineIndex = -1;
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line.trim().startsWith("bot:") && !line.trim().startsWith("#")) {
+                botKeyFound = true;
+                botLineIndex = i;
+                break;
+            }
+        }
+
+        if (!botKeyFound) {
+            lines.add("bot:");
+            botLineIndex = lines.size() - 1;
+        }
+
+        String newConfig = String.format(
+                "  - type: ws-reverse\n" +
+                "    url: ws://0.0.0.0:%d\n" +
+                "    accessToken: %s\n" +
+                "    #    修炼群号\n" +
+                "    groupId: %s\n" +
+                "    #    主号qq\n" +
+                "    controlQQ: %s\n" +
+                "    #    主号qq\n" +
+                "    masterQQ: %s",
+                wsPort, accessToken, groupId, controlQQ, masterQQ
+        );
+
+        String[] configLines = newConfig.split("\n");
+        int insertIndex = botLineIndex + 1;
+        for (String line : configLines) {
+            if (insertIndex <= lines.size()) {
+                lines.add(insertIndex++, line);
+            } else {
+                lines.add(line);
+                insertIndex++;
+            }
+        }
+
+        Files.write(configPath, lines);
     }
 
     private boolean isSelfContainer(String containerId) {

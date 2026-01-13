@@ -85,6 +85,8 @@ public class GroupManager {
     public Map<String, Map<String, ProductPrice>> autoBuyProductMap = new ConcurrentHashMap();
     public Map<String, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
     public Map<String, TaskStatus> taskStateMap = new ConcurrentHashMap();
+    public Map<String, Boolean> groupXslPriceQueryMap = new ConcurrentHashMap();
+    public Map<String, Boolean> groupSettlementReminderMap = new ConcurrentHashMap();
     public VerifyCount verifyCount = new VerifyCount();
     public volatile boolean taskReminder = true;
     private final Map<String, Map<String, Long>> taskRecords = new ConcurrentHashMap();
@@ -347,6 +349,8 @@ public class GroupManager {
             data.put("炼金排除", this.excludeAlchemyMap);
             data.put("上架排除", this.excludeSellMap);
             data.put("taskReminder", this.taskReminder);
+            data.put("群悬赏价格查询", this.groupXslPriceQueryMap);
+            data.put("群结算提醒", this.groupSettlementReminderMap);
             data.put("自动验证", this.autoVerifyQQ);
             data.put("验证统计", this.verifyCount);
             // 直接写入JSON字节（UTF-8编码）
@@ -418,6 +422,20 @@ public class GroupManager {
                 this.taskReminder = savedReminder;
             }
 
+            this.groupXslPriceQueryMap = data.getObject("群悬赏价格查询",
+                    new TypeReference<Map<String, Boolean>>() {
+                    });
+            if (this.groupXslPriceQueryMap == null) {
+                this.groupXslPriceQueryMap = new ConcurrentHashMap<>();
+            }
+
+            this.groupSettlementReminderMap = data.getObject("群结算提醒",
+                    new TypeReference<Map<String, Boolean>>() {
+                    });
+            if (this.groupSettlementReminderMap == null) {
+                this.groupSettlementReminderMap = new ConcurrentHashMap<>();
+            }
+
 
             logger.info("加载成功：{} 个灵田任务，{} 条发言统计",
                     ltmap.size(), MESSAGE_NUMBER_MAP.size());
@@ -434,8 +452,30 @@ public class GroupManager {
         this.excludeAlchemyMap = new ConcurrentHashMap<>();
         this.excludeSellMap = new ConcurrentHashMap<>();
         this.taskStateMap = new ConcurrentHashMap<>();
+        this.groupXslPriceQueryMap = new ConcurrentHashMap<>();
+        this.groupSettlementReminderMap = new ConcurrentHashMap<>();
         this.autoVerifyQQ = new ConcurrentHashMap<>();
         this.verifyCount = new VerifyCount();
+    }
+
+    public boolean isGroupXslPriceQueryEnabled(Long groupId) {
+        Boolean enabled = this.groupXslPriceQueryMap.get(groupId + "");
+        return enabled == null || enabled;
+    }
+
+    public void setGroupXslPriceQueryEnabled(Long groupId, boolean enabled) {
+        this.groupXslPriceQueryMap.put(groupId + "", enabled);
+        this.saveTasksToFile();
+    }
+
+    public boolean isGroupSettlementReminderEnabled(Long groupId) {
+        Boolean enabled = this.groupSettlementReminderMap.get(groupId + "");
+        return enabled == null || enabled;
+    }
+
+    public void setGroupSettlementReminderEnabled(Long groupId, boolean enabled) {
+        this.groupSettlementReminderMap.put(groupId + "", enabled);
+        this.saveTasksToFile();
     }
 
     public String getExcludeAlchemyList(Long botId) {
@@ -589,7 +629,10 @@ public class GroupManager {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 监控群友发言(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
-        if (bot.getBotConfig().isEnableAutomaticReply() && this.taskReminder && msg.contains("@3889001741")) {
+        if (bot.getBotConfig().isEnableAutomaticReply()
+                && this.taskReminder
+                && this.isGroupSettlementReminderEnabled(group.getGroupId())
+                && msg.contains("@3889001741")) {
             Long groupId = group.getGroupId();
             Long userId = member.getUserId();
             if (userId == 3889001741L) {
@@ -848,6 +891,9 @@ public class GroupManager {
     }
 
     private void addMjXslMap(String qq, String type, Group group, String time, Bot bot) {
+        if (!this.isGroupSettlementReminderEnabled(group.getGroupId())) {
+            return;
+        }
         if (StringUtils.isNotBlank(qq) && StringUtils.isNotBlank(time)) {
             RemindTime remindTime = new RemindTime();
             remindTime.setQq(Long.parseLong(qq));
@@ -1023,6 +1069,9 @@ public class GroupManager {
     }
 
     private void updateLingTianTimer(String qqNumber, String time, Group group, Long botId) {
+        if (!this.isGroupSettlementReminderEnabled(group.getGroupId())) {
+            return;
+        }
         if (StringUtils.isNotBlank(qqNumber) && StringUtils.isNotBlank(time)) {
             RemindTime remindTime = new RemindTime();
             remindTime.setText("灵田");
@@ -1062,6 +1111,10 @@ public class GroupManager {
                 if (System.currentTimeMillis() - remindTime.getExpireTime() < 1000L * 60 * 30) {
                     Bot bot = BotFactory.getBots().get(remindTime.getRemindQq());
                     if (bot != null) {
+                        if (!this.isGroupSettlementReminderEnabled(remindTime.getGroupId())) {
+                            iterator.remove();
+                            continue;
+                        }
                         switch (remindTime.getText()) {
                             case "悬赏":
                                 bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())

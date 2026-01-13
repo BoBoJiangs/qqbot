@@ -132,7 +132,13 @@ public class DockerController {
         try {
             String account = body.get("account") == null ? null : String.valueOf(body.get("account"));
             int hostPort = body.get("hostPort") == null ? 0 : Integer.parseInt(String.valueOf(body.get("hostPort")));
-            return ResponseEntity.ok(dockerService.createNapcatBot(account, hostPort));
+            int wsPort = body.get("wsPort") == null ? 0 : Integer.parseInt(String.valueOf(body.get("wsPort")));
+            String serverIp = body.get("serverIp") == null ? "" : String.valueOf(body.get("serverIp"));
+            String accessToken = body.get("accessToken") == null ? "" : String.valueOf(body.get("accessToken"));
+            String groupId = body.get("groupId") == null ? "" : String.valueOf(body.get("groupId"));
+            String controlQQ = body.get("controlQQ") == null ? "" : String.valueOf(body.get("controlQQ"));
+
+            return ResponseEntity.ok(dockerService.createNapcatBot(account, hostPort, wsPort, serverIp, accessToken, groupId, controlQQ));
         } catch (Throwable e) {
             e.printStackTrace();
             Map<String, Object> error = new LinkedHashMap<>();

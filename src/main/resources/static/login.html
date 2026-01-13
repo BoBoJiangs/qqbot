@@ -16,6 +16,11 @@
         .row label { display: block; color: #333; font-weight: 700; margin-bottom: 8px; }
         .row input { width: 100%; border: 1px solid #d9d9d9; border-radius: 10px; padding: 10px 12px; font-size: 1em; outline: none; }
         .row input:focus { border-color: #4facfe; box-shadow: 0 0 0 4px rgba(79,172,254,0.14); }
+        .input-group { display: flex; gap: 10px; align-items: center; }
+        .input-group input { flex: 1; }
+        .btn-toggle { border: 1px solid #d9d9d9; background: #fff; color: #333; border-radius: 10px; padding: 10px 12px; cursor: pointer; font-weight: 800; white-space: nowrap; width: 44px; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-toggle svg { width: 18px; height: 18px; display: block; }
+        .btn-toggle:active { transform: translateY(1px); }
         .actions { display: flex; gap: 10px; margin-top: 8px; }
         .btn { flex: 1; padding: 10px 12px; border: none; border-radius: 10px; cursor: pointer; color: white; font-weight: 800; font-size: 1em; }
         .btn-login { background: #0d6efd; }
@@ -31,18 +36,21 @@
         <div class="body">
             <div class="row">
                 <label for="username">账号</label>
-                <input id="username" value="admin" autocomplete="username" />
+                <input id="username" placeholder="请输入账号" autocomplete="username" />
             </div>
             <div class="row">
                 <label for="password">密码</label>
-                <input id="password" type="password" value="admin" autocomplete="current-password" />
+                <div class="input-group">
+                    <input id="password" type="password" placeholder="请输入密码" autocomplete="current-password" />
+                    <button id="togglePasswordBtn" class="btn-toggle" type="button" onclick="togglePassword()" title="显示/隐藏密码" aria-label="显示/隐藏密码"></button>
+                </div>
             </div>
             <div class="actions">
                 <button class="btn btn-login" onclick="doLogin()">登录</button>
             </div>
             <div id="err" class="error"></div>
             <div class="hint">
-                默认账号密码：admin/admin（建议登录后立即修改密码）。
+                默认账号密码请联系管理员。
             </div>
         </div>
     </div>
@@ -52,6 +60,11 @@
             $('#password').on('keydown', function(e) {
                 if (e.key === 'Enter') doLogin();
             });
+            $('#username').on('keydown', function(e) {
+                if (e.key === 'Enter') doLogin();
+            });
+
+            tryFillSavedCredentials();
             $.get('/api/auth/me').done(function(res) {
                 if (res && res.authenticated) redirectNext();
             });
@@ -70,6 +83,52 @@
             $('#err').text(msg || '登录失败').show();
         }
 
+        function eyeIcon(open) {
+            if (open) {
+                return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+                    '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' +
+                    '<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="2"/>' +
+                    '</svg>';
+            }
+            return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+                '<path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+                '<path d="M10.6 10.7A2.9 2.9 0 0 0 12 15a3 3 0 0 0 2.3-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
+                '<path d="M6.3 6.4C3.9 8.1 2 12 2 12s3.6 7 10 7c2 0 3.7-.5 5.2-1.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '<path d="M9 5.2c.9-.1 1.9-.2 3-.2 6.4 0 10 7 10 7a18.7 18.7 0 0 1-4.2 5.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                '</svg>';
+        }
+
+        function togglePassword() {
+            var input = $('#password');
+            var current = input.attr('type') || 'password';
+            if (current === 'password') {
+                input.attr('type', 'text');
+                $('#togglePasswordBtn').html(eyeIcon(true));
+            } else {
+                input.attr('type', 'password');
+                $('#togglePasswordBtn').html(eyeIcon(false));
+            }
+        }
+
+        function tryFillSavedCredentials() {
+            try {
+                var savedUsername = localStorage.getItem('qqbot_username') || '';
+                var savedPassword = localStorage.getItem('qqbot_password') || '';
+                if (savedUsername) $('#username').val(savedUsername);
+                if (savedPassword) $('#password').val(savedPassword);
+            } catch (e) {
+            }
+            $('#togglePasswordBtn').html(eyeIcon(false));
+        }
+
+        function saveCredentials(username, password) {
+            try {
+                localStorage.setItem('qqbot_username', username || '');
+                localStorage.setItem('qqbot_password', password || '');
+            } catch (e) {
+            }
+        }
+
         function doLogin() {
             $('#err').hide();
             var username = String($('#username').val() || '').trim();
@@ -81,6 +140,7 @@
                 data: JSON.stringify({ username: username, password: password }),
                 success: function(res) {
                     if (res && res.success) {
+                        saveCredentials(username, password);
                         redirectNext();
                         return;
                     }

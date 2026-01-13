@@ -158,7 +158,9 @@ public class PriceTask {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, Integer messageId) {
-        if (bot.getBotConfig().isEnableXslPriceQuery() && !remindGroupIdList.contains(group.getGroupId())) {
+        if (bot.getBotConfig().isEnableXslPriceQuery()
+                && !remindGroupIdList.contains(group.getGroupId())
+                && groupManager.isGroupXslPriceQueryEnabled(group.getGroupId())) {
             if (!groupManager.isRemindGroup(bot, group)) {
                 return;
             }
@@ -351,7 +353,9 @@ public class PriceTask {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (!remindGroupIdList.contains(group.getGroupId()) && bot.getBotConfig().isEnableXslPriceQuery()) {
+        if (!remindGroupIdList.contains(group.getGroupId())
+                && bot.getBotConfig().isEnableXslPriceQuery()
+                && groupManager.isGroupXslPriceQueryEnabled(group.getGroupId())) {
             boolean isPersonal = message.contains("道友的个人悬赏令");
             boolean isNewVersion = message.contains("天机悬赏令") && !message.contains("今日悬赏令刷新次数已用尽");
 
