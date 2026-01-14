@@ -237,10 +237,7 @@ public class RemoteVerifyCode {
                     String matchText = StringUtils.isNotBlank(emojiText) ? emojiText : text;
 
                     for (Button button : buttons.getButtonList()) {
-                        if (!matchText.equals(button.getLabel())) continue;
-
-                        isSuccess = true;
-                        if (StringUtils.isEmpty(verifyQQ)) {
+                        if (matchText.equals(button.getLabel()) || text.equals(button.getLabel())){
                             bot.clickKeyboardButton(
                                     group.getGroupId(),
                                     buttons.getBotAppid(),
@@ -248,10 +245,9 @@ public class RemoteVerifyCode {
                                     button.getData(),
                                     buttons.getMsgSeq()
                             );
-                        } else {
-                            bot.getGroup(group.getGroupId())
-                                    .sendMessage(new MessageChain().at(verifyQQ).text("点击" + text));
-                        }
+                             isSuccess = true;
+                        };
+                        
                         break;
                     }
 

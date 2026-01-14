@@ -107,16 +107,6 @@
         </dependency>
 
 
-        <!--        <dependency>-->
-<!--            <groupId>com.volcengine</groupId>-->
-<!--            <artifactId>volcengine-java-sdk-ark-runtime</artifactId>-->
-<!--            <version>0.2.20</version>-->
-<!--        </dependency>-->
-<!--        <dependency>-->
-<!--            <groupId>org.openpnp</groupId>-->
-<!--            <artifactId>opencv</artifactId>-->
-<!--            <version>4.7.0-0</version>-->
-<!--        </dependency>-->
     </dependencies>
 
     <build>

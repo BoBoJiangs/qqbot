@@ -112,3 +112,5 @@ docker:
 napcat:
   image: docker.1ms.run/mlikiowa/napcat-docker:latest
   data-root: /home/user/JavaBot
+  qq-data-dir: /root/qq_data
+  napcat-config-dir: /root/napcat_config

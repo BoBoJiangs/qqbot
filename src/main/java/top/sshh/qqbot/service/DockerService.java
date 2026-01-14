@@ -1,6 +1,7 @@
 package top.sshh.qqbot.service;
 
 import com.github.dockerjava.api.DockerClient;
+import com.github.dockerjava.api.command.InspectContainerResponse;
 import com.github.dockerjava.api.model.Container;
 import com.github.dockerjava.api.model.ContainerPort;
 import com.github.dockerjava.api.model.ExposedPort;
@@ -47,6 +48,12 @@ public class DockerService {
 
     @Value("${napcat.data-root:/root}")
     private String napcatDataRoot;
+
+    @Value("${napcat.qq-data-dir:/root/qq_data}")
+    private String napcatQqDataDir;
+
+    @Value("${napcat.napcat-config-dir:/root/napcat_config}")
+    private String napcatConfigDir;
 
     private volatile DockerClient dockerClient;
     private volatile boolean available = false;
@@ -169,6 +176,22 @@ public class DockerService {
         if (isSelfContainer(containerId)) {
             throw new RuntimeException("禁止删除当前运行中的服务容器（会导致页面/接口中断）");
         }
+        try {
+            InspectContainerResponse inspect = requireClient().inspectContainerCmd(containerId).exec();
+            String[] env = inspect.getConfig() == null ? null : inspect.getConfig().getEnv();
+            Integer wsPort = parseWsPortFromEnv(env);
+            if (wsPort != null) {
+                try {
+                    removeBotConfigFromYamlByPort(wsPort);
+                } catch (Exception e) {
+                    logger.error("Failed to remove config from application-local.yml for wsPort={}", wsPort, e);
+                }
+            } else {
+                logger.warn("WS_URL 未找到，跳过 application-local.yml 配置移除. containerId={}", containerId);
+            }
+        } catch (Exception e) {
+            logger.error("删除容器前检查失败，尝试继续删除容器. containerId={}, error={}", containerId, e.toString());
+        }
         requireClient().removeContainerCmd(containerId).exec();
     }
 
@@ -210,10 +233,10 @@ public class DockerService {
         if (uid == null || uid.isBlank()) uid = "0";
         if (gid == null || gid.isBlank()) gid = "0";
 
-        String base = napcatDataRoot == null ? "" : napcatDataRoot.trim();
-        if (base.isEmpty()) throw new RuntimeException("napcat.data-root 未配置");
-        String hostQqData = base + "/napcat/qq_data";
-        String hostNapcatConfig = base + "/napcat/napcat_config";
+        String hostQqData = napcatQqDataDir == null ? "" : napcatQqDataDir.trim();
+        String hostNapcatConfig = napcatConfigDir == null ? "" : napcatConfigDir.trim();
+        if (hostQqData.isEmpty()) hostQqData = "/root/qq_data";
+        if (hostNapcatConfig.isEmpty()) hostNapcatConfig = "/root/napcat_config";
 
         ExposedPort containerPort = ExposedPort.tcp(6099);
         Ports portBindings = new Ports();
@@ -255,7 +278,9 @@ public class DockerService {
         result.put("containerName", containerName);
         result.put("hostPort", hostPort);
         result.put("account", qq);
-        result.put("dataDir", base + "/napcat/" + containerName);
+        result.put("dataRoot", napcatDataRoot);
+        result.put("qqDataDir", hostQqData);
+        result.put("napcatConfigDir", hostNapcatConfig);
         return result;
     }
 
@@ -289,8 +314,10 @@ public class DockerService {
 
         String writerContainerId = null;
         try {
+            String hostNapcatConfig = napcatConfigDir == null ? "" : napcatConfigDir.trim();
+            if (hostNapcatConfig.isEmpty()) hostNapcatConfig = "/root/napcat_config";
             HostConfig hostConfig = HostConfig.newHostConfig()
-                    .withBinds(new Bind("/root/napcat_config", new Volume("/mnt")));
+                    .withBinds(new Bind(hostNapcatConfig, new Volume("/mnt")));
 
             writerContainerId = requireClient()
                     .createContainerCmd(napcatImage)
@@ -320,7 +347,9 @@ public class DockerService {
                 }
             }
         } catch (Exception e) {
-            throw new RuntimeException("写入宿主机 /root/napcat_config 失败: " + e.getMessage(), e);
+            String hostNapcatConfig = napcatConfigDir == null ? "" : napcatConfigDir.trim();
+            if (hostNapcatConfig.isEmpty()) hostNapcatConfig = "/root/napcat_config";
+            throw new RuntimeException("写入宿主机 " + hostNapcatConfig + " 失败: " + e.getMessage(), e);
         } finally {
             if (writerContainerId != null) {
                 try {
@@ -393,6 +422,66 @@ public class DockerService {
         Files.write(configPath, lines);
     }
 
+    private Integer parseWsPortFromEnv(String[] env) {
+        if (env == null) return null;
+        for (String e : env) {
+            if (e == null) continue;
+            if (!e.startsWith("WS_URL=")) continue;
+            String v = e.substring("WS_URL=".length()).trim();
+            int idx = v.lastIndexOf(':');
+            if (idx < 0) return null;
+            String tail = v.substring(idx + 1).trim();
+            String digits = tail.replaceAll("[^0-9]", "");
+            if (digits.isEmpty()) return null;
+            try {
+                return Integer.parseInt(digits);
+            } catch (Exception ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private void removeBotConfigFromYamlByPort(int wsPort) throws java.io.IOException {
+        Path configPath = Path.of("config/application-local.yml");
+        if (!Files.exists(configPath)) return;
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(configPath);
+        } catch (java.io.IOException e) {
+            return;
+        }
+        boolean changed = false;
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (!line.trim().equals("- type: ws-reverse")) continue;
+
+            int start = i;
+            int end = i + 1;
+            boolean matchPort = false;
+            while (end < lines.size()) {
+                String ln = lines.get(end);
+                String t = ln.trim();
+                if (t.startsWith("- type:")) break;
+                if (t.equals("url: ws://0.0.0.0:" + wsPort)) {
+                    matchPort = true;
+                }
+                end++;
+            }
+
+            if (matchPort) {
+                for (int k = end - 1; k >= start; k--) {
+                    lines.remove(k);
+                }
+                changed = true;
+                i = start - 1;
+            }
+        }
+        if (changed) {
+            Files.write(configPath, lines, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.CREATE);
+        }
+    }
+
     private boolean isSelfContainer(String containerId) {
         if (containerId == null || containerId.isEmpty()) return false;
         if (selfContainerIdPrefix == null || selfContainerIdPrefix.isEmpty()) return false;
@@ -413,6 +502,8 @@ public class DockerService {
         info.put("selfContainerIdPrefix", selfContainerIdPrefix);
         info.put("napcatImage", napcatImage);
         info.put("napcatDataRoot", napcatDataRoot);
+        info.put("napcatQqDataDir", napcatQqDataDir);
+        info.put("napcatConfigDir", napcatConfigDir);
         if (resolvedDockerHost != null && resolvedDockerHost.startsWith("unix://")) {
             String socketPath = resolvedDockerHost.substring("unix://".length());
             info.put("unixSocketPath", socketPath);
