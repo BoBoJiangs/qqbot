@@ -28,7 +28,7 @@ public class QqBotApplication {
             try {
                 serverSocket = new ServerSocket(lockPort);
             } catch (IOException e) {
-                System.out.println("启动失败，之前启动的程序没有关闭！！！！");
+                System.out.println("启动失败，之前启动的程序没有关闭！！！");
                 System.exit(1);
             }
 
