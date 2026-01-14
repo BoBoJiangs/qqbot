@@ -32,7 +32,7 @@ public class AutoBuyGoods {
     private static final Logger logger = LoggerFactory.getLogger(AutoBuyGoods.class);
     private final ExecutorService customPool = Executors.newCachedThreadPool();
 
-    /** 每个 botId 对应的捡漏队列 */
+    /** 每个 botId 对应的捡漏队列  的*/
     private final Map<Long, List<ProductPrice>> autoBuyMap = new ConcurrentHashMap<>();
     private final Map<Long, Set<String>> pendingBuyCodeMap = new ConcurrentHashMap<>();
     private final Map<Long, Long> inFlightBuyTimeMap = new ConcurrentHashMap<>();
