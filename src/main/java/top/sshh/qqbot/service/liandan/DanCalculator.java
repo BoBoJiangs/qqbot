@@ -56,18 +56,15 @@ public class DanCalculator {
     }
 
     // ======================= 事件入口 =======================
-    @OnQQConnected
-    public void onConnected(Bot bot) {
-        BotConfig botConfig = bot.getBotConfig();
-        if (!botConfig.isEnableAlchemy()) return;
-
-        customPool.submit(() -> {
-            loadOrCreateConfig(bot.getBotId());
-//            loadData(bot.getBotId());
-//            calculateAllDans(bot.getBotId());
-            addAutoBuyHerbs(bot.getBotId());
-        });
-    }
+//    @OnQQConnected
+//    public void onConnected(Bot bot) {
+//        BotConfig botConfig = bot.getBotConfig();
+//
+//
+//        customPool.submit(() -> {
+//
+//        });
+//    }
 
     // ======================= 配置文件 =======================
     public void loadOrCreateConfig(Long botId) {

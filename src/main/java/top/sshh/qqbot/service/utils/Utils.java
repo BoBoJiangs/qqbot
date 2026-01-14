@@ -1,6 +1,7 @@
 package top.sshh.qqbot.service.utils;
 
 import com.zhuangxv.bot.core.Bot;
+import com.zhuangxv.bot.core.Button;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
@@ -15,6 +16,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 
 public class Utils {
 //    public static boolean isAtSelf(Bot bot, Group group) {
@@ -49,6 +51,35 @@ public class Utils {
         if (price <= 1500) return 0.15;
         if (price <= 2000) return 0.2;
         return 0.3;
+    }
+
+    public static String formatButtons(List<Button> buttonList, int buttonsPerRow) {
+        if (buttonList == null || buttonList.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        int totalButtons = buttonList.size();
+        int rows = (int) Math.ceil((double) totalButtons / buttonsPerRow);
+
+        for (int row = 0; row < rows; row++) {
+            for (int col = 0; col < buttonsPerRow; col++) {
+                int index = row * buttonsPerRow + col;
+                if (index >= totalButtons) {
+                    break;
+                }
+                Button button = buttonList.get(index);
+                sb.append(" [").append(index + 1).append("] ").append(button.getLabel());
+
+                // 添加空格分隔，最后一项不加
+                if (col < buttonsPerRow - 1 && index < totalButtons - 1) {
+                    sb.append("  ");
+                }
+            }
+            sb.append("\n");
+        }
+
+        return sb.toString();
     }
 
 //    public static void forwardMessage(Bot bot,long xxGroupId, String message){

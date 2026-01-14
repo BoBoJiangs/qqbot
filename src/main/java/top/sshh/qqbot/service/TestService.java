@@ -445,6 +445,7 @@ public class TestService {
                 botConfig.setEnableAlchemy(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
                 saveBotConfig(bot);
+                onConnected(bot);
             } else if ("关闭炼丹模块".equals(message)) {
                 botConfig.setEnableAlchemy(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
@@ -673,6 +674,10 @@ public class TestService {
 
         customPool.submit(() -> {
             loadBotConfig(bot);
+
+            if (!botConfig.isEnableAlchemy()) return;
+            danCalculator.loadOrCreateConfig(bot.getBotId());
+            danCalculator.addAutoBuyHerbs(bot.getBotId());
         });
     }
 
@@ -1415,7 +1420,7 @@ public class TestService {
                     buttonBuilder.append("\n");
                     buttonBuilder.append("\n");
 //                    buttonBuilder.append("【");
-                    buttonBuilder.append(formatButtons(buttonList,4));
+                    buttonBuilder.append(Utils.formatButtons(buttonList,4));
                     MessageChain messageChain1 = new MessageChain();
                     messageChain1.at(remindBot.getBotConfig().getMasterQQ() + "").text("\n").image(buttons.getImageUrl()).text(buttonBuilder.toString());
                     bot.getGroup(groupId).sendMessage(messageChain1);
@@ -1429,34 +1434,7 @@ public class TestService {
 
     }
 
-    public static String formatButtons(List<Button> buttonList, int buttonsPerRow) {
-        if (buttonList == null || buttonList.isEmpty()) {
-            return "";
-        }
 
-        StringBuilder sb = new StringBuilder();
-        int totalButtons = buttonList.size();
-        int rows = (int) Math.ceil((double) totalButtons / buttonsPerRow);
-
-        for (int row = 0; row < rows; row++) {
-            for (int col = 0; col < buttonsPerRow; col++) {
-                int index = row * buttonsPerRow + col;
-                if (index >= totalButtons) {
-                    break;
-                }
-                Button button = buttonList.get(index);
-                sb.append(" [").append(index + 1).append("] ").append(button.getLabel());
-
-                // 添加空格分隔，最后一项不加
-                if (col < buttonsPerRow - 1 && index < totalButtons - 1) {
-                    sb.append("  ");
-                }
-            }
-            sb.append("\n");
-        }
-
-        return sb.toString();
-    }
 
     public String[] callShituAPI(String shituApiUrl, String imageUrl, String titleText, String annu, String mode) {
         HttpURLConnection conn = null;

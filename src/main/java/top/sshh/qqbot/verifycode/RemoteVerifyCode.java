@@ -237,7 +237,7 @@ public class RemoteVerifyCode {
                     String matchText = StringUtils.isNotBlank(emojiText) ? emojiText : text;
 
                     for (Button button : buttons.getButtonList()) {
-                        if (matchText.equals(button.getLabel()) || text.equals(button.getLabel())){
+                        if (matchText.equals(button.getLabel()) || text.equals(button.getLabel())) {
                             bot.clickKeyboardButton(
                                     group.getGroupId(),
                                     buttons.getBotAppid(),
@@ -245,10 +245,11 @@ public class RemoteVerifyCode {
                                     button.getData(),
                                     buttons.getMsgSeq()
                             );
-                             isSuccess = true;
-                        };
-                        
-                        break;
+                            isSuccess = true;
+                            break;
+                        }
+
+
                     }
 
 
@@ -499,7 +500,9 @@ public class RemoteVerifyCode {
             if (bot.getBotConfig().getAutoVerifyModel() != 2) {
 
                 if (xxGroupId > 0) {
-                    testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
+                    if(bot.getBotConfig().getMasterQQ() != 819463350L){
+                        testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
+                    }
                     bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
                 } else {
                     bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
@@ -520,14 +523,16 @@ public class RemoteVerifyCode {
 
     public void sendFailMessage(Bot bot, String message, Buttons buttons, MessageChain messageChain, RecognitionResult recognitionResult) {
         BotConfig botConfig = bot.getBotConfig();
-        if (buttons != null && !buttons.getButtonList().isEmpty() && botConfig.getMasterQQ() == 819463350L && xxGroupId>0) {
+        if (buttons != null && !buttons.getButtonList().isEmpty() && botConfig.getMasterQQ() == 819463350L && xxGroupId > 0) {
             StringBuilder stringBuilder = new StringBuilder();
+            stringBuilder.append(Utils.formatButtons(buttons.getButtonList(),4));
             if (recognitionResult.emojiList != null && !recognitionResult.emojiList.isEmpty()) {
                 stringBuilder.append("识别表情：");
                 stringBuilder.append(recognitionResult.emojiList);
                 stringBuilder.append("\n");
             }
-            stringBuilder.append("正确答案："+recognitionResult.answer);
+            stringBuilder.append("正确答案：" + recognitionResult.answer);
+            stringBuilder.append("\n");
             stringBuilder.append(buttons.getImageText());
             MessageChain messageChain1 = new MessageChain();
             messageChain1.text("\n").image(buttons.getImageUrl()).text(stringBuilder.toString());
@@ -572,7 +577,7 @@ public class RemoteVerifyCode {
             imageBytes = downloadImageBytes(url);
             // 上传到服务器
             String hash = md5(url);
-            String returnMsg = uploadMultipart(shituApiUrl + "report_error", imageBytes, "error_" + hash + ".jpg", question, answer,url);
+            String returnMsg = uploadMultipart(shituApiUrl + "report_error", imageBytes, "error_" + hash + ".jpg", question, answer, url);
             RecognitionResult result = JSON.parseObject(returnMsg, RecognitionResult.class);
             if (result.msg.contains("已保存")) {
                 groupManager.verifyCount.addError();
