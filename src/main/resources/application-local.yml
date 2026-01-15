@@ -114,3 +114,11 @@ napcat:
   data-root: /home/user/JavaBot
   qq-data-dir: /root/qq_data
   napcat-config-dir: /root/napcat_config
+
+update:
+  enabled: true
+  baseUrl: http://113.44.42.139:7000/
+  autoApply: true
+  autoRestart: true
+  checkIntervalMs: 3600000
+  initialDelayMs: 60000

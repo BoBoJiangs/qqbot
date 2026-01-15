@@ -10,11 +10,13 @@
     </parent>
     <groupId>top.sshh</groupId>
     <artifactId>bot</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
     <name>bot</name>
     <description>bot</description>
     <properties>
         <java.version>11</java.version>
+        <!-- 定义打包文件名格式 -->
+        <!-- <build.finalName>${project.artifactId}-${project.version}</build.finalName> -->
     </properties>
     <dependencies>
         <dependency>
@@ -124,6 +126,13 @@
                         </exclude>
                     </excludes>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

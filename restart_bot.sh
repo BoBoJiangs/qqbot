@@ -9,7 +9,12 @@ log() {
 : > "$SCRIPT_DIR/restart.log"
 log "=== 开始重启流程 ==="
 
-OLD_PID=$(pgrep -f "java.*-jar $SCRIPT_DIR/bot.jar")
+OLD_PID=""
+if command -v pgrep >/dev/null 2>&1; then
+  OLD_PID=$(pgrep -f "java.*-jar $SCRIPT_DIR/bot.jar" | head -n 1)
+else
+  OLD_PID=$(ps -eo pid,args | grep -E "java.*-jar[[:space:]]+$SCRIPT_DIR/bot.jar" | grep -v grep | awk '{print $1}' | head -n 1)
+fi
 log "检测到旧进程PID: $OLD_PID"
 
 if [ -n "$OLD_PID" ]; then
@@ -33,7 +38,7 @@ if [ -n "$OLD_PID" ]; then
 fi
 
 log "清理文件锁..."
-lsof -t "$SCRIPT_DIR/bot.jar" > /tmp/bot.lock.pids 2>/dev/null
+(command -v lsof >/dev/null 2>&1 && lsof -t "$SCRIPT_DIR/bot.jar" > /tmp/bot.lock.pids 2>/dev/null) || : > /tmp/bot.lock.pids
 if [ -s /tmp/bot.lock.pids ]; then
   log "发现锁定进程: $(tr '\n' ' ' < /tmp/bot.lock.pids)"
   while read -r pid; do
@@ -53,7 +58,11 @@ clean_old_log() {
 
   # 解除日志文件锁
   log "解除日志文件锁定..."
-  lsof -t "$log_file" | xargs -r kill -9 2>/dev/null
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -t "$log_file" 2>/dev/null | while read -r pid; do
+      [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null
+    done
+  fi
   sleep 1  # 等待文件句柄释放
 
   for i in {1..5}; do
@@ -74,6 +83,17 @@ clean_old_log() {
 
 log "开始清理旧日志..."
 clean_old_log
+
+if [ -f "$SCRIPT_DIR/bot.jar.new" ]; then
+  TS=$(date '+%Y%m%d%H%M%S')
+  log "检测到更新包 bot.jar.new，开始替换（备份旧 jar）"
+  if [ -f "$SCRIPT_DIR/bot.jar" ]; then
+    mv -f "$SCRIPT_DIR/bot.jar" "$SCRIPT_DIR/bot.jar.bak.$TS" 2>/dev/null
+  fi
+  mv -f "$SCRIPT_DIR/bot.jar.new" "$SCRIPT_DIR/bot.jar"
+  chmod 644 "$SCRIPT_DIR/bot.jar" 2>/dev/null
+  log "替换完成"
+fi
 
 log "启动新进程..."
 nohup setsid java \

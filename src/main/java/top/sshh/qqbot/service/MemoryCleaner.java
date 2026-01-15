@@ -26,6 +26,7 @@ import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.OpenOption;
@@ -236,9 +237,9 @@ public class MemoryCleaner {
         }
     }
 
-    private boolean handleRestart(long groupId, Bot bot) {
+    private boolean handleRestart() {
         try {
-            String scriptPath = this.generateRestartScript(groupId);
+            String scriptPath = this.generateRestartScript();
             this.executeRestartScript(scriptPath);
             System.exit(0);
             return true;
@@ -249,7 +250,11 @@ public class MemoryCleaner {
         }
     }
 
-    private String generateRestartScript(long groupId) throws IOException {
+    public void restartByScript() {
+        this.handleRestart();
+    }
+
+    private String generateRestartScript() throws IOException {
         String os = System.getProperty("os.name").toLowerCase();
         String scriptName = os.contains("win") ? "restart_bot.bat" : "restart_bot.sh";
         Path scriptPath = Paths.get(System.getProperty("user.dir"), scriptName);
@@ -261,7 +266,7 @@ public class MemoryCleaner {
                 scriptContent = "#!/bin/bash\nSCRIPT_DIR=$(cd \"$(dirname \"$0\")\" && pwd)\ncd \"$SCRIPT_DIR\" || exit 1\n\nlog() {\n  echo \"[$(date '+%Y-%m-%d %H:%M:%S')] $1\" >> \"$SCRIPT_DIR/restart.log\"\n}\n\n: > \"$SCRIPT_DIR/restart.log\"\nlog \"=== 开始重启流程 ===\"\n\nOLD_PID=$(pgrep -f \"java.*-jar $SCRIPT_DIR/bot.jar\")\nlog \"检测到旧进程PID: $OLD_PID\"\n\nif [ -n \"$OLD_PID\" ]; then\n  log \"发送SIGTERM到进程 $OLD_PID\"\n  kill \"$OLD_PID\"\n  \n  for i in {1..15}; do\n    if ! ps -p \"$OLD_PID\" > /dev/null; then\n      log \"进程 $OLD_PID 已正常退出\"\n      break\n    fi\n    sleep 1\n    log \"等待进程退出 ($i/15)...\"\n  done\n  \n  if ps -p \"$OLD_PID\" > /dev/null; then\n    log \"强制终止进程 $OLD_PID\"\n    kill -9 \"$OLD_PID\"\n    sleep 2\n  fi\nfi\n\nlog \"清理文件锁...\"\nlsof -t \"$SCRIPT_DIR/bot.jar\" > /tmp/bot.lock.pids 2>/dev/null\nif [ -s /tmp/bot.lock.pids ]; then\n  log \"发现锁定进程: $(tr '\\n' ' ' < /tmp/bot.lock.pids)\"\n  while read -r pid; do\n    if ps -p \"$pid\" > /dev/null; then\n      log \"终止残留进程 $pid\"\n      kill -9 \"$pid\" 2>/dev/null && sleep 0.5\n    fi\n  done < /tmp/bot.lock.pids\nfi\nrm -f /tmp/bot.lock.pids\nchmod 644 \"$SCRIPT_DIR/bot.jar\" 2>/dev/null\n\nclean_old_log() {\n  local log_file=\"$SCRIPT_DIR/bot.log\"\n  \n  [ ! -f \"$log_file\" ] && log \"未找到旧日志文件\" && return 0\n\n  # 解除日志文件锁\n  log \"解除日志文件锁定...\"\n  lsof -t \"$log_file\" | xargs -r kill -9 2>/dev/null\n  sleep 1  # 等待文件句柄释放\n\n  for i in {1..5}; do\n    if rm -f \"$log_file\"; then\n      log \"✅ 成功删除旧日志\"\n      return 0\n    fi\n    log \"第${i}次删除失败，修改权限后重试...\"\n    chmod 666 \"$log_file\" 2>/dev/null  # 修复权限问题\n    sleep 1\n  done\n\n  if [ -f \"$log_file\" ]; then\n    log \"⚠️ 无法删除，执行内容截断\"\n    : > \"$log_file\"  # 清空内容\n  fi\n}\n\nlog \"开始清理旧日志...\"\nclean_old_log\n\nlog \"启动新进程...\"\nnohup setsid java \\\n  -Dfile.encoding=UTF-8 \\\n  -Duser.timezone=Asia/Shanghai \\\n  -jar \"$SCRIPT_DIR/bot.jar\" \\\n  --spring.config.location=file:\"$SCRIPT_DIR/config/\" \\\n  >> \"$SCRIPT_DIR/bot.log\" 2>&1 &\n\nMAX_WAIT=30\nSUCCESS=0\nfor ((i=1; i<=$MAX_WAIT; i++)); do\n  NEW_PID=$(pgrep -f \"java.*-jar $SCRIPT_DIR/bot.jar\")\n  if [ -n \"$NEW_PID\" ]; then\n    log \"启动成功！新PID: $NEW_PID\"\n    SUCCESS=1\n    break\n  fi\n  \n  if tail -n 5 \"$SCRIPT_DIR/bot.log\" | grep -q -E \"ERROR|Exception|main.* exited\"; then\n    log \"检测到启动错误，终止等待\"\n    break\n  fi\n  \n  sleep 1\ndone\n\nif [ $SUCCESS -eq 0 ]; then\n  log \"❌ 重启失败！最后10行日志：\"\n  tail -n 10 \"$SCRIPT_DIR/bot.log\" >> \"$SCRIPT_DIR/restart.log\"\n  exit 1\nfi\n\nlog \"=== 重启完成 ===\"\nexit 0";
             }
 
-            Files.write(scriptPath, scriptContent.getBytes(), new OpenOption[0]);
+            Files.write(scriptPath, scriptContent.getBytes(StandardCharsets.UTF_8), new OpenOption[0]);
             if (!os.contains("win")) {
                 Set<PosixFilePermission> perms = new HashSet();
                 perms.add(PosixFilePermission.OWNER_READ);
@@ -275,13 +280,81 @@ public class MemoryCleaner {
             }
         }
 
+        this.ensureRestartScriptSupportsUpdate(scriptPath, os.contains("win"));
+        this.ensureRestartScriptPortable(scriptPath, os.contains("win"));
         return scriptPath.toString();
+    }
+
+    private void ensureRestartScriptPortable(Path scriptPath, boolean win) {
+        if (win) return;
+        try {
+            if (!Files.exists(scriptPath, new LinkOption[0])) return;
+            String existing = Files.readString(scriptPath, StandardCharsets.UTF_8);
+            if (existing == null) return;
+
+            String updated = existing;
+            updated = updated.replace(
+                    "OLD_PID=$(pgrep -f \"java.*-jar $SCRIPT_DIR/bot.jar\")",
+                    "OLD_PID=\"\"\nif command -v pgrep >/dev/null 2>&1; then\n  OLD_PID=$(pgrep -f \"java.*-jar $SCRIPT_DIR/bot.jar\" | head -n 1)\nelse\n  OLD_PID=$(ps -eo pid,args | grep -E \"java.*-jar[[:space:]]+$SCRIPT_DIR/bot.jar\" | grep -v grep | awk '{print $1}' | head -n 1)\nfi"
+            );
+            updated = updated.replace(
+                    "lsof -t \"$SCRIPT_DIR/bot.jar\" > /tmp/bot.lock.pids 2>/dev/null",
+                    "(command -v lsof >/dev/null 2>&1 && lsof -t \"$SCRIPT_DIR/bot.jar\" > /tmp/bot.lock.pids 2>/dev/null) || : > /tmp/bot.lock.pids"
+            );
+            updated = updated.replace(
+                    "lsof -t \"$log_file\" | xargs -r kill -9 2>/dev/null",
+                    "if command -v lsof >/dev/null 2>&1; then\n    lsof -t \"$log_file\" 2>/dev/null | while read -r pid; do\n      [ -n \"$pid\" ] && kill -9 \"$pid\" 2>/dev/null\n    done\n  fi"
+            );
+
+            if (!updated.equals(existing)) {
+                Files.write(scriptPath, updated.getBytes(StandardCharsets.UTF_8), new OpenOption[0]);
+            }
+        } catch (Exception var5) {
+        }
+    }
+
+    private void ensureRestartScriptSupportsUpdate(Path scriptPath, boolean win) {
+        try {
+            if (!Files.exists(scriptPath, new LinkOption[0])) return;
+            String existing = Files.readString(scriptPath, StandardCharsets.UTF_8);
+            if (existing == null || existing.contains("bot.jar.new")) return;
+            String updated = this.injectUpdateStep(existing, win);
+            if (updated == null || updated.equals(existing)) return;
+            Files.write(scriptPath, updated.getBytes(StandardCharsets.UTF_8), new OpenOption[0]);
+        } catch (Exception var4) {
+        }
+    }
+
+    private String injectUpdateStep(String existing, boolean win) {
+        if (existing == null) return null;
+        if (win) {
+            if (existing.contains("bot.jar.new")) return existing;
+            String needle = "start \"\" javaw";
+            String snippet = "if exist \"%SCRIPT_DIR%bot.jar.new\" (\r\n  set TS=%date:~0,4%%date:~5,2%%date:~8,2%%time:~0,2%%time:~3,2%%time:~6,2%\r\n  set TS=%TS: =0%\r\n  if exist \"%SCRIPT_DIR%bot.jar\" ren \"%SCRIPT_DIR%bot.jar\" bot.jar.bak.%TS%\r\n  move /Y \"%SCRIPT_DIR%bot.jar.new\" \"%SCRIPT_DIR%bot.jar\" > nul\r\n)\r\n";
+            int idx = existing.indexOf(needle);
+            if (idx >= 0) return existing.substring(0, idx) + snippet + existing.substring(idx);
+            return existing + "\r\n" + snippet;
+        } else {
+            if (existing.contains("bot.jar.new")) return existing;
+            String needle = "log \"启动新进程...\"";
+            String snippet = "if [ -f \"$SCRIPT_DIR/bot.jar.new\" ]; then\n  TS=$(date '+%Y%m%d%H%M%S')\n  log \"检测到更新包 bot.jar.new，开始替换（备份旧 jar）\"\n  if [ -f \"$SCRIPT_DIR/bot.jar\" ]; then\n    mv -f \"$SCRIPT_DIR/bot.jar\" \"$SCRIPT_DIR/bot.jar.bak.$TS\" 2>/dev/null\n  fi\n  mv -f \"$SCRIPT_DIR/bot.jar.new\" \"$SCRIPT_DIR/bot.jar\"\n  chmod 644 \"$SCRIPT_DIR/bot.jar\" 2>/dev/null\n  log \"替换完成\"\nfi\n\n";
+            int idx = existing.indexOf(needle);
+            if (idx >= 0) return existing.substring(0, idx) + snippet + existing.substring(idx);
+            return existing + "\n" + snippet;
+        }
     }
 
 
 
     private void executeRestartScript(String scriptPath) throws IOException {
-        Process process = (new ProcessBuilder(new String[0])).command("bash", scriptPath).directory(new File(System.getProperty("user.dir"))).redirectErrorStream(true).start();
+        String os = System.getProperty("os.name").toLowerCase();
+        ProcessBuilder pb = (new ProcessBuilder(new String[0])).directory(new File(System.getProperty("user.dir"))).redirectErrorStream(true);
+        if (os.contains("win")) {
+            pb.command("cmd", "/c", scriptPath);
+        } else {
+            pb.command("bash", scriptPath);
+        }
+        Process process = pb.start();
         (new Thread(() -> {
             try {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
@@ -416,7 +489,7 @@ public class MemoryCleaner {
                     long groupId = group.getGroupId();
                     this.groupManager.loadTasksFromFile();
                     group.sendMessage((new MessageChain()).reply(msgId).text("✅ 重启指令已接收，正在准备重启..."));
-                    this.handleRestart(groupId, bot);
+                    this.handleRestart();
                 } catch (Exception e) {
 
                     logger.error("重启处理失败", e.getMessage());

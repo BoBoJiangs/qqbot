@@ -1542,7 +1542,6 @@ public class TestService {
         }
 
         if (message.contains("https") && message.contains("qqbot") && message.contains("" + bot.getBotId())) {
-
             if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 5) {
                 BotConfig botConfig = bot.getBotConfig();
                 botConfig.setStop(true);
