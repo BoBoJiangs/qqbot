@@ -4,401 +4,87 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QQ Bot 配置管理</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Microsoft YaHei', Arial, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            overflow: hidden;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
-        }
-
-        .header p {
-            font-size: 1.2em;
-            opacity: 0.9;
-        }
-
-        .content {
-            padding: 30px;
-        }
-
-        .bot-selector {
-            margin-bottom: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            border-left: 4px solid #4facfe;
-        }
-
-        .bot-selector h3 {
-            margin-bottom: 15px;
-            color: #333;
-        }
-
-        .bot-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-
-        .bot-card {
-            background: white;
-            border: 2px solid #e9ecef;
-            border-radius: 8px;
-            padding: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        .bot-card:hover {
-            border-color: #4facfe;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(79, 172, 254, 0.2);
-        }
-
-        .bot-card.active {
-            border-color: #4facfe;
-            background: #f0f8ff;
-        }
-
-        .bot-name {
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 5px;
-        }
-
-        .bot-info {
-            color: #666;
-            font-size: 0.9em;
-        }
-
-        .config-section {
-            display: none;
-        }
-
-        .config-section.active {
-            display: block;
-        }
-
-        .config-tabs {
-            display: flex;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #e9ecef;
-        }
-
-        .tab {
-            padding: 12px 24px;
-            background: #f8f9fa;
-            border: none;
-            cursor: pointer;
-            border-radius: 8px 8px 0 0;
-            margin-right: 5px;
-            transition: all 0.3s ease;
-        }
-
-        .tab.active {
-            background: #4facfe;
-            color: white;
-        }
-
-        .tab-content {
-            padding: 20px;
-            background: white;
-            border-radius: 0 0 8px 8px;
-            min-height: 400px;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-row {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: bold;
-            color: #333;
-        }
-
-        input, select, textarea {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #e9ecef;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.3s ease;
-        }
-
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #4facfe;
-        }
-
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        .checkbox-group input[type="checkbox"] {
-            width: auto;
-        }
-
-        .btn {
-            padding: 12px 24px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            margin-right: 10px;
-            margin-bottom: 10px;
-        }
-
-        .btn-primary {
-            background: #4facfe;
-            color: white;
-        }
-
-        .btn-primary:hover {
-            background: #3d8bfe;
-            transform: translateY(-2px);
-        }
-
-        .btn-success {
-            background: #28a745;
-            color: white;
-        }
-
-        .btn-success:hover {
-            background: #218838;
-            transform: translateY(-2px);
-        }
-
-        .btn-warning {
-            background: #ffc107;
-            color: #212529;
-        }
-
-        .btn-warning:hover {
-            background: #e0a800;
-            transform: translateY(-2px);
-        }
-
-        .btn-danger {
-            background: #dc3545;
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background: #c82333;
-            transform: translateY(-2px);
-        }
-
-        .status-indicator {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 8px;
-        }
-
-        .status-online {
-            background: #28a745;
-        }
-
-        .status-offline {
-            background: #dc3545;
-        }
-
-        .status-busy {
-            background: #ffc107;
-        }
-
-        .runtime-status {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            margin-top: 20px;
-        }
-
-        .runtime-status h4 {
-            margin-bottom: 15px;
-            color: #333;
-        }
-
-        .status-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-        }
-
-        .status-item {
-            background: white;
-            padding: 15px;
-            border-radius: 6px;
-            border-left: 4px solid #4facfe;
-        }
-
-        .status-label {
-            font-size: 0.9em;
-            color: #666;
-            margin-bottom: 5px;
-        }
-
-        .status-value {
-            font-weight: bold;
-            color: #333;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-
-        .error {
-            background: #f8d7da;
-            color: #721c24;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            border: 1px solid #f5c6cb;
-        }
-
-        .success {
-            background: #d4edda;
-            color: #155724;
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            border: 1px solid #c3e6cb;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-
-        .modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 20px;
-            border-radius: 10px;
-            width: 80%;
-            max-width: 600px;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-
-        .close:hover {
-            color: black;
-        }
-
-        @media (max-width: 768px) {
-            .container {
-                margin: 10px;
-                border-radius: 10px;
-            }
-            
-            .content {
-                padding: 20px;
-            }
-            
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            
-            .bot-list {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
+    <link rel="stylesheet" href="css/admin.css">
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🤖 QQ Bot 配置管理</h1>
-            <p>可视化配置管理界面 - 轻松管理你的Bot设置</p>
-        </div>
-
-        <div class="content">
-            <!-- Bot选择器 -->
-            <div class="bot-selector">
-                <h3>选择要配置的Bot</h3>
-                <div class="bot-list" id="botList">
-                    <div class="loading">正在加载Bot列表...</div>
-                </div>
+<body class="admin-body">
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-mark"></div>
+                <div class="brand-title">NapCat</div>
+                <div class="brand-sub">Bot 管理</div>
             </div>
-
-            <!-- 配置区域 -->
-            <div class="config-section" id="configSection">
-                <div class="config-tabs">
-                    <button class="tab active" onclick="showTab('basic')">基础配置</button>
-                    <button class="tab" onclick="showTab('reward')">悬赏令配置</button>
-                    <button class="tab" onclick="showTab('cultivation')">修炼配置</button>
-                    <button class="tab" onclick="showTab('sect')">宗门配置</button>
-                    <button class="tab" onclick="showTab('query')">查询功能</button>
-                    <button class="tab" onclick="showTab('control')">控制配置</button>
-                    <button class="tab" onclick="showTab('runtime')">运行时状态</button>
+            <div class="nav">
+                <div class="nav-group-title">基础信息</div>
+                <a class="nav-item" href="/container-manager.html">
+                    <span class="nav-icon">📦</span>
+                    <span>容器管理</span>
+                </a>
+                <a class="nav-item active" href="/bot-config.html">
+                    <span class="nav-icon">🤖</span>
+                    <span>Bot 配置</span>
+                </a>
+            </div>
+            <div class="sidebar-footer">
+                <button class="nav-item" type="button" onclick="toggleTheme()" id="themeBtn">
+                    <span class="nav-icon">🌗</span>
+                    <span>切换主题</span>
+                </button>
+                <button class="nav-item logout" type="button" onclick="logout()">
+                    <span class="nav-icon">⎋</span>
+                    <span>退出</span>
+                </button>
+            </div>
+        </aside>
+        <main class="main">
+            <header class="topbar">
+                <div class="topbar-title">
+                    <div class="topbar-h1">Bot 配置管理</div>
+                    <div class="topbar-sub">可视化配置管理界面</div>
                 </div>
+                <div class="topbar-actions">
+                    <button class="btn btn-primary" type="button" onclick="saveConfig()">保存</button>
+                    <button class="btn btn-success" type="button" onclick="loadConfig()">刷新</button>
+                    <button class="btn btn-warning" type="button" onclick="resetConfig()">重置</button>
+                    <button class="btn" type="button" onclick="exportConfig()">导出</button>
+                    <button class="btn" type="button" onclick="showImportModal()">导入</button>
+                </div>
+            </header>
+            <section class="page">
+                <div class="panel">
+                    <div class="panel-inner">
+                        <div class="bot-selector">
+                            <h3>选择要配置的Bot</h3>
+                            <div class="bot-list" id="botList">
+                                <div class="loading">正在加载Bot列表...</div>
+                            </div>
+                        </div>
+
+                        <div class="config-section" id="configSection">
+                            <div class="config-tabs">
+                                <button class="tab active" onclick="showTab('basic')">基础配置</button>
+                                <button class="tab" onclick="showTab('reward')">悬赏令配置</button>
+                                <button class="tab" onclick="showTab('cultivation')">修炼配置</button>
+                                <button class="tab" onclick="showTab('sect')">宗门配置</button>
+                                <button class="tab" onclick="showTab('query')">查询功能</button>
+                                <button class="tab" onclick="showTab('control')">控制配置</button>
+                                <button class="tab" onclick="showTab('runtime')">运行时状态</button>
+                            </div>
 
                 <!-- 基础配置 -->
                 <div id="basic" class="tab-content">
                     <h3>基础配置</h3>
-                    <div class="form-row">
+                    <div class="form-row-grid">
                         <div class="form-group">
                             <label>Bot编号</label>
                             <input type="number" id="botNumber" placeholder="设置Bot编号">
                         </div>
+                        <div class="form-group">
+                            <label>AI称呼</label>
+                            <input type="text" id="aiCheng" placeholder="设置AI的自称">
+                        </div>
+                    </div>
+                    <div class="form-row-grid">
                         <div class="form-group">
                             <label>验证模式</label>
                             <select id="autoVerifyModel">
@@ -408,7 +94,7 @@
                             </select>
                         </div>
                     </div>
-                    <div class="form-row">
+                    <div class="form-row-grid">
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="enableAutoTask">
                             <label for="enableAutoTask">启用定时任务</label>
@@ -423,7 +109,7 @@
                 <!-- 悬赏令配置 -->
                 <div id="reward" class="tab-content" style="display: none;">
                     <h3>悬赏令配置</h3>
-                    <div class="form-row">
+                    <div class="form-row-grid">
                         <div class="form-group">
                             <label>悬赏令模式</label>
                             <select id="rewardMode">
@@ -448,7 +134,7 @@
                 <!-- 修炼配置 -->
                 <div id="cultivation" class="tab-content" style="display: none;">
                     <h3>修炼配置</h3>
-                    <div class="form-row">
+                    <div class="form-row-grid">
                         <div class="form-group">
                             <label>修炼模式</label>
                             <select id="cultivationMode">
@@ -468,7 +154,7 @@
                 <!-- 宗门配置 -->
                 <div id="sect" class="tab-content" style="display: none;">
                     <h3>宗门配置</h3>
-                    <div class="form-row">
+                    <div class="form-row-grid">
                         <div class="form-group">
                             <label>宗门任务模式</label>
                             <select id="sectMode">
@@ -477,7 +163,7 @@
                             </select>
                         </div>
                     </div>
-                    <div class="form-row">
+                    <div class="form-row-grid">
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="enableSectMission">
                             <label for="enableSectMission">启用宗门任务</label>
@@ -492,7 +178,7 @@
                 <!-- 查询功能 -->
                 <div id="query" class="tab-content" style="display: none;">
                     <h3>查询功能</h3>
-                    <div class="form-row">
+                    <div class="form-row-grid">
                         <div class="form-group checkbox-group">
                             <input type="checkbox" id="enableCheckPrice">
                             <label for="enableCheckPrice">启用价格查询</label>
@@ -511,7 +197,7 @@
                 <!-- 控制配置 -->
                 <div id="control" class="tab-content" style="display: none;">
                     <h3>控制配置</h3>
-                    <div class="form-row">
+                    <div class="form-row-grid">
                         <div class="form-group">
                             <label>主号QQ</label>
                             <input type="text" id="controlQQ" placeholder="控制QQ号，多个用&分隔">
@@ -537,36 +223,63 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- 操作按钮 -->
-                <div style="margin-top: 30px; text-align: center;">
-                    <button class="btn btn-primary" onclick="saveConfig()">💾 保存配置</button>
-                    <button class="btn btn-success" onclick="loadConfig()">🔄 刷新配置</button>
-                    <button class="btn btn-warning" onclick="resetConfig()">🔄 重置配置</button>
-                    <button class="btn btn-primary" onclick="exportConfig()">📤 导出配置</button>
-                    <button class="btn btn-primary" onclick="showImportModal()">📥 导入配置</button>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
+            </section>
+        </main>
     </div>
 
-    <!-- 导入配置模态框 -->
-    <div id="importModal" class="modal">
-        <div class="modal-content">
-            <span class="close" onclick="closeImportModal()">&times;</span>
-            <h3>导入配置</h3>
-            <textarea id="importConfig" rows="10" placeholder="请粘贴配置JSON内容..."></textarea>
-            <div style="margin-top: 20px; text-align: center;">
-                <button class="btn btn-primary" onclick="importConfig()">导入</button>
-                <button class="btn btn-danger" onclick="closeImportModal()">取消</button>
+    <div id="importModal" class="modal-mask">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">导入配置</div>
+                <button class="modal-close" type="button" onclick="closeImportModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="field">
+                    <label for="importConfig">配置 JSON</label>
+                    <textarea id="importConfig" rows="10" placeholder="请粘贴配置JSON内容..."></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn btn-danger" type="button" onclick="closeImportModal()">取消</button>
+                <button class="btn btn-primary" type="button" onclick="importConfig()">导入</button>
             </div>
         </div>
     </div>
 
     <script>
+        // 初始化主题
+        (function() {
+            var theme = localStorage.getItem('napcat_theme');
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        })();
+
+        function toggleTheme() {
+            var root = document.documentElement;
+            if (root.classList.contains('dark')) {
+                root.classList.remove('dark');
+                localStorage.setItem('napcat_theme', 'light');
+            } else {
+                root.classList.add('dark');
+                localStorage.setItem('napcat_theme', 'dark');
+            }
+        }
+
         function redirectToLogin() {
             const next = window.location.pathname + (window.location.search || '');
             window.location.href = '/login.html?next=' + encodeURIComponent(next);
+        }
+
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' });
+            } catch (e) {
+            }
+            redirectToLogin();
         }
 
         async function ensureAuthed() {
@@ -631,7 +344,7 @@
             Object.values(bots).forEach(bot => {
                 const botCard = document.createElement('div');
                 botCard.className = 'bot-card';
-                botCard.onclick = () => selectBot(bot.botId);
+                botCard.onclick = function() { selectBot(bot.botId, this); };
                 
                 botCard.innerHTML = `
                     <div class="bot-name">
@@ -649,14 +362,16 @@
         }
 
         // 选择Bot
-        async function selectBot(botId) {
+        async function selectBot(botId, cardElement) {
             currentBotId = botId;
             
             // 更新UI
             document.querySelectorAll('.bot-card').forEach(card => {
                 card.classList.remove('active');
             });
-            event.target.closest('.bot-card').classList.add('active');
+            if (cardElement) {
+                cardElement.classList.add('active');
+            }
             
             document.getElementById('configSection').classList.add('active');
             
@@ -690,29 +405,39 @@
 
         // 填充表单
         function fillForm(config) {
-            document.getElementById('botNumber').value = config.botNumber || '';
-            document.getElementById('autoVerifyModel').value = config.autoVerifyModel || 0;
-            document.getElementById('enableAutoTask').checked = config.enableAutoTask || false;
-            document.getElementById('enableAutomaticReply').checked = config.enableAutomaticReply || false;
+            const setValue = (id, value, def = '') => {
+                const el = document.getElementById(id);
+                if (el) el.value = (value !== null && value !== undefined) ? value : def;
+            };
+            const setCheck = (id, value) => {
+                const el = document.getElementById(id);
+                if (el) el.checked = !!value;
+            };
+
+            setValue('botNumber', config.botNumber);
+            setValue('aiCheng', config.aiCheng);
+            setValue('autoVerifyModel', config.autoVerifyModel, 0);
+            setCheck('enableAutoTask', config.enableAutoTask);
+            setCheck('enableAutomaticReply', config.enableAutomaticReply);
             
-            document.getElementById('rewardMode').value = config.rewardMode || 5;
-            document.getElementById('xslPriceLimit').value = config.xslPriceLimit || 1000;
-            document.getElementById('enableXslPriceQuery').checked = config.enableXslPriceQuery || false;
+            setValue('rewardMode', config.rewardMode, 5);
+            setValue('xslPriceLimit', config.xslPriceLimit, 1000);
+            setCheck('enableXslPriceQuery', config.enableXslPriceQuery);
             
-            document.getElementById('cultivationMode').value = config.cultivationMode || 0;
-            document.getElementById('enableAutoRepair').checked = config.enableAutoRepair || false;
+            setValue('cultivationMode', config.cultivationMode, 0);
+            setCheck('enableAutoRepair', config.enableAutoRepair);
             
-            document.getElementById('sectMode').value = config.sectMode || 1;
-            document.getElementById('enableSectMission').checked = config.enableSectMission || false;
-            document.getElementById('enableAutoField').checked = config.enableAutoField || false;
+            setValue('sectMode', config.sectMode, 1);
+            setCheck('enableSectMission', config.enableSectMission);
+            setCheck('enableAutoField', config.enableAutoField);
             
-            document.getElementById('enableCheckPrice').checked = config.enableCheckPrice || false;
-            document.getElementById('enableGuessTheIdiom').checked = config.enableGuessTheIdiom || false;
-            document.getElementById('enableAutoSecret').checked = config.enableAutoSecret || false;
+            setCheck('enableCheckPrice', config.enableCheckPrice);
+            setCheck('enableGuessTheIdiom', config.enableGuessTheIdiom);
+            setCheck('enableAutoSecret', config.enableAutoSecret);
             
-            document.getElementById('controlQQ').value = config.controlQQ || '';
-            document.getElementById('groupQQ').value = config.groupQQ || '';
-            document.getElementById('lingShiQQ').value = config.lingShiQQ || '';
+            setValue('controlQQ', config.controlQQ);
+            setValue('groupQQ', config.groupQQ);
+            setValue('lingShiQQ', config.lingShiQQ);
         }
 
         // 加载运行时状态
@@ -768,6 +493,7 @@
 
             const config = {
                 botNumber: parseInt(document.getElementById('botNumber').value) || 0,
+                aiCheng: document.getElementById('aiCheng').value,
                 autoVerifyModel: parseInt(document.getElementById('autoVerifyModel').value),
                 enableAutoTask: document.getElementById('enableAutoTask').checked,
                 enableAutomaticReply: document.getElementById('enableAutomaticReply').checked,
@@ -872,7 +598,7 @@
 
         // 显示导入模态框
         function showImportModal() {
-            document.getElementById('importModal').style.display = 'block';
+            document.getElementById('importModal').style.display = 'flex';
         }
 
         // 关闭导入模态框
@@ -942,7 +668,7 @@
             errorDiv.className = 'error';
             errorDiv.textContent = message;
             
-            const content = document.querySelector('.content');
+            const content = document.querySelector('.main');
             content.insertBefore(errorDiv, content.firstChild);
             
             setTimeout(() => {
@@ -956,7 +682,7 @@
             successDiv.className = 'success';
             successDiv.textContent = message;
             
-            const content = document.querySelector('.content');
+            const content = document.querySelector('.main');
             content.insertBefore(successDiv, content.firstChild);
             
             setTimeout(() => {

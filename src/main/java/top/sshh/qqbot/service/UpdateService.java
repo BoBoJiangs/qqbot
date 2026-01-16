@@ -479,7 +479,7 @@ public class UpdateService {
             sb.append("目标版本：").append(StringUtils.defaultString(target, "—")).append("\n");
         }
         sb.append("时间：").append(when).append("\n");
-        if (StringUtils.isNotBlank(jarUrl)) sb.append("下载地址：").append(jarUrl).append("\n");
+        // if (StringUtils.isNotBlank(jarUrl)) sb.append("下载地址：").append(jarUrl).append("\n");
         if (StringUtils.isNotBlank(notes)) sb.append("\n更新说明：\n").append(notes);
         return sb.toString();
     }
