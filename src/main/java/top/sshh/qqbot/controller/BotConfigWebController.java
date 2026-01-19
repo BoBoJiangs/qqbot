@@ -65,30 +65,30 @@ public class BotConfigWebController {
             // 添加运行时状态
             Map<String, Object> runtimeStatus = botConfigManager.getBotRuntimeStatus(botId);
             if (runtimeStatus != null) {
-                dto.setStop((Boolean) runtimeStatus.get("isStop"));
-                dto.setStartScheduled((Boolean) runtimeStatus.get("isStartScheduled"));
-                dto.setCommand((String) runtimeStatus.get("command"));
-                dto.setVerificationStatus((String) runtimeStatus.get("verificationStatus"));
-                dto.setChallengeMode((Integer) runtimeStatus.get("challengeMode"));
+                dto.setStop(getBoolean(runtimeStatus, "isStop", false));
+                dto.setStartScheduled(getBoolean(runtimeStatus, "isStartScheduled", false));
+                dto.setCommand(getString(runtimeStatus, "command", ""));
+                dto.setVerificationStatus(getString(runtimeStatus, "verificationStatus", ""));
+                dto.setChallengeMode(getInt(runtimeStatus, "challengeMode", 0));
                 
-                Long lastSendTime = (Long) runtimeStatus.get("lastSendTime");
-                if (lastSendTime != null && lastSendTime > 0) {
+                Long lastSendTime = getLong(runtimeStatus, "lastSendTime", 0L);
+                if (lastSendTime > 0) {
                     dto.setLastSendTime(LocalDateTime.ofEpochSecond(lastSendTime / 1000, 0, ZoneOffset.UTC));
                 }
                 
-                dto.setXslTime((Long) runtimeStatus.get("xslTime"));
-                dto.setMjTime((Long) runtimeStatus.get("mjTime"));
-                dto.setTaskStatusEquip((Integer) runtimeStatus.get("taskStatusEquip"));
-                dto.setTaskStatusSkills((Integer) runtimeStatus.get("taskStatusSkills"));
-                dto.setTaskStatusHerbs((Integer) runtimeStatus.get("taskStatusHerbs"));
-                dto.setStartScheduledMarket((Boolean) runtimeStatus.get("isStartScheduledMarket"));
-                dto.setStartScheduledEquip((Boolean) runtimeStatus.get("isStartScheduledEquip"));
-                dto.setStartScheduledSkills((Boolean) runtimeStatus.get("isStartScheduledSkills"));
-                dto.setStartScheduledHerbs((Boolean) runtimeStatus.get("isStartScheduledHerbs"));
-                dto.setEnableAutoBuyLowPrice((Boolean) runtimeStatus.get("isEnableAutoBuyLowPrice"));
-                dto.setStartAutoLingG((Boolean) runtimeStatus.get("isStartAutoLingG"));
-                dto.setEnableAutoCqMj((Boolean) runtimeStatus.get("isEnableAutoCqMj"));
-                dto.setEnableCheckMarket((Boolean) runtimeStatus.get("isEnableCheckMarket"));
+                dto.setXslTime(getLong(runtimeStatus, "xslTime", 0L));
+                dto.setMjTime(getLong(runtimeStatus, "mjTime", 0L));
+                dto.setTaskStatusEquip(getInt(runtimeStatus, "taskStatusEquip", 0));
+                dto.setTaskStatusSkills(getInt(runtimeStatus, "taskStatusSkills", 0));
+                dto.setTaskStatusHerbs(getInt(runtimeStatus, "taskStatusHerbs", 0));
+                dto.setStartScheduledMarket(getBoolean(runtimeStatus, "isStartScheduledMarket", false));
+                dto.setStartScheduledEquip(getBoolean(runtimeStatus, "isStartScheduledEquip", false));
+                dto.setStartScheduledSkills(getBoolean(runtimeStatus, "isStartScheduledSkills", false));
+                dto.setStartScheduledHerbs(getBoolean(runtimeStatus, "isStartScheduledHerbs", false));
+                dto.setEnableAutoBuyLowPrice(getBoolean(runtimeStatus, "isEnableAutoBuyLowPrice", false));
+                dto.setStartAutoLingG(getBoolean(runtimeStatus, "isStartAutoLingG", false));
+                dto.setEnableAutoCqMj(getBoolean(runtimeStatus, "isEnableAutoCqMj", false));
+                dto.setEnableCheckMarket(getBoolean(runtimeStatus, "isEnableCheckMarket", false));
             }
             
             // 转换为Map以避免序列化问题
@@ -114,6 +114,7 @@ public class BotConfigWebController {
             result.put("groupQQ", dto.getGroupQQ());
             result.put("lingShiQQ", dto.getLingShiQQ());
             result.put("botNumber", dto.getBotNumber());
+            result.put("aiCheng", persist.getAiCheng());
             result.put("isStop", dto.isStop());
             result.put("isStartScheduled", dto.isStartScheduled());
             result.put("command", dto.getCommand());
@@ -158,26 +159,29 @@ public class BotConfigWebController {
                 return ResponseEntity.status(404).body(error);
             }
             
-            // 从Map创建BotConfigPersist
-            BotConfigPersist persist = new BotConfigPersist();
-            persist.setEnableXslPriceQuery((Boolean) configData.getOrDefault("enableXslPriceQuery", false));
-            persist.setRewardMode((Integer) configData.getOrDefault("rewardMode", 5));
-            persist.setXslPriceLimit((Integer) configData.getOrDefault("xslPriceLimit", 1000));
-            persist.setCultivationMode((Integer) configData.getOrDefault("cultivationMode", 0));
-            persist.setEnableAutoRepair((Boolean) configData.getOrDefault("enableAutoRepair", true));
-            persist.setEnableSectMission((Boolean) configData.getOrDefault("enableSectMission", true));
-            persist.setSectMode((Integer) configData.getOrDefault("sectMode", 1));
-            persist.setEnableAutoField((Boolean) configData.getOrDefault("enableAutoField", true));
-            persist.setEnableAutoSecret((Boolean) configData.getOrDefault("enableAutoSecret", true));
-            persist.setEnableCheckPrice((Boolean) configData.getOrDefault("enableCheckPrice", false));
-            persist.setEnableGuessTheIdiom((Boolean) configData.getOrDefault("enableGuessTheIdiom", false));
-            persist.setEnableAutomaticReply((Boolean) configData.getOrDefault("enableAutomaticReply", false));
-            persist.setEnableAutoTask((Boolean) configData.getOrDefault("enableAutoTask", true));
-            persist.setAutoVerifyModel((Integer) configData.getOrDefault("autoVerifyModel", 0));
-            persist.setControlQQ((String) configData.get("controlQQ"));
-            persist.setGroupQQ((String) configData.get("groupQQ"));
-            persist.setLingShiQQ((Long) configData.get("lingShiQQ"));
-            persist.setBotNumber((Integer) configData.getOrDefault("botNumber", 0));
+            BotConfigPersist persist = botConfigManager.getBotConfig(botId);
+            if (persist == null) {
+                persist = new BotConfigPersist();
+            }
+            persist.setEnableXslPriceQuery(getBoolean(configData, "enableXslPriceQuery", persist.isEnableXslPriceQuery()));
+            persist.setRewardMode(getInt(configData, "rewardMode", persist.getRewardMode()));
+            persist.setXslPriceLimit(getInt(configData, "xslPriceLimit", persist.getXslPriceLimit()));
+            persist.setCultivationMode(getInt(configData, "cultivationMode", persist.getCultivationMode()));
+            persist.setEnableAutoRepair(getBoolean(configData, "enableAutoRepair", persist.isEnableAutoRepair()));
+            persist.setEnableSectMission(getBoolean(configData, "enableSectMission", persist.isEnableSectMission()));
+            persist.setSectMode(getInt(configData, "sectMode", persist.getSectMode()));
+            persist.setEnableAutoField(getBoolean(configData, "enableAutoField", persist.isEnableAutoField()));
+            persist.setEnableAutoSecret(getBoolean(configData, "enableAutoSecret", persist.isEnableAutoSecret()));
+            persist.setEnableCheckPrice(getBoolean(configData, "enableCheckPrice", persist.isEnableCheckPrice()));
+            persist.setEnableGuessTheIdiom(getBoolean(configData, "enableGuessTheIdiom", persist.isEnableGuessTheIdiom()));
+            persist.setEnableAutomaticReply(getBoolean(configData, "enableAutomaticReply", persist.isEnableAutomaticReply()));
+            persist.setEnableAutoTask(getBoolean(configData, "enableAutoTask", persist.isEnableAutoTask()));
+            persist.setAutoVerifyModel(getInt(configData, "autoVerifyModel", persist.getAutoVerifyModel()));
+            persist.setControlQQ(getString(configData, "controlQQ", persist.getControlQQ()));
+            persist.setGroupQQ(getString(configData, "groupQQ", persist.getGroupQQ()));
+            persist.setLingShiQQ(getLong(configData, "lingShiQQ", persist.getLingShiQQ()));
+            persist.setBotNumber(getInt(configData, "botNumber", persist.getBotNumber()));
+            persist.setAiCheng(getString(configData, "aiCheng", persist.getAiCheng()));
             
             boolean success = botConfigManager.updateBotConfig(botId, persist);
             
@@ -193,6 +197,52 @@ public class BotConfigWebController {
             error.put("error", "更新配置失败: " + e.getMessage());
             return ResponseEntity.status(500).body(error);
         }
+    }
+
+    private static boolean getBoolean(Map<String, Object> data, String key, boolean def) {
+        Object v = data.get(key);
+        if (v == null) return def;
+        if (v instanceof Boolean) return (Boolean) v;
+        if (v instanceof String) return Boolean.parseBoolean(((String) v).trim());
+        if (v instanceof Number) return ((Number) v).intValue() != 0;
+        return def;
+    }
+
+    private static int getInt(Map<String, Object> data, String key, int def) {
+        Object v = data.get(key);
+        if (v == null) return def;
+        if (v instanceof Number) return ((Number) v).intValue();
+        if (v instanceof String) {
+            try {
+                return Integer.parseInt(((String) v).trim());
+            } catch (Exception ignored) {
+                return def;
+            }
+        }
+        return def;
+    }
+
+    private static Long getLong(Map<String, Object> data, String key, Long def) {
+        Object v = data.get(key);
+        if (v == null) return def;
+        if (v instanceof Number) return ((Number) v).longValue();
+        if (v instanceof String) {
+            String t = ((String) v).trim();
+            if (t.isEmpty()) return def;
+            try {
+                return Long.parseLong(t);
+            } catch (Exception ignored) {
+                return def;
+            }
+        }
+        return def;
+    }
+
+    private static String getString(Map<String, Object> data, String key, String def) {
+        Object v = data.get(key);
+        if (v == null) return def;
+        if (v instanceof String) return (String) v;
+        return String.valueOf(v);
     }
     
     /**

@@ -566,6 +566,104 @@ body.admin-body{
   font-weight:900;
 }
 
+:root.dark .nav-item.logout{color:var(--muted)}
+
+:root.dark .modal-header{
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+:root.dark .modal-actions{
+  background: rgba(255, 255, 255, 0.02);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+:root.dark .modal-close{color:rgba(255,255,255,.65)}
+:root.dark .modal-close:hover{background:rgba(255,255,255,.06)}
+
+:root.dark .loading,
+:root.dark .empty,
+:root.dark .error{
+  border:1px dashed rgba(255,255,255,.12);
+  background:rgba(30,27,46,.45);
+  color:var(--muted);
+}
+:root.dark .error{
+  color:#ff6b6b;
+  border-color:rgba(255,107,107,.25);
+  background:rgba(255,107,107,.08);
+}
+
+:root.dark .form-row label,
+:root.dark .form-group label,
+:root.dark .field label{
+  color:rgba(255,255,255,.78);
+}
+
+:root.dark .form-row input,
+:root.dark .form-row select,
+:root.dark .form-row textarea,
+:root.dark .form-group input,
+:root.dark .form-group select,
+:root.dark .form-group textarea,
+:root.dark .field input,
+:root.dark .field select,
+:root.dark .field textarea{
+  background:var(--input-bg);
+  border-color:rgba(255,255,255,.10);
+  color:var(--text);
+}
+
+:root.dark .form-row input:focus,
+:root.dark .form-row select:focus,
+:root.dark .form-row textarea:focus,
+:root.dark .form-group input:focus,
+:root.dark .form-group select:focus,
+:root.dark .form-group textarea:focus,
+:root.dark .field input:focus,
+:root.dark .field select:focus,
+:root.dark .field textarea:focus{
+  border-color:rgba(255,60,125,.45);
+  box-shadow:0 0 0 4px rgba(255,60,125,.18);
+}
+
+:root.dark input::placeholder,
+:root.dark textarea::placeholder{
+  color:rgba(255,255,255,.35);
+}
+
+:root.dark .success{
+  border-color:rgba(29,185,84,.30);
+  background:rgba(29,185,84,.14);
+  color:#b2f2bb;
+}
+
+.toast-stack{
+  position:fixed;
+  top:78px;
+  right:18px;
+  z-index:10000;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  max-width:min(420px, calc(100vw - 36px));
+  pointer-events:none;
+}
+.toast{
+  pointer-events:auto;
+  padding:12px 14px;
+  border-radius:16px;
+  border:1px solid rgba(0,0,0,.08);
+  background:rgba(255,255,255,.88);
+  box-shadow:var(--shadow-soft);
+  font-weight:900;
+  color:var(--text);
+}
+:root.dark .toast{
+  border-color:rgba(255,255,255,.08);
+  background:rgba(30,27,46,.88);
+}
+.toast-success{border-left:4px solid var(--ok)}
+.toast-error{border-left:4px solid var(--danger)}
+
 .runtime-status{
   margin-top:14px;
 }
@@ -605,4 +703,3 @@ body.admin-body{
   .sidebar-footer{margin-top:0; padding-top:0; border-top:none}
   .main{min-height:calc(100vh - 86px)}
 }
-

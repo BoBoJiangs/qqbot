@@ -3,68 +3,322 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bot后台管理页面</title>
+    <title>登录 - NapCat Bot 管理</title>
     <script src="js/jquery-3.3.1.min.js"></script>
+    <link rel="stylesheet" href="css/admin.css">
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Microsoft YaHei', Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 18px; }
-        .card { width: 100%; max-width: 420px; background: white; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.25); overflow: hidden; }
-        .header { padding: 22px 20px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
-        .header h1 { font-size: 1.6em; }
-        .body { padding: 22px 20px; }
-        .row { margin-bottom: 14px; }
-        .row label { display: block; color: #333; font-weight: 700; margin-bottom: 8px; }
-        .row input { width: 100%; border: 1px solid #d9d9d9; border-radius: 10px; padding: 10px 12px; font-size: 1em; outline: none; }
-        .row input:focus { border-color: #4facfe; box-shadow: 0 0 0 4px rgba(79,172,254,0.14); }
-        .input-group { display: flex; gap: 10px; align-items: center; }
-        .input-group input { flex: 1; }
-        .btn-toggle { border: 1px solid #d9d9d9; background: #fff; color: #333; border-radius: 10px; padding: 10px 12px; cursor: pointer; font-weight: 800; white-space: nowrap; width: 44px; display: inline-flex; align-items: center; justify-content: center; }
-        .btn-toggle svg { width: 18px; height: 18px; display: block; }
-        .btn-toggle:active { transform: translateY(1px); }
-        .actions { display: flex; gap: 10px; margin-top: 8px; }
-        .btn { flex: 1; padding: 10px 12px; border: none; border-radius: 10px; cursor: pointer; color: white; font-weight: 800; font-size: 1em; }
-        .btn-login { background: #0d6efd; }
-        .hint { margin-top: 12px; color: #666; font-size: 0.92em; line-height: 1.45; }
-        .error { margin-top: 10px; color: #b00020; font-weight: 700; display: none; }
+        body.admin-body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            padding: 32px;
+            background: var(--panel);
+            border: 1px solid rgba(255,255,255,.58);
+            border-radius: 24px;
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(20px);
+            animation: float-up 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        
+        :root.dark .login-card {
+            border-color: rgba(255,255,255,.08);
+        }
+        
+        @keyframes float-up {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        
+        .login-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+        
+        .brand-logo {
+            width: 48px;
+            height: 48px;
+            margin: 0 auto 16px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+            box-shadow: 0 12px 24px rgba(255, 60, 125, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+        }
+        
+        .login-title {
+            font-size: 24px;
+            font-weight: 950;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+        
+        .login-subtitle {
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 800;
+        }
+        
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 14px 16px;
+            padding-left: 46px;
+            border-radius: 16px;
+            border: 1px solid rgba(20,20,20,.1);
+            background: rgba(255,255,255,.8);
+            font-size: 15px;
+            font-weight: 700;
+            outline: none;
+            transition: all 0.2s ease;
+            color: var(--text);
+        }
+        
+        :root.dark .input-group input {
+            background: rgba(255,255,255,.05);
+            border-color: rgba(255,255,255,.1);
+        }
+        
+        .input-group input:focus {
+            border-color: var(--primary);
+            background: white;
+            box-shadow: 0 0 0 4px rgba(255,60,125,.15);
+        }
+        
+        :root.dark .input-group input:focus {
+            background: rgba(255,255,255,.1);
+        }
+        
+        .input-icon {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            pointer-events: none;
+            width: 18px;
+            height: 18px;
+        }
+        
+        .toggle-password {
+            position: absolute;
+            right: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--muted);
+            cursor: pointer;
+            width: 20px;
+            height: 20px;
+            border: none;
+            background: none;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .toggle-password:hover {
+            color: var(--text);
+        }
+        
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-2) 100%);
+            color: white;
+            font-weight: 900;
+            font-size: 16px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 10px 20px rgba(255, 60, 125, 0.2);
+            margin-top: 12px;
+        }
+        
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 28px rgba(255, 60, 125, 0.3);
+        }
+        
+        .btn-submit:active {
+            transform: translateY(1px);
+        }
+        
+        .theme-toggle {
+            position: fixed;
+            top: 24px;
+            right: 24px;
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            background: var(--panel);
+            border: 1px solid rgba(255,255,255,.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: var(--shadow-soft);
+            transition: all 0.2s ease;
+        }
+        
+        :root.dark .theme-toggle {
+            border-color: rgba(255,255,255,.1);
+        }
+        
+        .theme-toggle:hover {
+            transform: translateY(-2px);
+        }
+        
+        .hint-text {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 700;
+        }
     </style>
 </head>
-<body>
-    <div class="card">
-        <div class="header">
-            <h1>Bot后台管理页面</h1>
+<body class="admin-body">
+    <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">
+        <svg class="icon-theme" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+        </svg>
+    </button>
+
+    <div class="login-card">
+        <div class="login-header">
+            <div class="brand-logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+            </div>
+            <div class="login-title">欢迎回来</div>
+            <div class="login-subtitle">请登录 NapCat Bot 管理面板</div>
         </div>
-        <div class="body">
-            <div class="row">
-                <label for="username">账号</label>
-                <input id="username" placeholder="请输入账号" autocomplete="username" />
+        
+        <div class="input-group">
+            <div class="input-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
             </div>
-            <div class="row">
-                <label for="password">密码</label>
-                <div class="input-group">
-                    <input id="password" type="password" placeholder="请输入密码" autocomplete="current-password" />
-                    <button id="togglePasswordBtn" class="btn-toggle" type="button" onclick="togglePassword()" title="显示/隐藏密码" aria-label="显示/隐藏密码"></button>
-                </div>
+            <input id="username" type="text" placeholder="账号" autocomplete="username">
+        </div>
+        
+        <div class="input-group">
+            <div class="input-icon">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
             </div>
-            <div class="actions">
-                <button class="btn btn-login" onclick="doLogin()">登录</button>
-            </div>
-            <div id="err" class="error"></div>
-            <div class="hint">
-                默认账号密码请联系管理员。
-            </div>
+            <input id="password" type="password" placeholder="密码" autocomplete="current-password">
+            <button class="toggle-password" type="button" onclick="togglePassword()">
+                <svg id="eyeIcon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                    <circle cx="12" cy="12" r="3"></circle>
+                </svg>
+            </button>
+        </div>
+        
+        <button class="btn-submit" onclick="doLogin()">立即登录</button>
+        
+        <div class="hint-text">
+            默认账号密码请联系管理员
         </div>
     </div>
+    
+    <div id="toastStack" class="toast-stack"></div>
 
     <script>
+        // 主题管理
+        function initTheme() {
+            var theme = localStorage.getItem('napcat_theme');
+            if (theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        }
+        
+        function toggleTheme() {
+            var root = document.documentElement;
+            if (root.classList.contains('dark')) {
+                root.classList.remove('dark');
+                localStorage.setItem('napcat_theme', 'light');
+            } else {
+                root.classList.add('dark');
+                localStorage.setItem('napcat_theme', 'dark');
+            }
+        }
+        
+        // 密码可见性切换
+        function togglePassword() {
+            var input = document.getElementById('password');
+            var icon = document.getElementById('eyeIcon');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line>';
+            } else {
+                input.type = 'password';
+                icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle>';
+            }
+        }
+
+        // Toast 提示
+        function showToast(message, type = 'error') {
+            const container = document.getElementById('toastStack');
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + (type === 'success' ? 'toast-success' : 'toast-error');
+            toast.textContent = message;
+            
+            // 动画
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateX(20px)';
+            toast.style.transition = 'all 0.3s ease';
+            
+            container.appendChild(toast);
+            
+            // 触发重绘
+            toast.offsetHeight;
+            
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateX(0)';
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(20px)';
+                setTimeout(() => {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                }, 300);
+            }, 3000);
+        }
+
+        // 登录逻辑
         $(document).ready(function() {
-            $('#password').on('keydown', function(e) {
-                if (e.key === 'Enter') doLogin();
-            });
-            $('#username').on('keydown', function(e) {
+            initTheme();
+            
+            $('#password, #username').on('keydown', function(e) {
                 if (e.key === 'Enter') doLogin();
             });
 
             tryFillSavedCredentials();
+            
+            // 检查是否已登录
             $.get('/api/auth/me').done(function(res) {
                 if (res && res.authenticated) redirectNext();
             });
@@ -79,60 +333,39 @@
             window.location.href = getNext();
         }
 
-        function showError(msg) {
-            $('#err').text(msg || '登录失败').show();
-        }
-
-        function eyeIcon(open) {
-            if (open) {
-                return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-                    '<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>' +
-                    '<path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="currentColor" stroke-width="2"/>' +
-                    '</svg>';
-            }
-            return '<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">' +
-                '<path d="M3 3l18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
-                '<path d="M10.6 10.7A2.9 2.9 0 0 0 12 15a3 3 0 0 0 2.3-1" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>' +
-                '<path d="M6.3 6.4C3.9 8.1 2 12 2 12s3.6 7 10 7c2 0 3.7-.5 5.2-1.3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '<path d="M9 5.2c.9-.1 1.9-.2 3-.2 6.4 0 10 7 10 7a18.7 18.7 0 0 1-4.2 5.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-                '</svg>';
-        }
-
-        function togglePassword() {
-            var input = $('#password');
-            var current = input.attr('type') || 'password';
-            if (current === 'password') {
-                input.attr('type', 'text');
-                $('#togglePasswordBtn').html(eyeIcon(true));
-            } else {
-                input.attr('type', 'password');
-                $('#togglePasswordBtn').html(eyeIcon(false));
-            }
-        }
-
         function tryFillSavedCredentials() {
             try {
                 var savedUsername = localStorage.getItem('qqbot_username') || '';
                 var savedPassword = localStorage.getItem('qqbot_password') || '';
                 if (savedUsername) $('#username').val(savedUsername);
                 if (savedPassword) $('#password').val(savedPassword);
-            } catch (e) {
-            }
-            $('#togglePasswordBtn').html(eyeIcon(false));
+            } catch (e) {}
         }
 
         function saveCredentials(username, password) {
             try {
                 localStorage.setItem('qqbot_username', username || '');
                 localStorage.setItem('qqbot_password', password || '');
-            } catch (e) {
-            }
+            } catch (e) {}
         }
 
         function doLogin() {
-            $('#err').hide();
             var username = String($('#username').val() || '').trim();
             var password = String($('#password').val() || '');
+            
+            if (!username) {
+                showToast('请输入账号');
+                return;
+            }
+            if (!password) {
+                showToast('请输入密码');
+                return;
+            }
+            
+            const btn = $('.btn-submit');
+            const originalText = btn.text();
+            btn.prop('disabled', true).text('登录中...');
+
             $.ajax({
                 url: '/api/auth/login',
                 method: 'POST',
@@ -141,18 +374,20 @@
                 success: function(res) {
                     if (res && res.success) {
                         saveCredentials(username, password);
-                        redirectNext();
+                        showToast('登录成功', 'success');
+                        setTimeout(() => redirectNext(), 500);
                         return;
                     }
-                    showError(res && res.message ? res.message : '登录失败');
+                    showToast(res && res.message ? res.message : '登录失败');
+                    btn.prop('disabled', false).text(originalText);
                 },
                 error: function(err) {
                     var msg = err && err.responseJSON && err.responseJSON.message ? err.responseJSON.message : (err.statusText || 'error');
-                    showError(msg);
+                    showToast(msg);
+                    btn.prop('disabled', false).text(originalText);
                 }
             });
         }
     </script>
 </body>
 </html>
-

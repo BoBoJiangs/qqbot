@@ -265,7 +265,7 @@ public class RemoteVerifyCode {
             }
         } catch (Exception e) {
             RecognitionResult codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
-            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult());
+            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult(),bot.getBotId());
             testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
             e.printStackTrace();
         }
@@ -344,7 +344,7 @@ public class RemoteVerifyCode {
         RecognitionResult recognitionResult = new RecognitionResult();
         try {
             if (shituApiUrl.contains("113.44.42.139")) {
-                recognitionResult = callShituAPI(shituApiUrl, imageUrl);
+                recognitionResult = callShituAPI(shituApiUrl, imageUrl,bot.getBotId());
             } else {
                 recognitionResult = callShituAPI(shituApiUrl, imageUrl, title, "", "1");
             }
@@ -512,10 +512,10 @@ public class RemoteVerifyCode {
                 errorClickButton(buttons, bot, group, recognitionResult, "");
             }
             RecognitionResult codeData = codeUrlMap.get(bot.getBotId());
-            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getEmojiList().toString());
+            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getEmojiList().toString(),bot.getBotId());
         } else {
             RecognitionResult codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
-            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getEmojiList().toString());
+            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getEmojiList().toString(),bot.getBotId());
             bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("自动验证失败，请手动验证"));
         }
 
@@ -552,7 +552,7 @@ public class RemoteVerifyCode {
         }
     }
 
-    public void saveErrorImage(String url, String question, String answer) {
+    public void saveErrorImage(String url, String question, String answer,Long botId) {
 //        saveErrorImage(url);
 //        if (shituApiUrl.contains("113.44.42.139")) {
 //            // 下载网络图片
@@ -577,7 +577,7 @@ public class RemoteVerifyCode {
             imageBytes = downloadImageBytes(url);
             // 上传到服务器
             String hash = md5(url);
-            String returnMsg = uploadMultipart(shituApiUrl + "report_error", imageBytes, "error_" + hash + ".jpg", question, answer, url);
+            String returnMsg = uploadMultipart(shituApiUrl + "report_error", imageBytes, "error_" + hash + ".jpg", question, answer, url,botId);
             RecognitionResult result = JSON.parseObject(returnMsg, RecognitionResult.class);
             if (result.msg.contains("已保存")) {
                 groupManager.verifyCount.addError();
@@ -811,10 +811,16 @@ public class RemoteVerifyCode {
 
     }
 
-    public RecognitionResult callShituAPI(String shituApiUrl, String imageUrl) {
+    public RecognitionResult callShituAPI(String shituApiUrl, String imageUrl, Long qqNumber) {
         HttpURLConnection conn = null;
         try {
-            URL url = new URL(shituApiUrl + "recognize");
+            // 在URL中添加qq参数
+            String apiUrl = shituApiUrl + "recognize";
+            if (qqNumber != null ) {
+                apiUrl += "?qq=" + URLEncoder.encode(qqNumber+"", "UTF-8");
+            }
+
+            URL url = new URL(apiUrl);
             conn = (HttpURLConnection) url.openConnection();
 
             conn.setRequestMethod("POST");
@@ -829,6 +835,12 @@ public class RemoteVerifyCode {
             }
 
             int code = conn.getResponseCode();
+            // 处理403 Forbidden（白名单拒绝）
+            if (code == 403) {
+                logger.warn("API访问被拒绝：QQ号不在白名单中或未提供QQ号");
+                return new RecognitionResult(new ArrayList<>(), "访问被拒绝：请检查QQ号");
+            }
+
             InputStream inputStream = (code >= 200 && code < 300) ?
                     conn.getInputStream() : conn.getErrorStream();
 
@@ -844,19 +856,15 @@ public class RemoteVerifyCode {
             return result;
         } catch (SocketTimeoutException ste) {
             logger.warn("API读取超时: {}", ste.getMessage());
-            String[] var29 = new String[]{"请求超时", "0"};
             return new RecognitionResult(new ArrayList<>(), "请求超时");
         } catch (Exception e) {
             logger.error("API调用异常: {}", e.getMessage());
-            String[] url = new String[]{"请求异常", "0"};
             return new RecognitionResult(new ArrayList<>(), "请求异常");
         } finally {
             if (conn != null) {
                 conn.disconnect();
             }
-
         }
-
     }
 
     // 从网络下载图片字节
@@ -873,7 +881,7 @@ public class RemoteVerifyCode {
     }
 
     // 发送 multipart/form-data 请求
-    private static String uploadMultipart(String serverUrl, byte[] imageBytes, String fileName, String question, String answer, String imageUrl) throws IOException {
+    private static String uploadMultipart(String serverUrl, byte[] imageBytes, String fileName, String question, String answer, String imageUrl,Long qqNumer) throws IOException {
         try (CloseableHttpClient client = HttpClients.createDefault()) {
             HttpPost post = new HttpPost(serverUrl);
 
@@ -882,6 +890,7 @@ public class RemoteVerifyCode {
                     .addTextBody("question", question, ContentType.TEXT_PLAIN.withCharset("UTF-8"))
                     .addTextBody("answer", answer, ContentType.TEXT_PLAIN.withCharset("UTF-8"))
                     .addTextBody("imageUrl", imageUrl, ContentType.TEXT_PLAIN.withCharset("UTF-8"))
+                    .addTextBody("qq", qqNumer+"", ContentType.TEXT_PLAIN.withCharset("UTF-8"))
                     .build();
 
             post.setEntity(entity);

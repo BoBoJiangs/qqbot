@@ -188,20 +188,7 @@ public class BotConfigManager {
         if (bot == null) {
             return null;
         }
-        
-        BotConfig botConfig = bot.getBotConfig();
-        Map<String, Object> status = new HashMap<>();
-        
-        status.put("isStop", botConfig.isStop());
-        status.put("isStartScheduled", botConfig.isStartScheduled());
-        status.put("lastSendTime", botConfig.getLastSendTime());
-        status.put("xslTime", botConfig.getXslTime());
-        status.put("mjTime", botConfig.getMjTime());
-        status.put("command", botConfig.getCommand());
-        status.put("verificationStatus", botConfig.getVerificationStatus());
-        status.put("challengeMode", botConfig.getChallengeMode());
-        
-        return status;
+        return getRuntimeConfig(bot.getBotConfig());
     }
     
     /**
@@ -237,7 +224,12 @@ public class BotConfigManager {
         try {
             Path path = Paths.get("./config/bot-" + botId + ".json");
             if (!Files.exists(path)) {
-                // 如果配置文件不存在，返回默认配置
+                Bot bot = BotFactory.getBots().get(botId);
+                if (bot != null) {
+                    BotConfigPersist persist = createPersistFromRuntime(bot.getBotConfig());
+                    botConfigCache.put(botId, persist);
+                    return persist;
+                }
                 return createDefaultConfig();
             }
             
@@ -252,6 +244,32 @@ public class BotConfigManager {
             log.error("加载Bot配置失败: {}", e.getMessage(), e);
             return createDefaultConfig();
         }
+    }
+
+    private BotConfigPersist createPersistFromRuntime(BotConfig botConfig) {
+        BotConfigPersist config = createDefaultConfig();
+        if (botConfig == null) {
+            return config;
+        }
+        config.setEnableXslPriceQuery(botConfig.isEnableXslPriceQuery());
+        config.setRewardMode(botConfig.getRewardMode());
+        config.setXslPriceLimit(botConfig.getXslPriceLimit());
+        config.setCultivationMode(botConfig.getCultivationMode());
+        config.setEnableAutoRepair(botConfig.isEnableAutoRepair());
+        config.setEnableSectMission(botConfig.isEnableSectMission());
+        config.setSectMode(botConfig.getSectMode());
+        config.setEnableAutoField(botConfig.isEnableAutoField());
+        config.setEnableAutoSecret(botConfig.isEnableAutoSecret());
+        config.setEnableCheckPrice(botConfig.isEnableCheckPrice());
+        config.setEnableGuessTheIdiom(botConfig.isEnableGuessTheIdiom());
+        config.setEnableAutomaticReply(botConfig.isEnableAutomaticReply());
+        config.setEnableAutoTask(botConfig.isEnableAutoTask());
+        config.setAutoVerifyModel(botConfig.getAutoVerifyModel());
+        config.setControlQQ(botConfig.getControlQQ());
+        config.setGroupQQ(botConfig.getGroupQQ());
+        config.setLingShiQQ(botConfig.getLingShiQQ());
+        config.setBotNumber(botConfig.getBotNumber());
+        return config;
     }
     
     private void saveBotConfigToFile(Long botId, BotConfigPersist config) throws IOException {

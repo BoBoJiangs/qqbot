@@ -522,10 +522,21 @@
                     body: JSON.stringify(config)
                 });
 
-                const result = await response.json();
+                let result = {};
+                try {
+                    result = await response.json();
+                } catch (e) {
+                    result = {};
+                }
+
+                if (!response.ok) {
+                    showError(result.error || `保存失败 (${response.status})`);
+                    return;
+                }
                 
                 if (result.success) {
                     showSuccess('配置保存成功！');
+                    await loadConfig();
                 } else {
                     showError(result.error || '保存失败');
                 }
@@ -664,30 +675,35 @@
 
         // 显示错误信息
         function showError(message) {
-            const errorDiv = document.createElement('div');
-            errorDiv.className = 'error';
-            errorDiv.textContent = message;
-            
-            const content = document.querySelector('.main');
-            content.insertBefore(errorDiv, content.firstChild);
-            
-            setTimeout(() => {
-                errorDiv.remove();
-            }, 5000);
+            showToast(message, 'error');
         }
 
         // 显示成功信息
         function showSuccess(message) {
-            const successDiv = document.createElement('div');
-            successDiv.className = 'success';
-            successDiv.textContent = message;
-            
-            const content = document.querySelector('.main');
-            content.insertBefore(successDiv, content.firstChild);
-            
+            showToast(message, 'success');
+        }
+
+        function showToast(message, type) {
+            let container = document.getElementById('toastStack');
+            if (!container) {
+                container = document.createElement('div');
+                container.id = 'toastStack';
+                container.className = 'toast-stack';
+                document.body.appendChild(container);
+            }
+
+            const toast = document.createElement('div');
+            toast.className = 'toast ' + (type === 'success' ? 'toast-success' : 'toast-error');
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            const ttl = type === 'success' ? 3000 : 5000;
             setTimeout(() => {
-                successDiv.remove();
-            }, 3000);
+                toast.remove();
+                if (container.childElementCount === 0) {
+                    container.remove();
+                }
+            }, ttl);
         }
 
         // 点击模态框外部关闭
