@@ -19,6 +19,9 @@ import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.ReplyMessage;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
+
+import lombok.val;
+
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
@@ -666,6 +669,90 @@ public class GroupManager {
             }
         }
 
+    }
+
+    @GroupMessageHandler(
+        // senderIds = {3889001741L}
+        ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 秘境挑战结果处理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        if (this.isGroupSettlementReminderEnabled(group.getGroupId()) && bot.getBotConfig().isEnableAutomaticReply()) {
+            if (message.contains("```bash")) {
+                if (message.contains("的回合") && message.contains("道友大战一番") && !message.contains("修仙令牌额外奖励")) {
+                    extractAndFormatResult(message,group,messageId);
+                }
+            }
+        }
+    }
+
+    public void extractAndFormatResult(String battleLog,Group group,Integer messageId) {
+        // 提取怪物名称（从"成功战胜"到"!"之间的内容）
+        Pattern monsterPattern = Pattern.compile("成功战胜([^!]+)!");
+        Matcher monsterMatcher = monsterPattern.matcher(battleLog);
+        String monsterName = "";
+        if (monsterMatcher.find()) {
+            monsterName = monsterMatcher.group(1);
+        }
+        
+        // 提取修为数值
+        Pattern cultivationPattern = Pattern.compile("修为：([0-9]+)点");
+        Matcher cultivationMatcher = cultivationPattern.matcher(battleLog);
+        String cultivationStr = "";
+        if (cultivationMatcher.find()) {
+            cultivationStr = cultivationMatcher.group(1);
+        }
+        
+        // 提取灵石数值
+        Pattern spiritStonePattern = Pattern.compile("灵石：([0-9]+)枚");
+        Matcher spiritStoneMatcher = spiritStonePattern.matcher(battleLog);
+        String spiritStoneStr = "";
+        if (spiritStoneMatcher.find()) {
+            spiritStoneStr = spiritStoneMatcher.group(1);
+        }
+        
+        // 格式化修为（支持亿和兆两种单位）
+        String formattedCultivation = "";
+        if (!cultivationStr.isEmpty()) {
+            long cultivation = Long.parseLong(cultivationStr);
+            
+            // 如果数值达到1万亿（1兆）以上，使用兆为单位
+            if (cultivation >= 1_0000_0000_0000L) {
+                double cultivationInTrillions = cultivation / 1_0000_0000_0000.0;
+                formattedCultivation = String.format("%.2f", cultivationInTrillions) + "兆";
+            } else {
+                // 否则使用亿为单位
+                double cultivationInBillions = cultivation / 1_0000_0000.0;
+                formattedCultivation = String.format("%.2f", cultivationInBillions) + "亿";
+            }
+        }
+        
+        // 格式化灵石（转换为万）
+        String formattedSpiritStones = "";
+        if (!spiritStoneStr.isEmpty()) {
+            long spiritStones = Long.parseLong(spiritStoneStr);
+            
+            // 如果数值达到1万亿（1兆）以上，使用兆为单位
+            if (spiritStones >= 1_0000_0000_0000L) {
+                double spiritStonesInTrillions = spiritStones / 1_0000_0000_0000.0;
+                formattedSpiritStones = String.format("%.2f", spiritStonesInTrillions) + "兆";
+            } 
+            // 如果数值达到1亿以上，使用亿为单位
+            else if (spiritStones >= 1_0000_0000L) {
+                double spiritStonesInBillions = spiritStones / 1_0000_0000.0;
+                formattedSpiritStones = String.format("%.2f", spiritStonesInBillions) + "亿";
+            } else {
+                // 否则使用万为单位
+                double spiritStonesInTenThousands = spiritStones / 1_0000.0;
+                formattedSpiritStones = String.format("%.0f", spiritStonesInTenThousands) + "万";
+            }
+        }
+        
+        // 构建结果字符串
+        StringBuilder result = new StringBuilder();
+        result.append("恭喜道友斩杀").append(monsterName)
+              .append("，获得修为：").append(formattedCultivation)
+              .append("，灵石：").append(formattedSpiritStones);
+        group.sendMessage(new MessageChain().reply(messageId).text(result.toString()));
     }
 
 

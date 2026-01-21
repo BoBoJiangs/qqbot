@@ -64,7 +64,15 @@ public class DockerService {
 
     @PostConstruct
     public void init() {
-        connect(false);
+        try {
+            connect(false);
+        } catch (Throwable e) {
+            // 本地启动时如果没有 Docker 环境，不要导致 Spring 启动失败
+            // 只是标记服务不可用
+            available = false;
+            initError = e.getMessage() != null ? e.getMessage() : e.toString();
+            logger.warn("Docker initialization failed (non-fatal): {}", initError);
+        }
     }
 
     public DockerService() {
@@ -105,6 +113,11 @@ public class DockerService {
                 DefaultDockerClientConfig config = configBuilder.build();
                 resolvedDockerHost = String.valueOf(config.getDockerHost());
 
+                // 在 Windows 本地环境，如果是 unix socket，直接跳过 JNA 调用尝试，避免 UnsatisfiedLinkError
+                if (resolvedDockerHost != null && resolvedDockerHost.startsWith("unix://") && System.getProperty("os.name").toLowerCase().contains("win")) {
+                    throw new UnsupportedOperationException("Windows does not support unix:// docker host directly via JNA in this context");
+                }
+
                 DockerHttpClient httpClient = new ApacheDockerHttpClient.Builder()
                         .dockerHost(config.getDockerHost())
                         .sslConfig(config.getSSLConfig())
@@ -126,6 +139,9 @@ public class DockerService {
                 return;
             } catch (Exception e) {
                 last = e;
+            } catch (UnsatisfiedLinkError e) {
+                // 捕获 JNA 链接错误
+                last = new RuntimeException("JNA link error: " + e.getMessage(), e);
             }
         }
 

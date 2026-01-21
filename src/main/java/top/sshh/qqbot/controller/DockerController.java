@@ -54,6 +54,10 @@ public class DockerController {
             }
             return ResponseEntity.ok(result);
         } catch (Throwable e) {
+            // 本地开发或无Docker环境时，返回空列表而不是500，方便前端展示
+            if (e.getMessage() != null && e.getMessage().contains("Docker service not connected")) {
+                return ResponseEntity.ok(new ArrayList<>());
+            }
             e.printStackTrace();
             Map<String, String> error = new HashMap<>();
             String msg = e.getMessage() != null ? e.getMessage() : e.getClass().getName();

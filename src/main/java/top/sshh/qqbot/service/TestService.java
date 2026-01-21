@@ -1102,7 +1102,7 @@ public class TestService {
                 }
             }
 
-            if (message.contains("正在宗门闭关室") || message.contains("现在在闭关")) {
+            if (message.contains("在宗门闭关室中") || message.contains("现在在闭关")) {
                 botConfig.setXslTime(-1L);
                 botConfig.setMjTime(-1L);
                 if (botConfig.getCultivationMode() == 1 && message.contains("现在在闭关")) {
@@ -1325,7 +1325,7 @@ public class TestService {
     )
     public void 识别大号接收码(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        if(botConfig.getLingShiNum() > 0 && botConfig.getLingShiQQ() == group.getGroupId()){
+        if(botConfig.getLingShiNum() > 0 && botConfig.getLingShiQQ()!=null && botConfig.getLingShiQQ() == group.getGroupId()){
             if (message.contains("您的接收码为") ) {
                 String code = message.split("您的接收码为：| ")[1];
                 group.sendMessage((new MessageChain()).at("3889001741").text("赠送灵石 ").text(code + " ").text(botConfig.getLingShiNum() * 10000 + ""));
@@ -2357,7 +2357,7 @@ public class TestService {
         BotConfig botConfig = bot.getBotConfig();
         boolean isAtSelf = Utils.isAtSelf(bot, group, message, xxGroupId);
         if (isAtSelf && botConfig.getRewardMode() != 1) {
-            if (message.contains("在做悬赏令呢") && message.contains("分身乏术")) {
+            if (message.contains("悬赏令") && message.contains("分身乏术")) {
                 botConfig.setStartScheduled(false);
                 bot.getBotConfig().setMjTime(-1L);
                 botConfig.setFamilyTaskStatus(0);
