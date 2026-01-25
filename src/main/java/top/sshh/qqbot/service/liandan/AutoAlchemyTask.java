@@ -123,7 +123,9 @@ public class AutoAlchemyTask {
         if ("开始自动炼丹".equals(message)) {
             resetPram(botId);
             groupMap.put(botId, group);
-
+            if (botConfig.getCultivationMode() == 1) {
+                botConfig.setStartScheduled(false);
+            }
             botConfig.setStartAuto(true);
             botConfig.setAutoBuyHerbsMode(0);
             customPool.submit(() -> {

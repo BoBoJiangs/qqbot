@@ -86,6 +86,8 @@ public class GroupManager {
     private Map<String, Set<String>> excludeAlchemyMap = new ConcurrentHashMap();
     private Map<String, Set<String>> excludeSellMap = new ConcurrentHashMap();
     public Map<String, Map<String, ProductPrice>> autoBuyProductMap = new ConcurrentHashMap();
+    public Map<String, Set<String>> buyRemindItemsMap = new ConcurrentHashMap();
+    public Map<String, Boolean> buyRemindGroupEnabledMap = new ConcurrentHashMap();
     public Map<String, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
     public Map<String, TaskStatus> taskStateMap = new ConcurrentHashMap();
     public Map<String, Boolean> groupXslPriceQueryMap = new ConcurrentHashMap();
@@ -349,6 +351,8 @@ public class GroupManager {
             data.put("发言统计", MESSAGE_NUMBER_MAP);
             data.put("任务统计", taskStateMap);
             data.put("自动购买", this.autoBuyProductMap);
+            data.put("购买提醒物品", this.buyRemindItemsMap);
+            data.put("购买提醒群", this.buyRemindGroupEnabledMap);
             data.put("炼金排除", this.excludeAlchemyMap);
             data.put("上架排除", this.excludeSellMap);
             data.put("taskReminder", this.taskReminder);
@@ -405,6 +409,19 @@ public class GroupManager {
             this.autoBuyProductMap = data.getObject("自动购买",
                     new TypeReference<Map<String, Map<String, ProductPrice>>>() {
                     });
+            this.buyRemindItemsMap = data.getObject("购买提醒物品",
+                    new TypeReference<Map<String, Set<String>>>() {
+                    });
+            if (this.buyRemindItemsMap == null) {
+                this.buyRemindItemsMap = new ConcurrentHashMap<>();
+            }
+
+            this.buyRemindGroupEnabledMap = data.getObject("购买提醒群",
+                    new TypeReference<Map<String, Boolean>>() {
+                    });
+            if (this.buyRemindGroupEnabledMap == null) {
+                this.buyRemindGroupEnabledMap = new ConcurrentHashMap<>();
+            }
 
             // 4. 处理排除列表
             this.excludeAlchemyMap = data.getObject("炼金排除",
@@ -452,6 +469,8 @@ public class GroupManager {
         this.ltmap = new ConcurrentHashMap<>();
         this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
         this.autoBuyProductMap = new ConcurrentHashMap<>();
+        this.buyRemindItemsMap = new ConcurrentHashMap<>();
+        this.buyRemindGroupEnabledMap = new ConcurrentHashMap<>();
         this.excludeAlchemyMap = new ConcurrentHashMap<>();
         this.excludeSellMap = new ConcurrentHashMap<>();
         this.taskStateMap = new ConcurrentHashMap<>();
@@ -484,6 +503,36 @@ public class GroupManager {
 
     public void setGroupSettlementReminderEnabled(Long groupId, boolean enabled) {
         this.groupSettlementReminderMap.put(groupId + "", enabled);
+        this.saveTasksToFile();
+    }
+
+    public boolean isBuyRemindGroupEnabled(Long groupId) {
+        Boolean enabled = this.buyRemindGroupEnabledMap.get(groupId + "");
+        if (enabled == null) {
+            return false;
+        }
+        return enabled;
+    }
+
+    public void setBuyRemindGroupEnabled(Long groupId, boolean enabled) {
+        this.buyRemindGroupEnabledMap.put(groupId + "", enabled);
+        this.saveTasksToFile();
+    }
+
+    public Set<String> getBuyRemindItems(Long botId) {
+        Set<String> items = this.buyRemindItemsMap.get(botId + "");
+        if (items == null) {
+            return Collections.emptySet();
+        }
+        return items;
+    }
+
+    public void setBuyRemindItems(Long botId, Set<String> items) {
+        Set<String> newItems = ConcurrentHashMap.newKeySet();
+        if (items != null) {
+            newItems.addAll(items);
+        }
+        this.buyRemindItemsMap.put(botId + "", newItems);
         this.saveTasksToFile();
     }
 

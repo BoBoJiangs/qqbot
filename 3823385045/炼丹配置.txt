@@ -1,0 +1,1 @@
+{"addPrice":50,"alchemy":true,"alchemyNumber":-20,"alchemyQQ":1055328182,"danNumber":6,"finishAutoBuyHerb":false,"limitHerbsCount":30,"makeName":"极品创世丹&极品混沌丹&极品创世丹&九天蕴仙丹&金仙造化丹&大道归一丹&菩提证道丹&太清玉液丹","makeNumber":1000}

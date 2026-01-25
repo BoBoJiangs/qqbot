@@ -433,10 +433,13 @@ public class DanCalculator {
                                             .forEach(assist -> {
                                                 List<RecipeResult> resultList = findHighestDan(main, lead, assist,botId);
                                                 for (RecipeResult result : resultList) {
-                                                    String recipe = formatRecipe(main, lead, assist,
-                                                            result.mainCount, result.leadCount, result.assistCount,
-                                                            result.spend, (result.alchemyValue - result.spend), (result.marketValue - result.spend), result.dan.name,botId);
-                                                    danRecipes.computeIfAbsent(result.dan, k -> new HashSet<>()).add(recipe);
+                                                    if(!main.name.equals(lead.name) && !main.name.equals(assist.name) &&!lead.name.equals(assist.name)){
+                                                        String recipe = formatRecipe(main, lead, assist,
+                                                                result.mainCount, result.leadCount, result.assistCount,
+                                                                result.spend, (result.alchemyValue - result.spend), (result.marketValue - result.spend), result.dan.name,botId);
+                                                        danRecipes.computeIfAbsent(result.dan, k -> new HashSet<>()).add(recipe);
+                                                    }
+
                                                 }
                                             });
                                 });

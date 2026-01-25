@@ -48,6 +48,16 @@ public class BotConfigPersist implements Serializable {
 
     private int lingShiNum;
 
+    private int challengeMode;
+
+    public int getChallengeMode() {
+        return challengeMode;
+    }
+
+    public void setChallengeMode(int challengeMode) {
+        this.challengeMode = challengeMode;
+    }
+
     public int getLingShiNum() {
         return lingShiNum;
     }

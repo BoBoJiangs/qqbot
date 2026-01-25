@@ -384,7 +384,6 @@ public class TestService {
                 } else {
                     botConfig.setChallengeMode(21);
                 }
-                saveBotConfig(bot);
             }
             if ("停止妖塔挑战".equals(message)) {
                 if (botConfig.getChallengeMode() == 11 || botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 13) {
@@ -392,7 +391,26 @@ public class TestService {
                 } else if (botConfig.getChallengeMode() == 21 || botConfig.getChallengeMode() == 22 || botConfig.getChallengeMode() == 23) {
                     botConfig.setChallengeMode(2);
                 }
-                saveBotConfig(bot);
+
+            }
+
+            if(message.startsWith("妖塔挑战模式")){
+                Pattern pattern = Pattern.compile("^妖塔挑战模式[：:】\\s]*([012])$");
+                Matcher matcher = pattern.matcher(message);
+
+                if (matcher.matches()) {
+                    int type = Integer.parseInt(matcher.group(1));
+                    botConfig.setChallengeMode(type);
+
+                    if(type == 0){
+                        group.sendMessage((new MessageChain()).reply(messageId).text("已关闭妖塔挑战"));
+                    }else if(type == 1){
+                        group.sendMessage((new MessageChain()).reply(messageId).text("已开启自动妖塔(不回血打满九层)"));
+                    } else{
+                        group.sendMessage((new MessageChain()).reply(messageId).text("已开启自动妖塔(回血打满九层)"));
+                    }
+                    saveBotConfig(bot);
+                }
             }
 
 
@@ -707,6 +725,7 @@ public class TestService {
             persist.setLingShiTotal(botConfig.getLingShiTotal());
             persist.setEnableAlchemy(botConfig.isEnableAlchemy());
             persist.setLingShiNum(botConfig.getLingShiNum());
+            persist.setChallengeMode(botConfig.getChallengeMode());
 
             Path path = Paths.get("./config/bot-" + bot.getBotId() + ".json");
             Files.createDirectories(path.getParent());
@@ -749,6 +768,7 @@ public class TestService {
             botConfig.setLingShiTotal(persist.getLingShiTotal());
             botConfig.setLingShiNum(persist.getLingShiNum());
             botConfig.setEnableAlchemy(persist.isEnableAlchemy());
+            botConfig.setChallengeMode(persist.getChallengeMode());
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -991,6 +1011,8 @@ public class TestService {
             sb.append("启用/关闭结算提醒\n");
             sb.append("启用/关闭本群结算提醒\n");
             sb.append("开始/停止更新坊市\n");
+            sb.append("开启/停止挑战九层妖塔\n");
+            sb.append("妖塔挑战模式(0无1不回血2回血)\n");
             sb.append("自动购买××(物品 价格单位：万)\n");
             sb.append("取消自动购买××\n");
             sb.append("批量取消自动购买\n");

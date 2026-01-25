@@ -31,6 +31,7 @@ import static top.sshh.qqbot.service.utils.Utils.isAtSelf;
 public class AutoBuyGoods {
     private static final Logger logger = LoggerFactory.getLogger(AutoBuyGoods.class);
     private final ExecutorService customPool = Executors.newCachedThreadPool();
+    private static final long AUTO_TASK_REFRESH_BASE_TIMEOUT_MS = 10000L;
 
     /** 每个 botId 对应的捡漏队列  的*/
     private final Map<Long, List<ProductPrice>> autoBuyMap = new ConcurrentHashMap<>();
@@ -62,9 +63,16 @@ public class AutoBuyGoods {
 
         if (message.startsWith("开始捡漏")) {
             try {
-                String[] parts = message.split(" ");
-                int frequency = Integer.parseInt(parts[1].split("频率")[1]);
-                List<String> actions = Arrays.asList(parts[2].split("&"));
+                Matcher matcher = Pattern.compile("^开始捡漏\\s+频率\\s*(\\d+)\\s+(.*)$").matcher(message);
+                if (!matcher.find()) {
+                    throw new IllegalArgumentException("invalid command format");
+                }
+                int frequency = Integer.parseInt(matcher.group(1));
+                String actionsRaw = matcher.group(2).trim();
+                if (actionsRaw.isEmpty()) {
+                    throw new IllegalArgumentException("empty actions");
+                }
+                List<String> actions = Arrays.asList(actionsRaw.split("&"));
 
                 botConfig.setFrequency(frequency);
                 botConfig.setEnableAutoBuyLowPrice(true);
@@ -78,7 +86,7 @@ public class AutoBuyGoods {
                 inFlightBuyCodeMap.remove(bot.getBotId());
                 sendNextCommand(bot, botConfig);
 
-                if (botConfig.getCultivationMode() == 1) {
+                if (botConfig.getCultivationMode() == 1 && frequency<10) {
                     botConfig.setStartScheduled(false);
                 }
             } catch (Exception e) {
@@ -103,6 +111,7 @@ public class AutoBuyGoods {
         Queue<String> queue = botCommandQueue.get(bot.getBotId());
         if (queue != null && !queue.isEmpty()) {
             String nextCmd = queue.poll();   // 取队头
+            botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             bot.getGroup(botConfig.getGroupId())
                     .sendMessage(new MessageChain().at("3889001741").text("坊市查看" + nextCmd));
             queue.offer(nextCmd);  // 放回队尾，实现循环
@@ -253,9 +262,9 @@ public class AutoBuyGoods {
         };
     }
 
-    /** 自动购买药材 */
+    /** 自动购买 */
     @GroupMessageHandler(senderIds = {3889001741L})
-    public void 自动购买药材(Bot bot, Group group, String message, Integer messageId) {
+    public void 自动购买(Bot bot, Group group, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
         boolean isAtSelf = Utils.isAtSelf(bot,message);
 //        boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
@@ -494,7 +503,7 @@ public class AutoBuyGoods {
         BotFactory.getBots().values().forEach(bot -> {
             BotConfig botConfig = bot.getBotConfig();
             if (botConfig.isEnableAutoBuyLowPrice()
-                    && System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L
+                    && System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > computeAutoTaskRefreshTimeoutMs(botConfig.getFrequency())
                     && botConfig.getAutoVerifyModel() == 2) {
 
                 autoBuyMap.put(bot.getBotId(), new CopyOnWriteArrayList<>());
@@ -504,5 +513,13 @@ public class AutoBuyGoods {
                 sendNextCommand(bot, botConfig);
             }
         });
+    }
+
+    static long computeAutoTaskRefreshTimeoutMs(int frequencySeconds) {
+        if (frequencySeconds <= 0) {
+            return AUTO_TASK_REFRESH_BASE_TIMEOUT_MS;
+        }
+        long byFrequency = frequencySeconds * 1000L + 5000L;
+        return Math.max(AUTO_TASK_REFRESH_BASE_TIMEOUT_MS, byFrequency);
     }
 }

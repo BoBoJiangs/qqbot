@@ -20,6 +20,7 @@ import top.sshh.qqbot.data.UpdateManifest;
 
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -527,9 +528,8 @@ public class UpdateService {
             Path currentJar = workDir.resolve("bot.jar");
             if (!Files.exists(newJar)) return;
 
-            String ts = DateTimeFormatter.ofPattern("yyyyMMddHHmmss")
-                    .format(Instant.now().atZone(ZoneId.systemDefault()));
-            Path backupJar = workDir.resolve("bot.jar.bak." + ts);
+            cleanupOldBackupJars(workDir);
+            Path backupJar = workDir.resolve("bot.jar.bak");
 
             if (Files.exists(currentJar)) {
                 Files.move(currentJar, backupJar, StandardCopyOption.REPLACE_EXISTING);
@@ -552,6 +552,19 @@ public class UpdateService {
             }
         } catch (Exception e) {
             logger.warn("更新文件替换失败（bot.jar.new 未能生效）：{}", e.getMessage());
+        }
+    }
+
+    private void cleanupOldBackupJars(Path workDir) {
+        if (workDir == null) return;
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(workDir, "bot.jar.bak.*")) {
+            for (Path p : stream) {
+                try {
+                    Files.deleteIfExists(p);
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (Exception ignored) {
         }
     }
 

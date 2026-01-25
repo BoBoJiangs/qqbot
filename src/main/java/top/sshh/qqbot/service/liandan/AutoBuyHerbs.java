@@ -100,13 +100,9 @@ public class AutoBuyHerbs {
                     botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
                     botConfig.setAutoBuyHerbsMode(1);
                     botConfig.setStartAuto(false);
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
-                    break;
-                case "一键采购药材":
-                    resetPram(bot, botConfig);
-                    botConfig.setStop(true);
-                    botConfig.setAutoBuyHerbsMode(2);
-                    botConfig.setStartAuto(false);
+                    if (botConfig.getCultivationMode() == 1) {
+                        botConfig.setStartScheduled(false);
+                    }
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                     break;
                 case "停止采购药材":
