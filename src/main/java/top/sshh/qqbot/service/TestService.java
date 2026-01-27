@@ -1025,7 +1025,7 @@ public class TestService {
             sb.append("任务统计\n");
             sb.append("－－－－－快捷命令－－－－－\n");
             sb.append("确认一键丹药炼金\n");
-            sb.append("确认一键装备炼金\n");
+            sb.append("批量炼金装备\n");
             sb.append("批量上架药材\n");
             sb.append("一键使用次元之钥\n");
             sb.append("一键使用追捕令\n");

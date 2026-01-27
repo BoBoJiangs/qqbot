@@ -20,24 +20,26 @@ import top.sshh.qqbot.service.utils.Utils;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Component
 public class AutoSellGoods {
     private static final Logger logger = LoggerFactory.getLogger(AutoSellGoods.class);
     private Map<Long, List<ProductPrice>> herbPackMap = new ConcurrentHashMap();
+    private Map<Long, List<ProductPrice>> equipPackMap = new ConcurrentHashMap();
     @Autowired
     private ProductPriceResponse productPriceResponse;
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
 
-    public AutoSellGoods(){
+    public AutoSellGoods() {
 
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
-    )
-    public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+    @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.ONLY_ITSELF)
+    public void enableScheduled(Bot bot, Group group, Member member, MessageChain messageChain, String message,
+            Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         long groupId = botConfig.getGroupId();
         message = message.trim();
@@ -50,55 +52,87 @@ public class AutoSellGoods {
             herbPackMap.clear();
             bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
         }
+        if ("批量炼金装备".equals(message)) {
+            botConfig.setCommand("批量炼金装备");
+            botConfig.setPage(1);
+            equipPackMap.clear();
+            bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("我的背包"));
+        }
         if ("停止执行".equals(message)) {
             botConfig.setCommand("");
             botConfig.setPage(1);
             herbPackMap.clear();
+            equipPackMap.clear();
         }
     }
 
-    @GroupMessageHandler(
-            senderIds = {3889001741L}
-    )
-    public void 成功上架药材(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+    @GroupMessageHandler(senderIds = { 3889001741L })
+    public void 成功上架药材(Bot bot, Group group, Member member, MessageChain messageChain, String message,
+            Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        if (Utils.isAtSelf(bot, group, message,xxGroupId) && (message.contains("上架价格过高") || message.contains("物品成功上架坊市") || message.contains("道友的上一条指令还没执行完")
-                || message.contains("操作失败")|| message.contains("物品数量不足")) && "批量上架药材".equals(botConfig.getCommand())) {
+        if (Utils.isAtSelf(bot, group, message, xxGroupId)
+                && (message.contains("上架价格过高") || message.contains("物品成功上架坊市") || message.contains("道友的上一条指令还没执行完")
+                        || message.contains("操作失败") || message.contains("物品数量不足"))
+                && "批量上架药材".equals(botConfig.getCommand())) {
             List<ProductPrice> autoBuyList = herbPackMap.get(bot.getBotId());
-            if (autoBuyList!=null && !autoBuyList.isEmpty()) {
+            if (autoBuyList != null && !autoBuyList.isEmpty()) {
                 autoBuyList.remove(0);
             }
-            if(autoBuyList.isEmpty()){
-                Utils.getRemindGroup(bot,xxGroupId).sendMessage(new MessageChain().text("药材上架完成"));
+            if (autoBuyList != null && autoBuyList.isEmpty()) {
+                Utils.getRemindGroup(bot, xxGroupId).sendMessage(new MessageChain().text("药材上架完成"));
                 botConfig.setCommand("");
-            }else{
-                this.buyHerbs(autoBuyList,group, bot.getBotConfig());
+            } else {
+                this.buyHerbs(autoBuyList, group, bot.getBotConfig());
             }
 
         }
 
     }
 
-    @GroupMessageHandler(
-            senderIds = {3889001741L}
-    )
-    public void 药材背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
+    @GroupMessageHandler(senderIds = { 3889001741L })
+    public void 成功炼金装备(Bot bot, Group group, Member member, MessageChain messageChain, String message,
+            Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        if (Utils.isAtSelf(bot, group,message,xxGroupId) && (message.contains("上一页") || message.contains("下一页") || message.contains("药材背包")) && "批量上架药材".equals(botConfig.getCommand())) {
+        if (Utils.isAtSelf(bot, group, message, xxGroupId)
+                && (message.contains("炼金成功") || message.contains("道友的上一条指令还没执行完")
+                        || message.contains("操作失败") || message.contains("物品数量不足"))
+                && "批量炼金装备".equals(botConfig.getCommand())) {
+            List<ProductPrice> dataList = equipPackMap.get(bot.getBotId());
+            if (dataList != null && !dataList.isEmpty()) {
+                dataList.remove(0);
+            }
+            if (dataList != null && dataList.isEmpty()) {
+                Utils.getRemindGroup(bot, xxGroupId).sendMessage(new MessageChain().text("装备炼金完成"));
+                botConfig.setCommand("");
+            } else {
+                this.alchemyEquip(dataList, group, botConfig);
+            }
+
+        }
+
+    }
+
+    @GroupMessageHandler(senderIds = { 3889001741L })
+    public void 药材背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId)
+            throws Exception {
+        BotConfig botConfig = bot.getBotConfig();
+        if (Utils.isAtSelf(bot, group, message, xxGroupId)
+                && (message.contains("上一页") || message.contains("下一页") || message.contains("药材背包"))
+                && "批量上架药材".equals(botConfig.getCommand())) {
             List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
             boolean hasNextPage = false;
             TextMessage textMessage = null;
             if (textMessages.size() > 1) {
-                textMessage = (TextMessage)textMessages.get(textMessages.size()-1);
+                textMessage = (TextMessage) textMessages.get(textMessages.size() - 1);
             } else {
-                textMessage = (TextMessage)textMessages.get(0);
+                textMessage = (TextMessage) textMessages.get(0);
             }
 
             if (textMessage != null) {
                 String msg = textMessage.getText();
                 if (message.contains("炼金") && message.contains("坊市数据")) {
                     String[] lines = msg.split("\n");
-                    this.parseHerbList(Arrays.asList(lines),bot);
+                    this.parseHerbList(Arrays.asList(lines), bot);
                     if (msg.contains("下一页")) {
                         hasNextPage = true;
                     }
@@ -109,7 +143,7 @@ public class AutoSellGoods {
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包" + botConfig.getPage()));
                 } else {
 
-                    buyHerbs(this.herbPackMap.get(bot.getBotId()),group,botConfig);
+                    buyHerbs(this.herbPackMap.get(bot.getBotId()), group, botConfig);
 
                 }
             }
@@ -117,26 +151,116 @@ public class AutoSellGoods {
 
     }
 
-    public void parseHerbList(List<String> medicinalList,Bot bot) throws Exception {
+    @GroupMessageHandler(senderIds = { 3889001741L })
+    public void 装备背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId)
+            throws Exception {
+        BotConfig botConfig = bot.getBotConfig();
+        if (Utils.isAtSelf(bot, group, message, xxGroupId) && (message.contains("上一页") || message.contains("下一页")
+                || (message.contains("的背包") && message.contains("持有灵石"))) && "批量炼金装备".equals(botConfig.getCommand())) {
+            List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
+            boolean hasNextPage = false;
+            TextMessage textMessage = null;
+            if (textMessages.size() > 1) {
+                textMessage = (TextMessage) textMessages.get(textMessages.size() - 1);
+            } else {
+                textMessage = (TextMessage) textMessages.get(0);
+            }
+
+            if (textMessage != null) {
+                String msg = textMessage.getText();
+                if (message.contains("炼金") && message.contains("坊市数据")) {
+                    String[] lines = msg.split("\n");
+                    this.parseEquipList(lines, bot);
+                    if (msg.contains("下一页")) {
+                        hasNextPage = true;
+                    }
+                }
+
+                if (hasNextPage) {
+                    botConfig.setPage(botConfig.getPage() + 1);
+                    group.sendMessage((new MessageChain()).at("3889001741").text("我的背包" + botConfig.getPage()));
+                } else {
+                    alchemyEquip(this.equipPackMap.get(bot.getBotId()), group, botConfig);
+
+                }
+            }
+        }
+
+    }
+
+    public void parseEquipList(String[] lines, Bot bot) throws Exception {
+
+        List<ProductPrice> productPrices = this.equipPackMap.get(bot.getBotId());
+        if (productPrices == null) {
+            productPrices = new ArrayList<>();
+        }
+        for (int i = 0; i < lines.length - 1; ++i) {
+
+            String line = lines[i];
+            if (line.contains("极品") || line.contains("无上") || line.contains("辅修")) {
+                continue;
+            }
+            line = line.trim();
+            String name = "";
+            if (!line.endsWith("功法") && !line.endsWith("神通")) {
+                if (line.startsWith("上品") || line.startsWith("下品") || line.startsWith("极品")
+                        || line.startsWith("无上仙器")) {
+                    name = line.substring(4).trim();
+                }
+            } else if (line.contains("辅修")) {
+                name = line.substring(0, line.length() - 8).trim();
+            } else if (!line.startsWith("极品神通")) {
+                name = line.substring(0, line.length() - 6).trim();
+            }
+
+            if (name.startsWith("法器")) {
+                name = name.substring(2);
+            }
+
+            lines[i + 1] = lines[i + 1].replace("已装备", "");
+            int quantity = 1;
+            if (lines[i + 1].contains("拥有数量")) {
+                Pattern pattern = Pattern.compile("\\d+");
+                Matcher matcher = pattern.matcher(lines[i + 1]);
+                if (matcher.find()) {
+                    String numberStr = matcher.group();
+                    quantity = Integer.parseInt(numberStr);
+                }
+            }
+
+            name = name.replaceAll("\\s", "");
+            if (!StringUtils.isBlank(name)) {
+                ProductPrice productPrice = new ProductPrice();
+                productPrice.setName(name);
+                productPrice.setHerbCount(quantity);
+                productPrices.add(productPrice);
+                this.equipPackMap.put(bot.getBotId(), productPrices);
+            }
+
+        }
+
+    }
+
+    public void parseHerbList(List<String> medicinalList, Bot bot) throws Exception {
         String currentHerb = null;
         Iterator var2 = medicinalList.iterator();
 
-        while(var2.hasNext()) {
-            String line = (String)var2.next();
+        while (var2.hasNext()) {
+            String line = (String) var2.next();
             line = line.trim();
             if (line.contains("名字：")) {
                 currentHerb = line.replaceAll("名字：", "");
             } else if (currentHerb != null && line.contains("拥有数量:")) {
                 int count = Integer.parseInt(line.split("拥有数量:|炼金")[1]);
 
-                herbsCountLimit10(bot,count,currentHerb);
+                herbsCountLimit10(bot, count, currentHerb);
                 currentHerb = null;
             }
         }
 
     }
 
-    private void herbsCountLimit10(Bot bot, int quantity,String currentHerb) {
+    private void herbsCountLimit10(Bot bot, int quantity, String currentHerb) {
         int remaining = quantity;
         while (remaining > 0) {
             int batchSize = Math.min(10, remaining); // 本次上架数量，最多10个
@@ -154,31 +278,34 @@ public class AutoSellGoods {
         }
     }
 
-
-    private void buyHerbs(List<ProductPrice> autoBuyList,Group group, BotConfig botConfig) {
+    private void buyHerbs(List<ProductPrice> autoBuyList, Group group, BotConfig botConfig) {
         Iterator var3 = autoBuyList.iterator();
 
-        while(var3.hasNext()) {
-            ProductPrice productPrice = (ProductPrice)var3.next();
+        while (var3.hasNext()) {
+            ProductPrice productPrice = (ProductPrice) var3.next();
 
             try {
-                if(StringUtils.isEmpty(botConfig.getCommand())){
+                if (StringUtils.isEmpty(botConfig.getCommand())) {
                     break;
                 }
-                ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(productPrice.getName().trim());
+                ProductPrice first = this.productPriceResponse
+                        .getFirstByNameOrderByTimeDesc(productPrice.getName().trim());
                 if (first != null) {
-                    if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(productPrice.getName()) * 1.1) {
+                    if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(productPrice.getName())
+                            * 1.1) {
                         group.sendMessage((new MessageChain()).at("3889001741")
                                 .text("炼金 " + first.getName() + " " + productPrice.getHerbCount()));
-                        group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice() + "万，炼金：" + ProductLowPrice.getLowPrice(first.getName()) + "万，直接炼金处理。"));
+                        group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice()
+                                + "万，炼金：" + ProductLowPrice.getLowPrice(first.getName()) + "万，直接炼金处理。"));
                         if (!autoBuyList.isEmpty()) {
                             autoBuyList.remove(0);
                         }
-                        this.buyHerbs(autoBuyList,group, botConfig);
+                        this.buyHerbs(autoBuyList, group, botConfig);
 
                     } else {
                         group.sendMessage((new MessageChain()).at("3889001741")
-                                .text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000 + " " + productPrice.getHerbCount()));
+                                .text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000 + " "
+                                        + productPrice.getHerbCount()));
                     }
                 }
                 break;
@@ -189,5 +316,24 @@ public class AutoSellGoods {
 
     }
 
+    private void alchemyEquip(List<ProductPrice> autoBuyList, Group group, BotConfig botConfig) {
+        Iterator var3 = autoBuyList.iterator();
+
+        while (var3.hasNext()) {
+            ProductPrice productPrice = (ProductPrice) var3.next();
+
+            try {
+                if (StringUtils.isEmpty(botConfig.getCommand())) {
+                    break;
+                }
+                group.sendMessage((new MessageChain()).at("3889001741")
+                            .text("炼金 " + productPrice.getName() + " " + productPrice.getHerbCount()));
+                break;
+            } catch (Exception var6) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+    }
 
 }

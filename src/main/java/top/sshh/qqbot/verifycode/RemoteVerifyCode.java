@@ -356,110 +356,123 @@ public class RemoteVerifyCode {
             if (StringUtils.isNotBlank(title)) {
                 if (title.contains("请点击图中第") && title.contains("表情") && !recognitionResult.emojiList.isEmpty()) {
                     answer = getEmojiAnswer(title, recognitionResult);
-
-                } else if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
-                    Character targetChar = extractTargetChar(title);
-                    if (targetChar != null) {
-                        answer = String.valueOf(countCharOccurrences(resultText, targetChar));
-                    } else {
-                        System.out.println("识别失败，请手动点击验证码" + title);
-                        answer = "识别失败，请手动点击验证码";
-//                        recognitionResult.answer = "识别失败，请手动点击验证码";
-//                        return resultText;
-                    }
-                } else if (title.contains("请按照深色文字的题目点击对应的答案")) {
-
-                    if (resultText.contains("点击") && resultText.length() < 7) {
-
-                        if (resultText.length() == 4 || resultText.length() == 5) {
-                            char secondLastChar = resultText.charAt(resultText.length() - 2);
-                            char lastChar = resultText.charAt(resultText.length() - 1);
-                            String secondLastStr = String.valueOf(secondLastChar);
-                            String lastStr = String.valueOf(lastChar);
-
-                            if ("沙".equals(secondLastStr) || "漏".equals(lastStr)) {
-                                answer = "沙漏";
-                            } else if ("葡".equals(secondLastStr) || "萄".equals(lastStr) ||
-                                    "萄".equals(secondLastStr) || "葡".equals(lastStr)) {
-                                answer = "葡萄";
-                            } else if ("书".equals(secondLastStr) || "本".equals(lastStr)) {
-                                answer = "书本";
-                            } else if ("图".equals(secondLastStr) || "钉".equals(lastStr)) {
-                                answer = "图钉";
-                            } else if ("西".equals(secondLastStr) || "瓜".equals(lastStr)) {
-                                answer = "西瓜";
-                            } else if ("汽".equals(secondLastStr) || "车".equals(lastStr)) {
-                                answer = "汽车";
-                            } else if ("鲸".equals(secondLastStr) || "鱼".equals(lastStr)) {
-                                answer = "鲸鱼";
-                            } else if (resultText.length() == 4 && "鸡".equals(lastStr)) {
-                                answer = "鸡";
-                            } else if (resultText.length() == 5 && "脑".equals(lastStr)) {
-                                answer = "电脑";
-                            } else if (resultText.length() == 5 && ("池".equals(lastStr) || "减".equals(lastStr))) {
-                                answer = "电池";
-                            } else if (resultText.length() == 5 && "电".equals(secondLastStr) && "沙".equals(lastStr)) {
-                                answer = "电池";
-                            } else if (resultText.length() == 5 && "电".equals(secondLastStr)) {
-                                answer = "电池";
-                            } else if (resultText.length() == 5 && ("苹".equals(secondLastStr) || "果".equals(lastStr))) {
-                                answer = "苹果";
-                            } else if (resultText.length() == 4) {
-                                answer = lastStr;
-                            } else {
-                                answer = secondLastStr + lastStr;
-                            }
-                        } else {
-                            answer = resultText.substring("请点击".length()).trim();
-                            if (answer.equals("漏萄")) answer = "葡萄";
+                }else if(title.contains("请点击") && title.contains("飞行的交通工具") && !recognitionResult.emojiList.isEmpty()){
+                    for(String item : recognitionResult.emojiList){
+                        if("飞机".equals(item) || "直升机".equals(item)){
+                            answer = item;
                         }
-                    } else if (!recognitionResult.emojiList.isEmpty() && !StringUtils.isEmpty(resultText)) {
-                        answer = getEmojiAnswer(resultText, recognitionResult);
-                    } else if (resultText.contains("表") && resultText.contains("情")) {
-                        int idx = 1;
-                        Matcher matcher = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(resultText);
-                        if (recognitionResult.emojiList.isEmpty()) {
-                            if (matcher.find()) {
-                                String match = matcher.group(1);
-                                if (match.matches("\\d+")) {
-                                    idx = Integer.parseInt(match);
-                                } else {
-                                    idx = CHINESE_NUMBERS.get(match); // 中文转数字
-                                }
-                            }
-                            if (idx == 7) {
-                                idx = 1;
-                            }
-                            answer = "序号" + idx;
-                        } else if (recognitionResult.emojiList.size() == 3) {
-                            if (matcher.find()) {
-                                if (Integer.parseInt(matcher.group()) < 4) {
-                                    idx = Integer.parseInt(matcher.group()) - 1;
-                                }
-                                if (Integer.parseInt(matcher.group()) == 4 || Integer.parseInt(matcher.group()) == 7) {
-                                    idx = 0;
-                                }
-                            }
-                            if (idx < recognitionResult.emojiList.size()) {
-                                answer = recognitionResult.emojiList.get(idx);
-                            }
-                        }
-                    } else if (resultText.contains("加") && (resultText.length() == 11 || resultText.length() == 10)) {
-                        //                        resultText = resultText.replaceAll("点", "加");
-                        answer = String.valueOf(calculate(resultText, "加"));
-                    } else if (resultText.contains("减")) {
-                        answer = String.valueOf(calculate(resultText, "减"));
-                    } else if (resultText.contains("乘")) {
-                        resultText = resultText.replaceAll("结乘", "结果");
-                        resultText = resultText.replaceAll("乘点击", "请点击");
-                        answer = String.valueOf(calculate(resultText, "乘"));
                     }
-                } else if (title.contains("请问图中深色文字中包含几个字符")) {
-                    answer = String.valueOf(resultText.length());
+                    if(StringUtils.isBlank(answer)){
+                         answer = "飞机";
+                    }
                 }
             }
-            if (StringUtils.isEmpty(answer)) {
+//             if (StringUtils.isNotBlank(title)) {
+//                 if (title.contains("请点击图中第") && title.contains("表情") && !recognitionResult.emojiList.isEmpty()) {
+//                     answer = getEmojiAnswer(title, recognitionResult);
 
+//                 } else if (title.contains("请问深色文字中字符") && title.contains("出现了几次")) {
+//                     Character targetChar = extractTargetChar(title);
+//                     if (targetChar != null) {
+//                         answer = String.valueOf(countCharOccurrences(resultText, targetChar));
+//                     } else {
+//                         System.out.println("识别失败，请手动点击验证码" + title);
+//                         answer = "识别失败，请手动点击验证码";
+// //                        recognitionResult.answer = "识别失败，请手动点击验证码";
+// //                        return resultText;
+//                     }
+//                 } else if (title.contains("请按照深色文字的题目点击对应的答案")) {
+
+//                     if (resultText.contains("点击") && resultText.length() < 7) {
+
+//                         if (resultText.length() == 4 || resultText.length() == 5) {
+//                             char secondLastChar = resultText.charAt(resultText.length() - 2);
+//                             char lastChar = resultText.charAt(resultText.length() - 1);
+//                             String secondLastStr = String.valueOf(secondLastChar);
+//                             String lastStr = String.valueOf(lastChar);
+
+//                             if ("沙".equals(secondLastStr) || "漏".equals(lastStr)) {
+//                                 answer = "沙漏";
+//                             } else if ("葡".equals(secondLastStr) || "萄".equals(lastStr) ||
+//                                     "萄".equals(secondLastStr) || "葡".equals(lastStr)) {
+//                                 answer = "葡萄";
+//                             } else if ("书".equals(secondLastStr) || "本".equals(lastStr)) {
+//                                 answer = "书本";
+//                             } else if ("图".equals(secondLastStr) || "钉".equals(lastStr)) {
+//                                 answer = "图钉";
+//                             } else if ("西".equals(secondLastStr) || "瓜".equals(lastStr)) {
+//                                 answer = "西瓜";
+//                             } else if ("汽".equals(secondLastStr) || "车".equals(lastStr)) {
+//                                 answer = "汽车";
+//                             } else if ("鲸".equals(secondLastStr) || "鱼".equals(lastStr)) {
+//                                 answer = "鲸鱼";
+//                             } else if (resultText.length() == 4 && "鸡".equals(lastStr)) {
+//                                 answer = "鸡";
+//                             } else if (resultText.length() == 5 && "脑".equals(lastStr)) {
+//                                 answer = "电脑";
+//                             } else if (resultText.length() == 5 && ("池".equals(lastStr) || "减".equals(lastStr))) {
+//                                 answer = "电池";
+//                             } else if (resultText.length() == 5 && "电".equals(secondLastStr) && "沙".equals(lastStr)) {
+//                                 answer = "电池";
+//                             } else if (resultText.length() == 5 && "电".equals(secondLastStr)) {
+//                                 answer = "电池";
+//                             } else if (resultText.length() == 5 && ("苹".equals(secondLastStr) || "果".equals(lastStr))) {
+//                                 answer = "苹果";
+//                             } else if (resultText.length() == 4) {
+//                                 answer = lastStr;
+//                             } else {
+//                                 answer = secondLastStr + lastStr;
+//                             }
+//                         } else {
+//                             answer = resultText.substring("请点击".length()).trim();
+//                             if (answer.equals("漏萄")) answer = "葡萄";
+//                         }
+//                     } else if (!recognitionResult.emojiList.isEmpty() && !StringUtils.isEmpty(resultText)) {
+//                         answer = getEmojiAnswer(resultText, recognitionResult);
+//                     } else if (resultText.contains("表") && resultText.contains("情")) {
+//                         int idx = 1;
+//                         Matcher matcher = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(resultText);
+//                         if (recognitionResult.emojiList.isEmpty()) {
+//                             if (matcher.find()) {
+//                                 String match = matcher.group(1);
+//                                 if (match.matches("\\d+")) {
+//                                     idx = Integer.parseInt(match);
+//                                 } else {
+//                                     idx = CHINESE_NUMBERS.get(match); // 中文转数字
+//                                 }
+//                             }
+//                             if (idx == 7) {
+//                                 idx = 1;
+//                             }
+//                             answer = "序号" + idx;
+//                         } else if (recognitionResult.emojiList.size() == 3) {
+//                             if (matcher.find()) {
+//                                 if (Integer.parseInt(matcher.group()) < 4) {
+//                                     idx = Integer.parseInt(matcher.group()) - 1;
+//                                 }
+//                                 if (Integer.parseInt(matcher.group()) == 4 || Integer.parseInt(matcher.group()) == 7) {
+//                                     idx = 0;
+//                                 }
+//                             }
+//                             if (idx < recognitionResult.emojiList.size()) {
+//                                 answer = recognitionResult.emojiList.get(idx);
+//                             }
+//                         }
+//                     } else if (resultText.contains("加") && (resultText.length() == 11 || resultText.length() == 10)) {
+//                         //                        resultText = resultText.replaceAll("点", "加");
+//                         answer = String.valueOf(calculate(resultText, "加"));
+//                     } else if (resultText.contains("减")) {
+//                         answer = String.valueOf(calculate(resultText, "减"));
+//                     } else if (resultText.contains("乘")) {
+//                         resultText = resultText.replaceAll("结乘", "结果");
+//                         resultText = resultText.replaceAll("乘点击", "请点击");
+//                         answer = String.valueOf(calculate(resultText, "乘"));
+//                     }
+//                 } else if (title.contains("请问图中深色文字中包含几个字符")) {
+//                     answer = String.valueOf(resultText.length());
+//                 }
+//             }
+            if (StringUtils.isEmpty(answer)) {
                 answer = "识别失败，请手动点击验证码";
             }
 
