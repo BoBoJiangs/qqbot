@@ -89,9 +89,12 @@ public class UpdateService {
     @PostConstruct
     public void postStartupSendPendingNotice() {
         new Thread(() -> {
+            try {
+                syncAppliedVersionFromPendingNotice();
+            } catch (Exception ignored) {
+            }
             for (int i = 0; i < 30; i++) {
                 try {
-                    syncAppliedVersionFromPendingNotice();
                     if (trySendPendingNoticeOnce()) return;
                 } catch (Exception ignored) {
                 }
@@ -102,6 +105,20 @@ public class UpdateService {
                 }
             }
         }, "update-notice-on-start").start();
+    }
+
+    @PostConstruct
+    public void postStartupAutoCheckOnce() {
+        if (!updateProperties.isEnabled() || !updateProperties.isAutoApply()) {
+            return;
+        }
+        new Thread(() -> {
+            try {
+                Thread.sleep(15000L);
+                scheduledAutoUpdate();
+            } catch (InterruptedException ignored) {
+            }
+        }, "update-check-on-start").start();
     }
 
     public UpdateManifest checkForUpdate() throws Exception {
@@ -201,7 +218,7 @@ public class UpdateService {
 
     @Scheduled(
             fixedDelayString = "${update.checkIntervalMs:3600000}",
-            initialDelayString = "${update.initialDelayMs:120000}"
+            initialDelayString = "${update.initialDelayMs:60000}"
     )
     public void scheduledAutoUpdate() {
         if (!updateProperties.isEnabled() || !updateProperties.isAutoApply()) {
@@ -406,7 +423,45 @@ public class UpdateService {
             if (target == null) return;
             String targetVersion = String.valueOf(target).trim();
             if (StringUtils.isBlank(targetVersion)) return;
-            writeAppliedVersion(targetVersion);
+            String buildVersion = getBuildVersion();
+            if (StringUtils.isNotBlank(buildVersion) && compareVersion(buildVersion, targetVersion) >= 0) {
+                writeAppliedVersion(targetVersion);
+                return;
+            }
+
+            Long noticeTime = null;
+            try {
+                Object t = payload.get("time");
+                if (t instanceof Number) noticeTime = ((Number) t).longValue();
+                else if (t != null) noticeTime = Long.parseLong(String.valueOf(t));
+            } catch (Exception ignored) {
+            }
+
+            Path currentJar = workDir.resolve("bot.jar");
+            if (noticeTime == null || !Files.exists(currentJar)) {
+                maybeClearWrongAppliedVersion(workDir, targetVersion);
+                return;
+            }
+
+            long jarMtime = Files.getLastModifiedTime(currentJar).toMillis();
+            if (jarMtime + 1000L >= noticeTime) {
+                writeAppliedVersion(targetVersion);
+            } else {
+                maybeClearWrongAppliedVersion(workDir, targetVersion);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void maybeClearWrongAppliedVersion(Path workDir, String targetVersion) {
+        try {
+            if (workDir == null || StringUtils.isBlank(targetVersion)) return;
+            String applied = readAppliedVersion();
+            if (StringUtils.isBlank(applied)) return;
+            if (compareVersion(applied, targetVersion) >= 0) {
+                Path file = workDir.resolve("update").resolve(APPLIED_VERSION_FILE_NAME);
+                Files.deleteIfExists(file);
+            }
         } catch (Exception ignored) {
         }
     }
