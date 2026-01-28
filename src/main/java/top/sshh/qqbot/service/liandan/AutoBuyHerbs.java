@@ -62,6 +62,9 @@ public class AutoBuyHerbs {
     private final Map<Long, Integer> noQueriedCountMap = new ConcurrentHashMap<>();
     private final Map<Long, List<Integer>> makeDrugIndexListMap = new ConcurrentHashMap<>();
     private final Map<Long, Integer> drugIndexMap = new ConcurrentHashMap<>();
+    
+    // 按 botId 隔离：智能调整药材价格模式
+    private final Map<Long, Boolean> smartAdjustModeMap = new ConcurrentHashMap<>();
 
     @Autowired
     public DanCalculator danCalculator;
@@ -110,6 +113,16 @@ public class AutoBuyHerbs {
                     botConfig.setAutoBuyHerbsMode(0);
                     group.sendMessage((new MessageChain()).reply(messageId).text("停止采购"));
                     break;
+                
+                case "分析背包药材":
+                    resetPram(bot, botConfig);
+                    smartAdjustModeMap.put(botId, true);
+                    medicinalListMap.put(botId, new ArrayList<>());
+                    pageMap.put(botId, 1);
+                   
+                    botConfig.setAutoBuyHerbsMode(0);
+                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+                    break;
 
                 default:
                     this.handlePurchaseCommands(bot, group, message, messageId);
@@ -143,6 +156,7 @@ public class AutoBuyHerbs {
         autoBuyListMap.put(botId, new CopyOnWriteArrayList<>());
         medicinalListMap.put(botId, new ArrayList<>());
         makeDrugIndexListMap.putIfAbsent(botId, new ArrayList<>());
+        smartAdjustModeMap.put(botId, false);
         botConfig.setTaskStatusHerbs(1);
     }
 
@@ -153,7 +167,9 @@ public class AutoBuyHerbs {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
-        if (isGroup && (message.contains("上一页") || message.contains("下一页") || message.contains("药材背包")) && botConfig.getAutoBuyHerbsMode()!=0) {
+        boolean isSmartAdjustMode = smartAdjustModeMap.getOrDefault(botId, false);
+        
+        if (isGroup && (message.contains("上一页") || message.contains("下一页") || message.contains("药材背包")) && (botConfig.getAutoBuyHerbsMode()!=0 || isSmartAdjustMode)) {
             List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
             boolean hasNextPage = false;
             TextMessage textMessage = null;
@@ -179,9 +195,16 @@ public class AutoBuyHerbs {
                     pageMap.put(botId, nextPage);
                     group.sendMessage((new MessageChain()).at("3889001741").text("药材背包" + nextPage));
                 } else {
-                    botConfig.setStop(false);
-                    this.parseHerbList(bot);
-                    this.refreshHerbsIndex(bot);
+                    if (isSmartAdjustMode) {
+                        botConfig.setStop(false);
+                        this.parseHerbList(bot);
+                        this.analyzeHerbCount(botId, group);
+                        smartAdjustModeMap.put(botId, false);
+                    } else {
+                        botConfig.setStop(false);
+                        this.parseHerbList(bot);
+                        this.refreshHerbsIndex(bot);
+                    }
                 }
             }
         }
@@ -358,6 +381,7 @@ public class AutoBuyHerbs {
 //            group.sendMessage((new MessageChain()).reply(messageId).text(result.toString()));
 //        }
         StringBuilder result = new StringBuilder();
+        StringBuilder belowMarketResult = new StringBuilder();
 
         // 按价格从高到低排序
         List<ProductPrice> sortedProducts = productMap.values().stream()
@@ -372,10 +396,28 @@ public class AutoBuyHerbs {
                     .append("万 坊市:")
                     .append(first!=null?first.getPrice():0)
                     .append("万\n");
+            
+            // 分析低于坊市价格的药材
+            if (first != null && value.getPrice() < first.getPrice()) {
+                belowMarketResult.append(value.getName())
+                        .append(" ")
+                        .append(value.getPrice())
+                        .append("万 坊市:")
+                        .append(first.getPrice())
+                        .append("万\n");
+            }
         }
 
         if (result.length() > 0) {
             group.sendMessage((new MessageChain()).reply(messageId).text(result.toString()));
+        }
+        
+        // 发送低于坊市价格的药材信息
+        if (belowMarketResult.length() > 0) {
+            StringBuilder belowMarketMessage = new StringBuilder();
+            belowMarketMessage.append("以下药材低于坊市价格，建议根据需求调整\n");
+            belowMarketMessage.append(belowMarketResult.toString());
+            group.sendMessage(new MessageChain().text(belowMarketMessage.toString().trim()));
         }
 
     }
@@ -646,5 +688,42 @@ public class AutoBuyHerbs {
             }
 
         }
+    }
+    
+    // -------------------- 智能调整药材价格功能 --------------------
+    private void analyzeHerbCount(Long botId, Group group) {
+        Config config = danCalculator.getConfig(botId);
+        if (config == null) {
+            group.sendMessage(new MessageChain().text("配置信息获取失败，无法进行分析"));
+            return;
+        }
+
+        int limitHerbsCount = config.getLimitHerbsCount();
+        Map<String, ProductPrice> herbPackMap = herbPackMapMap.getOrDefault(botId, new ConcurrentHashMap<>());
+        
+        List<String> overLimitHerbs = new ArrayList<>();
+        for (Map.Entry<String, ProductPrice> entry : herbPackMap.entrySet()) {
+            if (entry.getValue().getHerbCount() > limitHerbsCount) {
+                overLimitHerbs.add(entry.getKey());
+            }
+        }
+
+        if (overLimitHerbs.isEmpty()) {
+            group.sendMessage(new MessageChain().text("当前背包药材数量均在限制范围内，无需调整价格"));
+        } else {
+            StringBuilder sb = new StringBuilder();
+            sb.append("检测到背包数量累积较多，以下药材为当前坊市的药材价格,建议根据需求调整\n");
+
+            for (String herbName : overLimitHerbs) {
+                ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(herbName.trim());
+                if (first != null) {
+                    sb.append("采购药材").append(herbName).append(" ").append(first.getPrice()).append("\n");
+                }
+            }
+
+            group.sendMessage(new MessageChain().text(sb.toString().trim()));
+        }
+
+        medicinalListMap.put(botId, new ArrayList<>());
     }
 }

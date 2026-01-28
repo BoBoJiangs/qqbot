@@ -360,6 +360,7 @@ public class RemoteVerifyCode {
                     for(String item : recognitionResult.emojiList){
                         if("飞机".equals(item) || "直升机".equals(item)){
                             answer = item;
+                            break;
                         }
                     }
                     if(StringUtils.isBlank(answer)){

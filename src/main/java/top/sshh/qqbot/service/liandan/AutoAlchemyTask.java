@@ -16,6 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.MessageNumber;
+import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.GroupManager;
 
 import java.io.*;
@@ -46,6 +47,8 @@ public class AutoAlchemyTask {
 
     // 与每个 botId 对应的 group（启动自动炼丹时保存，发送消息使用）
     private final Map<Long, Group> groupMap = new ConcurrentHashMap<>();
+
+    
 
     // 不需要按 bot 隔离（全局）
 //    public static volatile boolean isCreateDan = true;
@@ -299,6 +302,7 @@ public class AutoAlchemyTask {
             sb.append("取消采购药材××\n");
             sb.append("批量取消采购药材\n");
             sb.append("查询采购药材\n");
+
             sb.append("采购药材×× ××\n");
             sb.append("开始/停止自动炼丹\n");
             sb.append("查询炼丹配方\n");
@@ -310,6 +314,7 @@ public class AutoAlchemyTask {
             sb.append("刷新指定药材坊市 ×&×&×\n");
             sb.append("取消刷新指定药材坊市\n");
             sb.append("批量修改性平价格 ××\n");
+            sb.append("分析背包药材\n");
             return sb.toString();
         } else {
             if (message.equals("炼丹设置")) {
@@ -725,4 +730,6 @@ public class AutoAlchemyTask {
             System.out.println("背包文件清空错误: " + e.getMessage());
         }
     }
+
+    
 }

@@ -95,6 +95,11 @@ public class TestService {
             if(!botConfig.isEnableAutoBuyLowPrice()){
                 botConfig.setStartScheduled(true);
                 group.sendMessage((new MessageChain()).at("3889001741").text("修炼"));
+            }else{
+                if(botConfig.getFrequency()>10){
+                    botConfig.setStartScheduled(true);
+                    group.sendMessage((new MessageChain()).at("3889001741").text("修炼"));
+                }
             }
         } else if (cultivationMode == 2) {
             botConfig.setStartScheduled(false);

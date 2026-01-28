@@ -128,7 +128,7 @@ public class AutoBuyGoods {
 
         if (autoBuyMap.get(bot.getBotId())!=null && isGroup && isAtSelf && (message.contains("道友成功购买")
                 || message.contains("卖家正在进行其他操作")
-                || (message.contains("成功参与") && message.contains("缘定"))
+                || (message.contains("参与") && message.contains("缘定"))
                 || message.contains("今天已经很努力了")
                 || message.contains("坊市现在太繁忙了")
                 || message.contains("没钱还来买东西")
