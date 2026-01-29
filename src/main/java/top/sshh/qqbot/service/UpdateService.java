@@ -62,6 +62,52 @@ public class UpdateService {
     private static final String NOTICE_FILE_NAME = "last_update_notice.json";
     private static final String APPLIED_VERSION_FILE_NAME = "applied_version.txt";
 
+    public String getCurrentVersionText() {
+        return getCurrentVersion();
+    }
+
+    public boolean hasUpdate(UpdateManifest manifest) {
+        if (manifest == null) return false;
+        boolean force = manifest.getForce() != null && manifest.getForce();
+        return force || isUpdateAvailable(getCurrentVersion(), manifest.getVersion());
+    }
+
+    public String buildCheckUpdateMessage() throws Exception {
+        UpdateManifest manifest = checkForUpdate();
+        String current = getCurrentVersion();
+        boolean available = hasUpdate(manifest);
+        StringBuilder sb = new StringBuilder();
+        if (available) {
+            sb.append("检测到新版本\n");
+            sb.append("当前版本：").append(StringUtils.defaultString(current, "—")).append("\n");
+            sb.append("最新版本：").append(StringUtils.defaultString(manifest == null ? null : manifest.getVersion(), "—")).append("\n");
+            if (StringUtils.isNotBlank(manifest == null ? null : manifest.getNotes())) {
+                sb.append("\n更新日志：\n").append(manifest.getNotes());
+            } else {
+                sb.append("\n更新日志：暂无");
+            }
+            sb.append("\n如需更新，请发送“立即更新”");
+        } else {
+            sb.append("当前已是最新版本\n");
+            sb.append("当前版本：").append(StringUtils.defaultString(current, "—"));
+        }
+        return sb.toString();
+    }
+
+    public String buildLatestChangelogMessage() throws Exception {
+        UpdateManifest manifest = checkForUpdate();
+        StringBuilder sb = new StringBuilder();
+        sb.append("版本更新日志\n");
+        sb.append("当前版本：").append(StringUtils.defaultString(getCurrentVersion(), "—")).append("\n");
+        sb.append("最新版本：").append(StringUtils.defaultString(manifest == null ? null : manifest.getVersion(), "—")).append("\n");
+        if (StringUtils.isNotBlank(manifest == null ? null : manifest.getNotes())) {
+            sb.append("\n").append(manifest.getNotes());
+        } else {
+            sb.append("\n暂无更新日志");
+        }
+        return sb.toString();
+    }
+
     public Map<String, Object> getState() {
         Map<String, Object> out = new LinkedHashMap<>();
         out.put("enabled", updateProperties.isEnabled());
@@ -193,6 +239,14 @@ public class UpdateService {
     }
 
     public void applyUpdateAndRestart(UpdateManifest manifest) throws Exception {
+        applyUpdateInternal(manifest, updateProperties.isAutoRestart());
+    }
+
+    public void applyUpdateAndRestartNow(UpdateManifest manifest) throws Exception {
+        applyUpdateInternal(manifest, true);
+    }
+
+    private void applyUpdateInternal(UpdateManifest manifest, boolean restart) throws Exception {
         lock.lock();
         try {
             Path newJar = downloadLatest(manifest);
@@ -201,7 +255,7 @@ public class UpdateService {
             savePendingNotice(buildVersion, manifest);
             trySendNoticeNow(buildVersion, manifest);
             tryPromoteDownloadedJar(newJar, manifest == null ? null : manifest.getVersion());
-            if (updateProperties.isAutoRestart()) {
+            if (restart) {
                 new Thread(() -> {
                     try {
                         Thread.sleep(1500);

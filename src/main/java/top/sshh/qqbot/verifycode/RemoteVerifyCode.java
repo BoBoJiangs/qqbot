@@ -62,6 +62,7 @@ public class RemoteVerifyCode {
     private String shituApiUrl;
     public Map<Long, Buttons> botButtonMap = new ConcurrentHashMap();
     public Map<Long, Integer> lastClickIndex = new ConcurrentHashMap();
+    private final Map<Long, Long> lastServiceWarnAt = new ConcurrentHashMap<>();
     private static final Map<String, Integer> CHINESE_NUMBERS = new HashMap<>();
 
     static {
@@ -199,6 +200,10 @@ public class RemoteVerifyCode {
             }
 
             RecognitionResult recognitionResult = recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText(), bot);
+            if (isCaptchaServiceBlocked(recognitionResult)) {
+                sendCaptchaServiceBlockedMessage(bot, group, verifyQQ, recognitionResult);
+                return;
+            }
             if (StringUtils.isNotBlank(verifyQQ)) {
                 codeUrlMap.put(Long.parseLong(verifyQQ), recognitionResult);
             } else {
@@ -207,7 +212,7 @@ public class RemoteVerifyCode {
 //            if (StringUtils.isNotBlank(verifyQQ)) {
 //                group.sendMessage((new MessageChain()).text(result));
 //            }
-            if (recognitionResult.result.contains("识别失败")) {
+            if (StringUtils.defaultString(recognitionResult.result).contains("识别失败")) {
                 verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, verifyQQ, recognitionResult);
                 return;
             }
@@ -350,7 +355,10 @@ public class RemoteVerifyCode {
             }
             recognitionResult.url = imageUrl;
             recognitionResult.title = title;
-            resultText = recognitionResult.result;
+            if (recognitionResult.emojiList == null) {
+                recognitionResult.emojiList = new ArrayList<>();
+            }
+            resultText = StringUtils.defaultString(recognitionResult.result);
 
             resultText = Utils.extractAfterPleaseClick(resultText);
             if (StringUtils.isNotBlank(title)) {
@@ -489,6 +497,50 @@ public class RemoteVerifyCode {
         }
     }
 
+    private boolean isCaptchaServiceBlocked(RecognitionResult recognitionResult) {
+        if (recognitionResult == null) {
+            return false;
+        }
+        return recognitionResult.getCode() != 0;
+    }
+
+    private void sendCaptchaServiceBlockedMessage(Bot bot, Group group, String verifyQQ, RecognitionResult recognitionResult) {
+        long botId = bot.getBotId();
+        long now = System.currentTimeMillis();
+        Long lastAt = lastServiceWarnAt.get(botId);
+        if (lastAt != null && now - lastAt < 5 * 60 * 1000L) {
+            return;
+        }
+        lastServiceWarnAt.put(botId, now);
+
+        int code = recognitionResult == null ? 1 : recognitionResult.getCode();
+        String rawMsg = recognitionResult == null ? "" : StringUtils.defaultString(recognitionResult.getMsg());
+        String tip;
+        if (code == 40302) {
+            tip = "验证码识别会员已到期，请联系管理续费";
+        } else if (code == 42901) {
+            tip = "验证码识别调用次数已达上限（今日），请稍后再试或联系管理";
+        } else if (code == 42902) {
+            tip = "验证码识别调用次数已达上限（本月），请联系管理处理";
+        } else if (code == 40301) {
+            tip = "验证码识别账号已被禁用，请联系管理";
+        } else {
+            tip = "验证码识别服务不可用：" + (StringUtils.isNotBlank(rawMsg) ? rawMsg : "未知原因");
+        }
+
+        try {
+           
+            Long masterQQ = bot.getBotConfig().getMasterQQ();
+            if (masterQQ != null && masterQQ > 0) {
+                bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).at(masterQQ + "").text(tip));
+            } else {
+                bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).text(tip));
+            }
+        } catch (Exception e) {
+            logger.warn("发送验证码识别服务提示失败: {}", e.getMessage());
+        }
+    }
+
     private String getEmojiAnswer(String title, RecognitionResult recognitionResult) {
         String answer;
         int idx = 0;
@@ -509,28 +561,22 @@ public class RemoteVerifyCode {
 
     private void verifyFailSendMessage(Bot bot, Group group, MessageChain messageChain, String message, Integer messageId, Buttons buttons, String verifyQQ, RecognitionResult recognitionResult) {
 //        saveErrorImage(buttons.getImageUrl());
+        if (isCaptchaServiceBlocked(recognitionResult)) {
+            sendCaptchaServiceBlockedMessage(bot, group, verifyQQ, recognitionResult);
+            return;
+        }
 
         if (StringUtils.isEmpty(verifyQQ)) {
-            if (bot.getBotConfig().getAutoVerifyModel() != 2) {
-
-                if (xxGroupId > 0) {
-                    if(bot.getBotConfig().getMasterQQ() != 819463350L){
-                        testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
-                    }
-                    bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
-                } else {
-                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
+            if (xxGroupId > 0) {
+                if (bot.getBotConfig().getMasterQQ() != 819463350L) {
+                    testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
                 }
-
+                bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
             } else {
-                errorClickButton(buttons, bot, group, recognitionResult, "");
+                bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
             }
             RecognitionResult codeData = codeUrlMap.get(bot.getBotId());
             saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getEmojiList().toString(),bot.getBotId());
-        } else {
-            RecognitionResult codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
-            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getEmojiList().toString(),bot.getBotId());
-            bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("自动验证失败，请手动验证"));
         }
 
     }
@@ -849,12 +895,6 @@ public class RemoteVerifyCode {
             }
 
             int code = conn.getResponseCode();
-            // 处理403 Forbidden（白名单拒绝）
-            if (code == 403) {
-                logger.warn("API访问被拒绝：QQ号不在白名单中或未提供QQ号");
-                return new RecognitionResult(new ArrayList<>(), "访问被拒绝：请检查QQ号");
-            }
-
             InputStream inputStream = (code >= 200 && code < 300) ?
                     conn.getInputStream() : conn.getErrorStream();
 
@@ -866,8 +906,20 @@ public class RemoteVerifyCode {
                 }
             }
             logger.info("API响应: {}", response);
-            RecognitionResult result = JSON.parseObject(response.toString(), RecognitionResult.class);
-            return result;
+            try {
+                RecognitionResult result = JSON.parseObject(response.toString(), RecognitionResult.class);
+                if (result != null && result.getEmojiList() == null) {
+                    result.setEmojiList(new ArrayList<>());
+                }
+                return result;
+            } catch (Exception parseEx) {
+                logger.warn("API响应解析失败: {}", parseEx.getMessage());
+                RecognitionResult fallback = new RecognitionResult(new ArrayList<>(), "服务返回异常");
+                fallback.setCode(code);
+                fallback.setMsg(response.toString());
+                fallback.setResult("识别失败：服务返回异常");
+                return fallback;
+            }
         } catch (SocketTimeoutException ste) {
             logger.warn("API读取超时: {}", ste.getMessage());
             return new RecognitionResult(new ArrayList<>(), "请求超时");
