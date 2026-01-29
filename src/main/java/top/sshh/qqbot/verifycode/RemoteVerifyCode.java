@@ -108,7 +108,7 @@ public class RemoteVerifyCode {
                 if (codeUrlMap.get(Long.parseLong(verifyQQ)) != null) {
                     RecognitionResult codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
                     if (buttons.getImageUrl().equals(codeData.getUrl())) {
-                        verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, "", codeData);
+                        verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, codeData);
                         sendFailMessage(bot, message, buttons, messageChain, codeData);
                         return;
 
@@ -130,7 +130,7 @@ public class RemoteVerifyCode {
                 customPool.submit(new Runnable() {
                     public void run() {
                         if (StringUtils.isNotBlank(shituApiUrl)) {
-                            autoVerifyCode(bot, group, messageChain, message, messageId, buttons, "");
+                            autoVerifyCode(bot, group, messageChain, message, messageId, buttons);
                         }
                     }
                 });
@@ -190,7 +190,7 @@ public class RemoteVerifyCode {
     }
 
 
-    private void autoVerifyCode(Bot bot, Group group, MessageChain messageChain, String message, Integer messageId, Buttons buttons, String verifyQQ) {
+    private void autoVerifyCode(Bot bot, Group group, MessageChain messageChain, String message, Integer messageId, Buttons buttons) {
         try {
             List<Button> buttonList = buttons.getButtonList();
             StringBuilder buttontextBuilder = new StringBuilder();
@@ -201,19 +201,12 @@ public class RemoteVerifyCode {
 
             RecognitionResult recognitionResult = recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText(), bot);
             if (isCaptchaServiceBlocked(recognitionResult)) {
-                sendCaptchaServiceBlockedMessage(bot, group, verifyQQ, recognitionResult);
+                sendCaptchaServiceBlockedMessage(bot, group, recognitionResult);
                 return;
             }
-            if (StringUtils.isNotBlank(verifyQQ)) {
-                codeUrlMap.put(Long.parseLong(verifyQQ), recognitionResult);
-            } else {
-                codeUrlMap.put(bot.getBotId(), recognitionResult);
-            }
-//            if (StringUtils.isNotBlank(verifyQQ)) {
-//                group.sendMessage((new MessageChain()).text(result));
-//            }
+            codeUrlMap.put(bot.getBotId(), recognitionResult);
             if (StringUtils.defaultString(recognitionResult.result).contains("识别失败")) {
-                verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, verifyQQ, recognitionResult);
+                verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, recognitionResult);
                 return;
             }
             boolean isSuccess = false;
@@ -228,11 +221,7 @@ public class RemoteVerifyCode {
                             if (Integer.parseInt(text) <= buttons.getButtonList().size()) {
                                 Button button = buttons.getButtonList().get(Integer.parseInt(text) - 1);
                                 isSuccess = true;
-                                if (StringUtils.isEmpty(verifyQQ)) {
-                                    bot.clickKeyboardButton(group.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
-                                } else {
-                                    bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("点击序号" + text));
-                                }
+                                bot.clickKeyboardButton(group.getGroupId(), buttons.getBotAppid(), button.getId(), button.getData(), buttons.getMsgSeq());
 
                             }
                         }
@@ -263,14 +252,16 @@ public class RemoteVerifyCode {
             }
             if (!isSuccess) {
 
-                verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, verifyQQ, recognitionResult);
+                verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, recognitionResult);
             } else {
 
                 groupManager.verifyCount.addCorrect();
             }
         } catch (Exception e) {
-            RecognitionResult codeData = codeUrlMap.get(Long.parseLong(verifyQQ));
-            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult(),bot.getBotId());
+            RecognitionResult codeData = codeUrlMap.get(bot.getBotId());
+            if(codeData != null){
+                saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult(),bot.getBotId());
+            }
             testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
             e.printStackTrace();
         }
@@ -279,7 +270,7 @@ public class RemoteVerifyCode {
     /**
      * 识别错误后尝试随机点击一个按钮
      */
-    private void errorClickButton(Buttons buttons, Bot bot, Group group, RecognitionResult result, String verifyQQ) {
+    private void errorClickButton(Buttons buttons, Bot bot, Group group, RecognitionResult result) {
         String resultText = result.getResult();
         if (resultText.contains("加") && (resultText.length() == 11 || resultText.length() == 10)) {
             Button maxNumberButton = null;
@@ -297,17 +288,13 @@ public class RemoteVerifyCode {
             }
             if (maxNumberButton != null) {
                 logger.info("点击最大数字按钮：" + maxNumberButton.getLabel());
-                if (!StringUtils.isEmpty(verifyQQ)) {
-                    bot.getGroup(group.getGroupId()).sendMessage((new MessageChain()).at(verifyQQ).text("点击" + maxNumberButton.getLabel()));
-                } else {
-                    bot.clickKeyboardButton(
-                            group.getGroupId(),
-                            buttons.getBotAppid(),
-                            maxNumberButton.getId(),
-                            maxNumberButton.getData(),
-                            buttons.getMsgSeq()
-                    );
-                }
+                bot.clickKeyboardButton(
+                        group.getGroupId(),
+                        buttons.getBotAppid(),
+                        maxNumberButton.getId(),
+                        maxNumberButton.getData(),
+                        buttons.getMsgSeq()
+                );
 
             }
 
@@ -326,7 +313,7 @@ public class RemoteVerifyCode {
                         buttons.getMsgSeq());
             }
         } else {
-            if (bot.getBotConfig().getAutoVerifyModel() == 2 && StringUtils.isEmpty(verifyQQ)) {
+            if (bot.getBotConfig().getAutoVerifyModel() == 2) {
                 bot.clickKeyboardButton(
                         group.getGroupId(),
                         buttons.getBotAppid(),
@@ -504,7 +491,7 @@ public class RemoteVerifyCode {
         return recognitionResult.getCode() != 0;
     }
 
-    private void sendCaptchaServiceBlockedMessage(Bot bot, Group group, String verifyQQ, RecognitionResult recognitionResult) {
+    private void sendCaptchaServiceBlockedMessage(Bot bot, Group group, RecognitionResult recognitionResult) {
         long botId = bot.getBotId();
         long now = System.currentTimeMillis();
         Long lastAt = lastServiceWarnAt.get(botId);
@@ -559,14 +546,13 @@ public class RemoteVerifyCode {
     }
 
 
-    private void verifyFailSendMessage(Bot bot, Group group, MessageChain messageChain, String message, Integer messageId, Buttons buttons, String verifyQQ, RecognitionResult recognitionResult) {
+    private void verifyFailSendMessage(Bot bot, Group group, MessageChain messageChain, String message, Integer messageId, Buttons buttons, RecognitionResult recognitionResult) {
 //        saveErrorImage(buttons.getImageUrl());
         if (isCaptchaServiceBlocked(recognitionResult)) {
-            sendCaptchaServiceBlockedMessage(bot, group, verifyQQ, recognitionResult);
+            sendCaptchaServiceBlockedMessage(bot, group, recognitionResult);
             return;
         }
-
-        if (StringUtils.isEmpty(verifyQQ)) {
+        if(bot.getBotConfig().getAutoVerifyModel() != 2){
             if (xxGroupId > 0) {
                 if (bot.getBotConfig().getMasterQQ() != 819463350L) {
                     testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
@@ -575,9 +561,12 @@ public class RemoteVerifyCode {
             } else {
                 bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
             }
-            RecognitionResult codeData = codeUrlMap.get(bot.getBotId());
-            saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getEmojiList().toString(),bot.getBotId());
+        }else{
+            errorClickButton(buttons,bot,group,recognitionResult);
         }
+
+        RecognitionResult codeData = codeUrlMap.get(bot.getBotId());
+        saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getEmojiList().toString(),bot.getBotId());
 
     }
 

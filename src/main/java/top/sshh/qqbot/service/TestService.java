@@ -1177,9 +1177,7 @@ public class TestService {
                     sb.append(Constant.padRight("主号", 3) + ": " + botConfig.getMasterQQ() + "\n");
                 }
 
-                if (bot.getBotId() == 3860863656L) {
-                    sb.append(Constant.padRight("提醒群号", 3) + ": " + botConfig.getGroupQQ() + "\n");
-                }
+
                 sb.append(Constant.padRight("当前编号", 3) + ": " + botConfig.getBotNumber() + "\n");
                 sb.append(Constant.padRight("当前爱称", 3) + ": " + botConfig.getAiCheng() + "\n");
             }
