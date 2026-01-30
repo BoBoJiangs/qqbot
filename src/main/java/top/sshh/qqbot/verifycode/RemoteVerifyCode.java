@@ -556,6 +556,8 @@ public class RemoteVerifyCode {
             if (xxGroupId > 0) {
                 if (bot.getBotConfig().getMasterQQ() != 819463350L) {
                     testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
+                }else{
+                     sendFailMessage(bot, message, buttons, messageChain, recognitionResult);
                 }
                 bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
             } else {

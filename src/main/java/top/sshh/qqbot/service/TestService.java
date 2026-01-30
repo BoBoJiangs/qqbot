@@ -2409,7 +2409,7 @@ public class TestService {
                 long groupId = botConfig.getGroupId();
                 botConfig.setFamilyTaskStatus(0);
                 bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("秘境结算"));
-            } else if (message.contains("道友现在什么都没干")) {
+            } else if (message.contains("道友现在什么都没干") || message.contains("小心走火入魔")) {
                 botConfig.setXslTime(-1L);
                 botConfig.setMjTime(-1L);
             } else if (message.contains("道友已经参加过本次秘境")) {
