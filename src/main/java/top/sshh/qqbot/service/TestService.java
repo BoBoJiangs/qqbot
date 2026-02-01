@@ -1083,7 +1083,7 @@ public class TestService {
             sb.append("启用/关闭结算提醒\n");
             sb.append("启用/关闭本群结算提醒\n");
             sb.append("开始/停止更新坊市\n");
-            sb.append("开启/停止挑战九层妖塔\n");
+            sb.append("开启/停止妖塔挑战\n");
             sb.append("妖塔挑战模式(0无1不回血2回血)\n");
             sb.append("自动购买××(物品 价格单位：万)\n");
             sb.append("取消自动购买××\n");

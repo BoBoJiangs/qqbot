@@ -1,4 +1,5 @@
-from fastapi import FastAPI, UploadFile, Form, Request, HTTPException
+from fastapi import FastAPI, UploadFile, Form, Request, HTTPException, File
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, HTMLResponse, RedirectResponse, Response
 from pydantic import BaseModel
 import requests
@@ -19,8 +20,41 @@ import hmac
 import base64
 import secrets
 import html
+from admin_ui import AdminUI
 
 app = FastAPI()
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    if request.url.path == "/report_error":
+        content_type = request.headers.get("content-type")
+        content_length = request.headers.get("content-length")
+        logger.warning(
+            "参数校验失败(422) path=%s content-type=%s content-length=%s errors=%s",
+            request.url.path,
+            content_type,
+            content_length,
+            exc.errors(),
+        )
+        try:
+            form = await request.form()
+            logger.warning("422 表单字段: %s", list(form.keys()))
+            for key in form.keys():
+                val = form.get(key)
+                if hasattr(val, "filename"):
+                    logger.warning("422 文件字段 %s filename=%s", key, getattr(val, "filename", None))
+                else:
+                    s = str(val)
+                    if len(s) > 200:
+                        s = s[:200] + "..."
+                    logger.warning("422 文本字段 %s=%s", key, s)
+        except Exception as e:
+            logger.warning("422 解析表单失败: %s", e)
+
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "code": 422, "msg": "参数校验失败"},
+    )
 
 @app.get("/favicon.ico")
 async def favicon():
@@ -29,6 +63,8 @@ async def favicon():
 _LOG_LEVEL_NAME = (os.getenv("LOG_LEVEL") or "INFO").upper()
 logging.basicConfig(level=getattr(logging, _LOG_LEVEL_NAME, logging.INFO))
 logger = logging.getLogger("captcha_api")
+
+_ADMIN_UI = AdminUI()
 
 # 保存错误图片目录
 SAVE_DIR = "errorPic"
@@ -330,90 +366,7 @@ def _admin_current_user(request: Request) -> str | None:
     return payload.get("u")
 
 def _render_admin_page(title: str, body_html: str, message: str | None = None) -> HTMLResponse:
-    css = """
-    <style>
-      :root { color-scheme: dark; }
-      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background: radial-gradient(1200px 600px at 15% 0%, #0b1b34 0%, #070b12 50%, #05070d 100%); color:#e6edf3; }
-      a { color:#93c5fd; text-decoration:none; }
-      a:hover { color:#bfdbfe; text-decoration:none; }
-      .app { display:flex; min-height: 100vh; }
-      .sidebar { width: 240px; padding: 18px 14px; border-right: 1px solid #182033; background: linear-gradient(180deg, rgba(15,23,42,.9), rgba(2,6,23,.6)); position: sticky; top:0; height: 100vh; box-sizing:border-box; }
-      .brand { display:flex; align-items:center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: rgba(15,23,42,.6); border:1px solid rgba(148,163,184,.15); }
-      .logo { width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, #22d3ee, #60a5fa); }
-      .brand-title { font-weight: 700; letter-spacing: .2px; }
-      .brand-sub { font-size: 12px; color:#94a3b8; margin-top: 2px; }
-      .nav { margin-top: 14px; display:flex; flex-direction: column; gap: 6px; }
-      .nav a { display:block; padding: 10px 12px; border-radius: 10px; color:#cbd5e1; border:1px solid transparent; }
-      .nav a:hover { background: rgba(30,41,59,.55); border-color: rgba(148,163,184,.18); color:#e2e8f0; }
-      .main { flex: 1; padding: 18px 18px 40px 18px; box-sizing:border-box; }
-      .header { display:flex; align-items:center; justify-content: space-between; gap: 12px; padding: 14px 16px; border-radius: 14px; background: rgba(15,23,42,.55); border:1px solid rgba(148,163,184,.15); }
-      .title { font-size: 18px; font-weight: 700; }
-      .content { margin-top: 14px; }
-      .row { display:flex; gap: 12px; flex-wrap: wrap; }
-      .row > * { flex: 1 1 340px; }
-      .card { background: rgba(15,23,42,.55); border:1px solid rgba(148,163,184,.15); border-radius: 14px; padding: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
-      h2 { margin: 0 0 12px 0; font-size: 14px; color:#cbd5e1; letter-spacing: .2px; }
-      label { display:block; font-size: 12px; color:#94a3b8; margin-top: 10px; }
-      input, select, textarea { width:100%; box-sizing:border-box; padding:10px 12px; border-radius:12px; border:1px solid rgba(148,163,184,.18); background: rgba(2,6,23,.55); color:#e6edf3; outline: none; }
-      input:focus, select:focus, textarea:focus { border-color: rgba(96,165,250,.75); box-shadow: 0 0 0 4px rgba(59,130,246,.15); }
-      textarea { min-height: 96px; resize: vertical; }
-      button { padding: 10px 12px; border-radius: 12px; border:1px solid rgba(148,163,184,.22); background: linear-gradient(180deg, rgba(30,41,59,.85), rgba(2,6,23,.55)); color:#e6edf3; cursor:pointer; }
-      button:hover { border-color: rgba(96,165,250,.75); }
-      .btn { display:inline-flex; align-items:center; justify-content:center; padding: 10px 12px; border-radius: 12px; border:1px solid rgba(148,163,184,.22); background: linear-gradient(180deg, rgba(30,41,59,.85), rgba(2,6,23,.55)); color:#e6edf3; }
-      .btn:hover { border-color: rgba(96,165,250,.75); }
-      .btn-sm { padding: 6px 10px; border-radius: 10px; font-size: 12px; }
-      .btn-danger { border-color: rgba(248,113,113,.35); background: rgba(127,29,29,.25); }
-      .btn-danger:hover { border-color: rgba(248,113,113,.65); }
-      .muted { color:#94a3b8; font-size: 12px; }
-      .msg { padding: 10px 12px; border-radius: 12px; background: rgba(2,6,23,.55); border:1px solid rgba(148,163,184,.18); margin: 12px 0; }
-      table { width:100%; border-collapse: collapse; overflow:hidden; border-radius: 14px; border:1px solid rgba(148,163,184,.15); background: rgba(2,6,23,.35); }
-      thead th { font-size: 12px; color:#a5b4fc; text-transform: uppercase; letter-spacing: .08em; padding: 12px 10px; background: rgba(15,23,42,.55); border-bottom: 1px solid rgba(148,163,184,.15); text-align:left; }
-      tbody td { padding: 12px 10px; border-bottom:1px solid rgba(148,163,184,.12); font-size: 13px; color:#e2e8f0; text-align:left; vertical-align: middle; }
-      tbody tr:hover td { background: rgba(30,41,59,.35); }
-      form.inline { display:inline; }
-      .actions { display:inline-flex; gap: 8px; align-items:center; flex-wrap: wrap; }
-      .actions form { margin: 0; }
-      @media (max-width: 860px) {
-        .app { flex-direction: column; }
-        .sidebar { width: 100%; height: auto; position: static; border-right: none; border-bottom: 1px solid rgba(148,163,184,.12); }
-      }
-    </style>
-    """
-    msg_html = f'<div class="msg">{message}</div>' if message else ""
-    html = f"""
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{css}<title>{title}</title></head>
-    <body>
-      <div class="app">
-        <aside class="sidebar">
-          <div class="brand">
-            <div class="logo"></div>
-            <div>
-              <div class="brand-title">Captcha Admin</div>
-              <div class="brand-sub">白名单 · 会员 · 监控</div>
-            </div>
-          </div>
-          <div class="nav">
-            <a href="/admin">首页</a>
-            <a href="/admin/whitelist">白名单</a>
-            <a href="/admin/members">会员</a>
-            <a href="/admin/renewals">续费通知</a>
-            <a href="/admin/password">改密</a>
-          </div>
-        </aside>
-        <main class="main">
-          <div class="header">
-            <div class="title">{title}</div>
-            <form class="inline" method="post" action="/admin/logout"><button type="submit">退出</button></form>
-          </div>
-          <div class="content">
-            {msg_html}
-            {body_html}
-          </div>
-        </main>
-      </div>
-    </body></html>
-    """
-    return HTMLResponse(html)
+    return _ADMIN_UI.render_page(title, body_html, message)
 
 def _require_admin(request: Request) -> str:
     user = _admin_current_user(request)
@@ -567,6 +520,14 @@ def _format_iso(dt: datetime | None) -> str:
         return ""
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
+_TZ_BJ = timezone(timedelta(hours=8))
+
+def _format_bj_from_iso(value: str | None) -> str:
+    dt = _parse_iso_datetime(value)
+    if not dt:
+        return ""
+    return dt.astimezone(_TZ_BJ).strftime("%Y-%m-%d %H:%M:%S")
+
 def _usage_key_from_request(request: Request) -> str | None:
     auth_type = getattr(request.state, "auth_type", None)
     auth_info = getattr(request.state, "auth_info", None)
@@ -617,7 +578,7 @@ def _enforce_membership_and_quota(request: Request):
     daily_limit = daily_limit_raw if daily_limit_raw > 0 else None
     _increment_usage(member_key, now, daily_limit=daily_limit, monthly_limit=None)
 
-def _increment_usage(member_key: str, now: datetime, daily_limit: int | None, monthly_limit: int | None):
+def _increment_usage(member_key: str, now: datetime, daily_limit: int | None, monthly_limit: int | None, is_error: bool = False):
     usage = _load_usage()
     counters = usage.setdefault("counters", {})
     c = counters.setdefault(member_key, {})
@@ -627,6 +588,8 @@ def _increment_usage(member_key: str, now: datetime, daily_limit: int | None, mo
     if c.get("daily_date") != day:
         c["daily_date"] = day
         c["daily_count"] = 0
+        c["total_count"] = 0
+        c["error_count"] = 0
     if c.get("monthly_ym") != ym:
         c["monthly_ym"] = ym
         c["monthly_count"] = 0
@@ -638,6 +601,11 @@ def _increment_usage(member_key: str, now: datetime, daily_limit: int | None, mo
 
     c["daily_count"] = int(c.get("daily_count") or 0) + 1
     c["monthly_count"] = int(c.get("monthly_count") or 0) + 1
+    
+    c["total_count"] = int(c.get("total_count") or 0) + 1
+    if is_error:
+        c["error_count"] = int(c.get("error_count") or 0) + 1
+    
     c["updated_at"] = _format_iso(now)
     _save_usage(usage)
 # 加载IP白名单
@@ -929,7 +897,39 @@ async def whitelist_middleware(request: Request, call_next):
         return await call_next(request)
     
     # 情况3：检查QQ白名单
-    qq_number = await extract_qq_number(request)
+    qq_probe_request = request
+    if request.method in {"POST", "PUT", "PATCH"}:
+        content_type = request.headers.get("content-type") or ""
+        if (
+            "multipart/form-data" in content_type
+            or "application/x-www-form-urlencoded" in content_type
+            or "application/json" in content_type
+        ):
+            body = await request.body()
+
+            _downstream_sent = False
+
+            async def downstream_receive():
+                nonlocal _downstream_sent
+                if _downstream_sent:
+                    return {"type": "http.request", "body": b"", "more_body": False}
+                _downstream_sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            request._receive = downstream_receive
+
+            _probe_sent = False
+
+            async def probe_receive():
+                nonlocal _probe_sent
+                if _probe_sent:
+                    return {"type": "http.request", "body": b"", "more_body": False}
+                _probe_sent = True
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            qq_probe_request = Request(request.scope, receive=probe_receive)
+
+    qq_number = await extract_qq_number(qq_probe_request)
     
     # 检查QQ号是否在白名单中
     if qq_number and allowed_qq and qq_number in allowed_qq:
@@ -1099,7 +1099,7 @@ def recognize_from_url(req: ImageURLRequest, request: Request, qq: str = None):
 @app.post("/report_error")
 async def report_error(
     request: Request,
-    image: UploadFile, 
+    image: UploadFile = File(...),
     question: str = Form(...), 
     answer: str = Form(...), 
     imageUrl: str = Form(...),
@@ -1114,6 +1114,8 @@ async def report_error(
     - imageUrl: 图片URL
     - qq: QQ号（可选）
     """
+    logger.info("收到错误报告请求 - image=%s, question=%s, answer=%s, imageUrl=%s, qq=%s", 
+                image.filename if image else None, question, answer, imageUrl, qq)
     try:
         auth_type = getattr(request.state, 'auth_type', None)
         auth_info = getattr(request.state, 'auth_info', None)
@@ -1155,6 +1157,11 @@ async def report_error(
             
             with open(json_path, "w", encoding="utf-8") as f:
                 json.dump(save_data, f, ensure_ascii=False, indent=2)
+            
+            member_key = _usage_key_from_request(request)
+            if member_key:
+                now = _now_utc()
+                _increment_usage(member_key, now, daily_limit=None, monthly_limit=None, is_error=True)
             
             return {"code": 0, "msg": "已保存"}
 
@@ -1241,59 +1248,7 @@ async def membership_renewal_request(request: Request):
     return {"code": 0, "msg": "已提交续费通知"}
 
 def _admin_login_page(message: str | None = None) -> HTMLResponse:
-    css = """
-    <style>
-      :root { color-scheme: dark; }
-      body { margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; background: radial-gradient(1200px 600px at 15% 0%, #0b1b34 0%, #070b12 50%, #05070d 100%); color:#e6edf3; }
-      .wrap { max-width: 980px; margin: 0 auto; padding: 48px 18px; display:flex; align-items:center; justify-content:center; min-height: calc(100vh - 96px); box-sizing:border-box; }
-      .shell { width: 100%; display:grid; grid-template-columns: 1.1fr .9fr; gap: 16px; }
-      .hero { padding: 26px; border-radius: 16px; background: rgba(15,23,42,.45); border:1px solid rgba(148,163,184,.15); }
-      .hero-title { font-size: 22px; font-weight: 800; letter-spacing: .3px; margin: 0 0 8px 0; }
-      .hero-sub { color:#94a3b8; font-size: 13px; line-height: 1.6; }
-      .card { padding: 22px; border-radius: 16px; background: rgba(15,23,42,.55); border:1px solid rgba(148,163,184,.15); box-shadow: 0 14px 40px rgba(0,0,0,.28); }
-      h1 { margin: 0 0 12px 0; font-size: 16px; color:#cbd5e1; letter-spacing: .2px; }
-      label { display:block; font-size: 12px; color:#94a3b8; margin-top: 10px; }
-      input { width:100%; box-sizing:border-box; padding:10px 12px; border-radius:12px; border:1px solid rgba(148,163,184,.18); background: rgba(2,6,23,.55); color:#e6edf3; outline:none; }
-      input:focus { border-color: rgba(96,165,250,.75); box-shadow: 0 0 0 4px rgba(59,130,246,.15); }
-      button { margin-top: 14px; padding: 10px 12px; border-radius: 12px; border:1px solid rgba(148,163,184,.22); background: linear-gradient(135deg, rgba(34,211,238,.18), rgba(96,165,250,.18)); color:#e6edf3; cursor:pointer; width:100%; font-weight: 700; }
-      button:hover { border-color: rgba(96,165,250,.75); }
-      .msg { padding: 10px 12px; border-radius: 12px; background: rgba(2,6,23,.55); border:1px solid rgba(148,163,184,.18); margin: 10px 0; }
-      .muted { color:#94a3b8; font-size: 12px; margin-top: 10px; }
-      @media (max-width: 860px) { .shell { grid-template-columns: 1fr; } .hero { display:none; } }
-    </style>
-    """
-    msg_html = f'<div class="msg">{message}</div>' if message else ""
-    html = f"""
-    <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">{css}<title>管理员登录</title></head>
-    <body><div class="wrap">
-      <div class="shell">
-        <div class="hero">
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-            <div style="width:38px;height:38px;border-radius:12px;background:linear-gradient(135deg,#22d3ee,#60a5fa);"></div>
-            <div>
-              <div style="font-weight:800;">Captcha Admin</div>
-              <div style="font-size:12px;color:#94a3b8;margin-top:2px;">后台管理 · 白名单 · 会员 · 续费</div>
-            </div>
-          </div>
-          <div class="hero-title">欢迎回来</div>
-          <div class="hero-sub">登录后可维护 IP/QQ 白名单、默认会员等级、调用次数与月卡有效期，并在续费通知中一键延长月卡。</div>
-        </div>
-        <div class="card">
-          <h1>管理员登录</h1>
-          {msg_html}
-          <form method="post" action="/admin/login">
-            <label>账号</label>
-            <input name="username" value="admin" autocomplete="username" />
-            <label>密码</label>
-            <input name="password" type="password" autocomplete="current-password" />
-            <button type="submit">登录</button>
-          </form>
-          <div class="muted">默认账号：admin 默认密码：admin（首次登录后强制改密）</div>
-        </div>
-      </div>
-    </div></body></html>
-    """
-    return HTMLResponse(html)
+    return _ADMIN_UI.login_page(message)
 
 def _admin_guard(request: Request):
     if ADMIN_LOCAL_ONLY and request.client.host not in {"127.0.0.1", "::1"}:
@@ -1526,9 +1481,15 @@ async def admin_members_get(request: Request):
     if redirect:
         return redirect
 
+    params = request.query_params
+    q = (params.get("q") or "").strip()
+    tier_filter = (params.get("tier") or "").strip().lower()
+    expired_filter = (params.get("expired") or "").strip().lower()
+
     members_data = _load_members()
     members = members_data.get("members") or {}
     usage = _load_usage().get("counters") or {}
+    now = _now_utc()
 
     def tier_cn(tier: str) -> str:
         t = (tier or "").strip().lower()
@@ -1544,9 +1505,30 @@ async def admin_members_get(request: Request):
         tier = (m.get("tier") or "permanent").strip().lower()
         enabled = bool(m.get("enabled", True))
         name = (m.get("name") or "").strip()
-        exp = (m.get("expires_at") or "").strip()
+        exp_raw = (m.get("expires_at") or "").strip()
+        exp_dt = _parse_iso_datetime(exp_raw)
+        is_expired = bool(exp_dt and now > exp_dt)
+        exp = _format_bj_from_iso(exp_raw)
+
+        if tier_filter in {"normal", "month", "permanent"} and tier != tier_filter:
+            continue
+        if expired_filter == "yes" and not is_expired:
+            continue
+        if expired_filter == "no" and is_expired:
+            continue
+        if q:
+            ql = q.lower()
+            if ql not in key.lower() and ql not in name.lower():
+                continue
+
         u = usage.get(key) or {}
         daily = int(u.get("daily_count") or 0)
+        total_count = int(u.get("total_count") or 0)
+        error_count = int(u.get("error_count") or 0)
+        if total_count > 0:
+            accuracy = round((total_count - error_count) / total_count * 100, 2)
+        else:
+            accuracy = 100.0
         daily_limit_raw = m.get("daily_limit", NORMAL_DAILY_LIMIT)
         try:
             daily_limit = int(daily_limit_raw)
@@ -1565,14 +1547,26 @@ async def admin_members_get(request: Request):
             config_text = f"续费 {max(1, renewal_days)}天"
 
         edit_url = "/admin/members/form?key=" + urllib.parse.quote(key)
+        
+        expiry_class = "expiry-ok"
+        if is_expired:
+            expiry_class = "expiry-expired"
+        elif exp_dt and (exp_dt - now).days <= 7:
+            expiry_class = "expiry-warning"
+        
+        status_class = "enabled" if enabled else "disabled"
+        tier_class = tier if tier in {"normal", "month", "permanent"} else "normal"
+        
         rows.append(
             "<tr>"
+            f"<td><input type='checkbox' class='row-checkbox' value='{_h(key)}' /></td>"
             f"<td>{_h(key)}</td>"
             f"<td>{_h(name or '未命名')}</td>"
-            f"<td>{_h(tier_cn(tier))}</td>"
-            f"<td>{'启用' if enabled else '禁用'}</td>"
-            f"<td>{_h(exp or '-')}</td>"
-            f"<td>{daily}</td>"
+            f"<td><span class='status-badge {tier_class}'>{_h(tier_cn(tier))}</span></td>"
+            f"<td><span class='status-badge {status_class}'>{'启用' if enabled else '禁用'}</span></td>"
+            f"<td class='{expiry_class}'>{_h(exp or '-')}</td>"
+            f"<td>{total_count}/{error_count}</td>"
+            f"<td>{accuracy}%</td>"
             f"<td>{_h(config_text)}</td>"
             "<td><div class='actions'>"
             f"<a class='btn btn-sm' href=\"{_h(edit_url)}\">编辑</a>"
@@ -1583,17 +1577,92 @@ async def admin_members_get(request: Request):
             "</tr>"
         )
 
+    matched_count = len(rows)
+    
     body = f"""
     <div class="card">
       <h2>会员列表</h2>
       <div class="muted">新增/编辑会员会同时维护对应的 IP/QQ 白名单。</div>
-      <div style="margin-top:12px;"><a class="btn" href="/admin/members/form">新增会员</a></div>
+      <form method="get" action="/admin/members" style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap; align-items:end;">
+        <div style="flex: 1 1 260px; min-width: 220px;">
+          <label>搜索</label>
+          <input name="q" value="{_h(q)}" placeholder="Key / 名称" />
+        </div>
+        <div style="flex: 0 0 160px;">
+          <label>类型</label>
+          <select name="tier">
+            <option value="" {"selected" if not tier_filter else ""}>全部</option>
+            <option value="permanent" {"selected" if tier_filter == "permanent" else ""}>永久</option>
+            <option value="month" {"selected" if tier_filter == "month" else ""}>月卡</option>
+            <option value="normal" {"selected" if tier_filter == "normal" else ""}>普通</option>
+          </select>
+        </div>
+        <div style="flex: 0 0 160px;">
+          <label>是否到期</label>
+          <select name="expired">
+            <option value="" {"selected" if not expired_filter else ""}>全部</option>
+            <option value="no" {"selected" if expired_filter == "no" else ""}>否</option>
+            <option value="yes" {"selected" if expired_filter == "yes" else ""}>是</option>
+          </select>
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; padding-top: 22px;">
+          <button type="submit">筛选</button>
+          <a class="btn" href="/admin/members">清空</a>
+          <a class="btn" href="/admin/members/form">新增会员</a>
+        </div>
+      </form>
+      <div class="muted" style="margin-top:8px;">筛选结果：共 {matched_count} 条记录</div>
       <div style="margin-top:12px;"></div>
-      <table>
-        <thead><tr><th>Key</th><th>名称</th><th>类型</th><th>状态</th><th>到期</th><th>今日调用</th><th>配置</th><th>操作</th></tr></thead>
-        <tbody>{''.join(rows) or '<tr><td colspan="8" class="muted">暂无</td></tr>'}</tbody>
-      </table>
+      <div class="batch-actions" style="display:none;" id="batchActions">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <span class="muted">已选择 <strong id="selectedCount">0</strong> 项：</span>
+          <button type="button" onclick="batchOperation('enable')">批量启用</button>
+          <button type="button" onclick="batchOperation('disable')">批量禁用</button>
+          <button type="button" class="btn-danger" onclick="batchOperation('delete')">批量删除</button>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table>
+          <thead><tr><th style="width:40px;"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" /></th><th>Key</th><th>名称</th><th>类型</th><th>状态</th><th>到期</th><th>总次数/错误次数</th><th>准确率</th><th>配置</th><th>操作</th></tr></thead>
+          <tbody>{''.join(rows) or '<tr><td colspan="10" class="muted">暂无</td></tr>'}</tbody>
+        </table>
+      </div>
     </div>
+    <script>
+      function toggleSelectAll() {{
+        const selectAll = document.getElementById('selectAll');
+        const checkboxes = document.querySelectorAll('.row-checkbox');
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        updateBatchActions();
+      }}
+      function updateBatchActions() {{
+        const checked = document.querySelectorAll('.row-checkbox:checked');
+        const count = checked.length;
+        document.getElementById('selectedCount').textContent = count;
+        document.getElementById('batchActions').style.display = count > 0 ? 'block' : 'none';
+      }}
+      function batchOperation(action) {{
+        const checked = document.querySelectorAll('.row-checkbox:checked');
+        if (checked.length === 0) return;
+        if (!confirm('确定要对选中的 ' + checked.length + ' 个会员执行「' + action + '」操作吗？')) return;
+        const keys = Array.from(checked).map(cb => cb.value);
+        fetch('/admin/members/batch', {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
+          body: 'action=' + encodeURIComponent(action) + '&keys=' + encodeURIComponent(keys.join(','))
+        }}).then(r => r.json()).then(data => {{
+          if (data.success) {{
+            alert(data.message || '操作成功');
+            location.reload();
+          }} else {{
+            alert(data.message || '操作失败');
+          }}
+        }}).catch(e => {{
+          alert('操作失败：' + e.message);
+        }});
+      }}
+      document.querySelectorAll('.row-checkbox').forEach(cb => cb.addEventListener('change', updateBatchActions));
+    </script>
     """
     return _render_admin_page("会员", body)
 
@@ -1657,62 +1726,211 @@ async def admin_members_form_get(request: Request):
     expires_at = (member.get("expires_at") or "").strip()
     daily_limit = member.get("daily_limit", NORMAL_DAILY_LIMIT)
     renewal_days = member.get("renewal_days", DEFAULT_MONTH_CARD_VALID_DAYS)
+    
+    expiry_display = _format_bj_from_iso(expires_at) or '-'
+    expiry_class = "expiry-ok"
+    if expires_at:
+        exp_dt = _parse_iso_datetime(expires_at)
+        now = _now_utc()
+        if exp_dt and now > exp_dt:
+            expiry_class = "expiry-expired"
+        elif exp_dt and (exp_dt - now).days <= 7:
+            expiry_class = "expiry-warning"
 
     body = f"""
     <div class="card">
       <h2>新增 / 编辑会员</h2>
-      <form method="post" action="/admin/members/form">
-        <label>类型</label>
-        <select name="kind">
-          <option value="ip" {"selected" if current_kind == "ip" else ""}>IP</option>
-          <option value="qq" {"selected" if current_kind == "qq" else ""}>QQ</option>
-        </select>
-        <label>用户名称（用于 QQ 分组显示）</label>
-        <input name="name" value="{_h(current_name)}" placeholder="例如：sin / 一心" />
-        <label>值（支持多个：用 # 或 , 或空格分隔）</label>
-        <input name="values" value="{_h('#'.join(current_values))}" placeholder="例如：1.2.3.4#5.6.7.8 或 3205807349#2915739699" />
-        <label>会员等级</label>
-        <select name="tier">
-          <option value="normal" {"selected" if tier == "normal" else ""}>普通</option>
-          <option value="month" {"selected" if tier == "month" else ""}>月卡</option>
-          <option value="permanent" {"selected" if tier == "permanent" else ""}>永久</option>
-        </select>
-        <label>状态</label>
-        <select name="enabled">
-          <option value="1" {"selected" if enabled else ""}>启用</option>
-          <option value="0" {"selected" if not enabled else ""}>禁用</option>
-        </select>
-        <div id="normalFields">
-          <label>普通会员：每日调用次数上限（0 表示不限制，默认 {NORMAL_DAILY_LIMIT}）</label>
-          <input name="daily_limit" type="number" min="0" value="{_h(daily_limit)}" />
+      <form method="post" action="/admin/members/form" id="memberForm">
+        
+        <div class="form-group">
+          <h3>基本信息</h3>
+          <label>类型</label>
+          <select name="kind">
+            <option value="ip" {"selected" if current_kind == "ip" else ""}>IP</option>
+            <option value="qq" {"selected" if current_kind == "qq" else ""}>QQ</option>
+          </select>
+          <div class="validation-msg" id="kindMsg"></div>
+          
+          <label>用户名称（用于 QQ 分组显示）</label>
+          <input name="name" value="{_h(current_name)}" placeholder="例如：sin / 一心" />
+          <div class="muted" style="margin-top:4px;">用户名称用于标识和分组管理会员</div>
+          
+          <label>值（支持多个：用 # 或 , 或空格分隔）</label>
+          <input name="values" value="{_h('#'.join(current_values))}" placeholder="例如：1.2.3.4#5.6.7.8 或 3205807349#2915739699" id="valuesInput" />
+          <div class="validation-msg" id="valuesMsg"></div>
         </div>
-        <div id="monthFields">
-          <label>月卡会员：续费天数（默认 {DEFAULT_MONTH_CARD_VALID_DAYS}）</label>
-          <input name="renewal_days" type="number" min="1" value="{_h(renewal_days)}" />
-          <div class="muted" style="margin-top:10px;">当前到期：{_h(expires_at or '-')}</div>
+        
+        <div class="form-group">
+          <h3>会员设置</h3>
+          <label>会员等级</label>
+          <select name="tier" id="tierSelect">
+            <option value="normal" {"selected" if tier == "normal" else ""}>普通</option>
+            <option value="month" {"selected" if tier == "month" else ""}>月卡</option>
+            <option value="permanent" {"selected" if tier == "permanent" else ""}>永久</option>
+          </select>
+          <div class="muted" style="margin-top:4px;">普通会员受每日调用次数限制，月卡会员有有效期，永久会员无限制</div>
+          
+          <label>状态</label>
+          <select name="enabled">
+            <option value="1" {"selected" if enabled else ""}>启用</option>
+            <option value="0" {"selected" if not enabled else ""}>禁用</option>
+          </select>
         </div>
+        
+        <div class="form-group" id="normalFields" style="display:{'block' if tier == 'normal' else 'none'};">
+          <h3>权限配置 - 普通会员</h3>
+          <label>每日调用次数上限（0 表示不限制，默认 {NORMAL_DAILY_LIMIT}）</label>
+          <input name="daily_limit" type="number" min="0" value="{_h(daily_limit)}" id="dailyLimitInput" />
+          <div class="validation-msg" id="dailyLimitMsg"></div>
+          <div class="muted" style="margin-top:4px;">超过限制后当天将无法继续调用识别接口</div>
+        </div>
+        
+        <div class="form-group" id="monthFields" style="display:{'block' if tier == 'month' else 'none'};">
+          <h3>权限配置 - 月卡会员</h3>
+          <label>续费天数（默认 {DEFAULT_MONTH_CARD_VALID_DAYS}）</label>
+          <input name="renewal_days" type="number" min="1" max="365" value="{_h(renewal_days)}" id="renewalDaysInput" />
+          <div class="validation-msg" id="renewalDaysMsg"></div>
+          <div class="muted" style="margin-top:4px;">每次续费延长指定天数</div>
+          
+          <label>当前到期时间</label>
+          <div style="padding: 8px 12px; background: rgba(2,6,23,.55); border-radius: 8px; border:1px solid rgba(148,163,184,.12);">
+            <span class="{expiry_class}">{_h(expiry_display)}</span>
+            <span class="muted" style="margin-left:8px;">{'(已到期)' if expires_at and expiry_class == 'expiry-expired' else ''}</span>
+          </div>
+        </div>
+        
         <input type="hidden" name="key" value="{_h(current_key)}" />
-        <div style="margin-top:12px; display:flex; gap:10px; flex-wrap:wrap;">
-          <button type="submit">保存</button>
+        <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
+          <button type="submit" id="submitBtn">保存</button>
           <a href="/admin/members"><button type="button">返回列表</button></a>
         </div>
       </form>
-      <script>
-        (function() {{
-          var tierSelect = document.querySelector('select[name="tier"]');
-          var normalFields = document.getElementById('normalFields');
-          var monthFields = document.getElementById('monthFields');
-          function syncFields() {{
-            var t = (tierSelect && tierSelect.value) || 'permanent';
-            if (normalFields) normalFields.style.display = (t === 'normal') ? '' : 'none';
-            if (monthFields) monthFields.style.display = (t === 'month') ? '' : 'none';
-          }}
-          if (tierSelect) tierSelect.addEventListener('change', syncFields);
-          syncFields();
-        }})();
-      </script>
-      <div class="muted" style="margin-top:10px;">月卡到期后提示：当前验证月卡已到期，请联系管理</div>
+      
+      <div class="muted" style="margin-top:12px;">月卡到期后提示：当前验证月卡已到期，请联系管理</div>
     </div>
+    
+    <script>
+      (function() {{
+        var tierSelect = document.getElementById('tierSelect');
+        var normalFields = document.getElementById('normalFields');
+        var monthFields = document.getElementById('monthFields');
+        
+        function syncFields() {{
+          var t = tierSelect ? tierSelect.value : 'permanent';
+          normalFields.style.display = (t === 'normal') ? 'block' : 'none';
+          monthFields.style.display = (t === 'month') ? 'block' : 'none';
+        }}
+        
+        if (tierSelect) {{
+          tierSelect.addEventListener('change', syncFields);
+        }}
+        
+        syncFields();
+        
+        function showValidationMsg(id, msg, isError) {{
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.textContent = msg || '';
+          el.className = 'validation-msg ' + (isError ? 'error' : 'success') + ' show';
+        }}
+        
+        function hideValidationMsg(id) {{
+          var el = document.getElementById(id);
+          if (!el) return;
+          el.className = 'validation-msg';
+        }}
+        
+        function validateValues(value) {{
+          if (!value.trim()) {{
+            showValidationMsg('valuesMsg', '值不能为空', true);
+            return false;
+          }}
+          var kind = document.querySelector('select[name="kind"]').value;
+          var parts = value.split(/[#,\\s]+/).filter(function(v) {{ return v.trim(); }});
+          
+          if (kind === 'ip') {{
+            for (var i = 0; i < parts.length; i++) {{
+              if (!/^\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}\\.\\d{{1,3}}$/.test(parts[i])) {{
+                showValidationMsg('valuesMsg', 'IP 格式不正确：' + parts[i], true);
+                return false;
+              }}
+            }}
+          }} else if (kind === 'qq') {{
+            for (var i = 0; i < parts.length; i++) {{
+              if (!/^\\d+$/.test(parts[i])) {{
+                showValidationMsg('valuesMsg', 'QQ 格式不正确：' + parts[i], true);
+                return false;
+              }}
+            }}
+          }}
+          
+          hideValidationMsg('valuesMsg');
+          return true;
+        }}
+        
+        function validateDailyLimit(value) {{
+          var num = parseInt(value, 10);
+          if (isNaN(num) || num < 0) {{
+            showValidationMsg('dailyLimitMsg', '请输入有效的数字（大于等于 0）', true);
+            return false;
+          }}
+          hideValidationMsg('dailyLimitMsg');
+          return true;
+        }}
+        
+        function validateRenewalDays(value) {{
+          var num = parseInt(value, 10);
+          if (isNaN(num) || num < 1 || num > 365) {{
+            showValidationMsg('renewalDaysMsg', '请输入有效的天数（1-365）', true);
+            return false;
+          }}
+          hideValidationMsg('renewalDaysMsg');
+          return true;
+        }}
+        
+        var valuesInput = document.getElementById('valuesInput');
+        var dailyLimitInput = document.getElementById('dailyLimitInput');
+        var renewalDaysInput = document.getElementById('renewalDaysInput');
+        var form = document.getElementById('memberForm');
+        
+        if (valuesInput) {{
+          valuesInput.addEventListener('input', function() {{
+            validateValues(this.value);
+          }});
+        }}
+        
+        if (dailyLimitInput) {{
+          dailyLimitInput.addEventListener('input', function() {{
+            validateDailyLimit(this.value);
+          }});
+        }}
+        
+        if (renewalDaysInput) {{
+          renewalDaysInput.addEventListener('input', function() {{
+            validateRenewalDays(this.value);
+          }});
+        }}
+        
+        if (form) {{
+          form.addEventListener('submit', function(e) {{
+            var tier = tierSelect ? tierSelect.value : 'permanent';
+            var valid = validateValues(valuesInput ? valuesInput.value : '');
+            
+            if (tier === 'normal' && dailyLimitInput) {{
+              valid = valid && validateDailyLimit(dailyLimitInput.value);
+            }}
+            
+            if (tier === 'month' && renewalDaysInput) {{
+              valid = valid && validateRenewalDays(renewalDaysInput.value);
+            }}
+            
+            if (!valid) {{
+              e.preventDefault();
+            }}
+          }});
+        }}
+      }})();
+    </script>
     """
     return _render_admin_page("会员编辑", body)
 
@@ -1843,6 +2061,54 @@ async def admin_members_delete(request: Request):
         _save_members(data)
     return RedirectResponse("/admin/members", status_code=303)
 
+@app.post("/admin/members/batch")
+async def admin_members_batch(request: Request):
+    """批量操作会员接口：启用、禁用、删除"""
+    user, redirect = _admin_guard(request)
+    if redirect:
+        return redirect
+    
+    form = await request.form()
+    action = str(form.get("action") or "").strip().lower()
+    keys_str = str(form.get("keys") or "").strip()
+    
+    if not keys_str:
+        return JSONResponse({"success": False, "message": "未选择任何会员"})
+    
+    keys = [k.strip() for k in keys_str.split(",") if k.strip()]
+    if not keys:
+        return JSONResponse({"success": False, "message": "未选择任何会员"})
+    
+    if action not in {"enable", "disable", "delete"}:
+        return JSONResponse({"success": False, "message": "无效的操作类型"})
+    
+    data = _load_members()
+    members = data.setdefault("members", {})
+    now = _now_utc()
+    success_count = 0
+    
+    for key in keys:
+        member = members.get(key)
+        if not member:
+            continue
+        
+        if action == "delete":
+            members.pop(key, None)
+            success_count += 1
+        elif action in {"enable", "disable"}:
+            member["enabled"] = (action == "enable")
+            member["updated_at"] = _format_iso(now)
+            members[key] = member
+            success_count += 1
+    
+    _save_members(data)
+    
+    action_name = {"enable": "启用", "disable": "禁用", "delete": "删除"}[action]
+    return JSONResponse({
+        "success": True,
+        "message": f"成功{action_name} {success_count}/{len(keys)} 个会员"
+    })
+
 @app.get("/admin/renewals")
 async def admin_renewals_get(request: Request):
     user, redirect = _admin_guard(request)
@@ -1867,9 +2133,9 @@ async def admin_renewals_get(request: Request):
         rid = str(r.get("id") or "")
         key = str(r.get("member_key") or "")
         tier = str(r.get("tier") or "")
-        exp = str(r.get("expires_at") or "")
+        exp = _format_bj_from_iso(str(r.get("expires_at") or ""))
         note = str(r.get("note") or "")
-        at = str(r.get("requested_at") or "")
+        at = _format_bj_from_iso(str(r.get("requested_at") or ""))
         cip = str(r.get("client_ip") or "")
         m = members.get(key) or {}
         try:
@@ -1877,32 +2143,154 @@ async def admin_renewals_get(request: Request):
         except Exception:
             days = DEFAULT_MONTH_CARD_VALID_DAYS
         days = max(1, days)
+        
         rows.append(
             "<tr>"
+            f"<td><input type='checkbox' class='renewal-checkbox' value='{_h(rid)}' /></td>"
             f"<td>{_h(rid)}</td><td>{_h(key)}</td><td>{_h(tier_cn(tier))}</td><td>{_h(exp or '-')}</td><td>{_h(note)}</td><td>{_h(cip)}</td><td>{_h(at)}</td>"
             "<td><div class='actions'>"
-            f"<form class='inline' method='post' action='/admin/renewals/approve'><input type='hidden' name='id' value='{_h(rid)}'/><button class='btn-sm' type='submit'>批准+{days}天</button></form>"
-            f"<form class='inline' method='post' action='/admin/renewals/dismiss'><input type='hidden' name='id' value='{_h(rid)}'/><button class='btn-danger btn-sm' type='submit'>忽略</button></form>"
+            f"<div class='number-input-wrapper'>"
+            f"<input type='number' class='renewal-days-input' data-id='{_h(rid)}' value='{days}' min='1' max='365' style='width:50px;padding:4px 6px;' />"
+            f"<span style='font-size:12px;color:#94a3b8;'>天</span>"
+            f"</div>"
+            f"<button class='btn-sm' onclick='approveSingle(\"{_h(rid)}\")'>批准</button>"
+            f"<button class='btn-danger btn-sm' onclick='dismissSingle(\"{_h(rid)}\")'>忽略</button>"
             "</div></td>"
             "</tr>"
         )
     body = f"""
     <div class="muted">用户可调用 /membership/renewal_request 提交续费通知；这里进行审批与延长月卡。</div>
+    <div class="batch-actions" style="margin-top:12px;" id="batchRenewalActions">
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <span class="muted">已选择 <strong id="renewalSelectedCount">0</strong> 项：</span>
+        <div class="number-input-wrapper">
+          <input type="number" id="batchRenewalDays" value="30" min="1" max="365" style="width:60px;padding:6px 8px;" />
+          <span style="font-size:12px;color:#94a3b8;">天</span>
+        </div>
+        <button type="button" onclick="batchApprove()">批量批准</button>
+        <button type="button" class="btn-danger" onclick="batchDismiss()">批量忽略</button>
+      </div>
+    </div>
     <h2 style="margin-top:18px;">待处理列表（{len(reqs)}）</h2>
-    <table>
-      <thead><tr><th>ID</th><th>Key</th><th>类型</th><th>到期</th><th>备注</th><th>IP</th><th>时间</th><th>操作</th></tr></thead>
-      <tbody>{''.join(rows) or '<tr><td colspan="8" class="muted">暂无</td></tr>'}</tbody>
-    </table>
+    <div class="table-wrapper">
+      <table>
+        <thead><tr><th style="width:40px;"><input type="checkbox" id="selectAllRenewals" onchange="toggleSelectAllRenewals()" /></th><th>ID</th><th>Key</th><th>类型</th><th>到期</th><th>备注</th><th>IP</th><th>时间</th><th>操作</th></tr></thead>
+        <tbody>{''.join(rows) or '<tr><td colspan="9" class="muted">暂无</td></tr>'}</tbody>
+      </table>
+    </div>
+    <script>
+      function toggleSelectAllRenewals() {{
+        const selectAll = document.getElementById('selectAllRenewals');
+        const checkboxes = document.querySelectorAll('.renewal-checkbox');
+        checkboxes.forEach(cb => cb.checked = selectAll.checked);
+        updateBatchRenewalActions();
+      }}
+      function updateBatchRenewalActions() {{
+        const checked = document.querySelectorAll('.renewal-checkbox:checked');
+        const count = checked.length;
+        document.getElementById('renewalSelectedCount').textContent = count;
+        document.getElementById('batchRenewalActions').style.display = count > 0 ? 'block' : 'none';
+      }}
+      function approveSingle(id) {{
+        const input = document.querySelector('.renewal-days-input[data-id="' + id + '"]');
+        const days = input ? parseInt(input.value) : 30;
+        if (!days || days < 1 || days > 365) {{
+          alert('请输入有效的天数（1-365）');
+          return;
+        }}
+        if (!confirm('确定要批准此续费请求，延长 ' + days + ' 天吗？')) return;
+        
+        const formData = new URLSearchParams();
+        formData.append('id', id);
+        formData.append('days', days);
+        
+        fetch('/admin/renewals/approve', {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
+          body: formData.toString()
+        }}).then(r => {{ if(r.ok) location.reload(); }});
+      }}
+      function dismissSingle(id) {{
+        if (!confirm('确定要忽略此续费请求吗？')) return;
+        const formData = new URLSearchParams();
+        formData.append('id', id);
+        fetch('/admin/renewals/dismiss', {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
+          body: formData.toString()
+        }}).then(r => {{ if(r.ok) location.reload(); }});
+      }}
+      function batchApprove() {{
+        const checked = document.querySelectorAll('.renewal-checkbox:checked');
+        if (checked.length === 0) return;
+        const daysInput = document.getElementById('batchRenewalDays');
+        const days = parseInt(daysInput.value) || 30;
+        if (days < 1 || days > 365) {{
+          alert('请输入有效的天数（1-365）');
+          return;
+        }}
+        if (!confirm('确定要批量批准选中的 ' + checked.length + ' 个续费请求，各延长 ' + days + ' 天吗？')) return;
+        
+        const ids = Array.from(checked).map(cb => cb.value);
+        const formData = new URLSearchParams();
+        formData.append('ids', ids.join(','));
+        formData.append('days', days.toString());
+        
+        fetch('/admin/renewals/batch_approve', {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
+          body: formData.toString()
+        }}).then(r => r.json()).then(data => {{
+          if (data.success) {{
+            alert(data.message || '批量批准成功');
+            location.reload();
+          }} else {{
+            alert(data.message || '批量批准失败');
+          }}
+        }}).catch(e => {{
+          alert('批量批准失败：' + e.message);
+        }});
+      }}
+      function batchDismiss() {{
+        const checked = document.querySelectorAll('.renewal-checkbox:checked');
+        if (checked.length === 0) return;
+        if (!confirm('确定要批量忽略选中的 ' + checked.length + ' 个续费请求吗？')) return;
+        
+        const ids = Array.from(checked).map(cb => cb.value);
+        const formData = new URLSearchParams();
+        formData.append('ids', ids.join(','));
+        
+        fetch('/admin/renewals/batch_dismiss', {{
+          method: 'POST',
+          headers: {{'Content-Type': 'application/x-www-form-urlencoded'}},
+          body: formData.toString()
+        }}).then(r => r.json()).then(data => {{
+          if (data.success) {{
+            alert(data.message || '批量忽略成功');
+            location.reload();
+          }} else {{
+            alert(data.message || '批量忽略失败');
+          }}
+        }}).catch(e => {{
+          alert('批量忽略失败：' + e.message);
+        }});
+      }}
+      document.querySelectorAll('.renewal-checkbox').forEach(cb => cb.addEventListener('change', updateBatchRenewalActions));
+      updateBatchRenewalActions();
+    </script>
     """
     return _render_admin_page("续费通知", body)
 
 @app.post("/admin/renewals/approve")
 async def admin_renewals_approve(request: Request):
+    """批准单个续费请求，支持自定义天数"""
     user, redirect = _admin_guard(request)
     if redirect:
         return redirect
     form = await request.form()
     rid = str(form.get("id") or "").strip()
+    days_str = str(form.get("days") or "").strip()
+    
     data = _load_renewals()
     reqs = data.setdefault("requests", [])
     target = None
@@ -1922,11 +2310,13 @@ async def admin_renewals_approve(request: Request):
             members_data = _load_members()
             members = members_data.setdefault("members", {})
             m = members.get(key) or {"tier": "month"}
+            
             try:
-                days = int(m.get("renewal_days", DEFAULT_MONTH_CARD_VALID_DAYS))
+                days = int(days_str) if days_str else int(m.get("renewal_days", DEFAULT_MONTH_CARD_VALID_DAYS))
             except Exception:
-                days = DEFAULT_MONTH_CARD_VALID_DAYS
-            days = max(1, days)
+                days = int(m.get("renewal_days", DEFAULT_MONTH_CARD_VALID_DAYS))
+            days = max(1, min(365, days))
+            
             exp = _parse_iso_datetime(m.get("expires_at"))
             base = exp if exp and exp > now else now
             m["tier"] = "month"
@@ -1939,6 +2329,95 @@ async def admin_renewals_approve(request: Request):
             _save_members(members_data)
 
     return RedirectResponse("/admin/renewals", status_code=303)
+
+@app.post("/admin/renewals/batch_approve")
+async def admin_renewals_batch_approve(request: Request):
+    """批量批准续费请求"""
+    user, redirect = _admin_guard(request)
+    if redirect:
+        return redirect
+    
+    form = await request.form()
+    ids_str = str(form.get("ids") or "").strip()
+    days_str = str(form.get("days") or "").strip()
+    
+    if not ids_str:
+        return JSONResponse({"success": False, "message": "未选择任何续费请求"})
+    
+    ids = [id_.strip() for id_ in ids_str.split(",") if id_.strip()]
+    if not ids:
+        return JSONResponse({"success": False, "message": "未选择任何续费请求"})
+    
+    try:
+        days = int(days_str) if days_str else 30
+    except Exception:
+        days = 30
+    days = max(1, min(365, days))
+    
+    data = _load_renewals()
+    reqs = data.get("requests", [])
+    req_ids_set = set(ids)
+    
+    success_count = 0
+    now = _now_utc()
+    members_data = _load_members()
+    members = members_data.setdefault("members", {})
+    
+    for r in reqs:
+        rid = str(r.get("id") or "")
+        if rid in req_ids_set:
+            key = str(r.get("member_key") or "").strip()
+            if key:
+                m = members.get(key) or {"tier": "month"}
+                exp = _parse_iso_datetime(m.get("expires_at"))
+                base = exp if exp and exp > now else now
+                m["tier"] = "month"
+                m["enabled"] = True
+                m["renewal_days"] = days
+                m["expires_at"] = _format_iso(base + timedelta(days=days))
+                m["updated_at"] = _format_iso(now)
+                m["created_at"] = m.get("created_at") or _format_iso(now)
+                members[key] = m
+                success_count += 1
+    
+    _save_members(members_data)
+    
+    data["requests"] = [r for r in reqs if str(r.get("id") or "") not in req_ids_set]
+    _save_renewals(data)
+    
+    return JSONResponse({
+        "success": True,
+        "message": f"成功批准 {success_count}/{len(ids)} 个续费请求，各延长 {days} 天"
+    })
+
+@app.post("/admin/renewals/batch_dismiss")
+async def admin_renewals_batch_dismiss(request: Request):
+    """批量忽略续费请求"""
+    user, redirect = _admin_guard(request)
+    if redirect:
+        return redirect
+    
+    form = await request.form()
+    ids_str = str(form.get("ids") or "").strip()
+    
+    if not ids_str:
+        return JSONResponse({"success": False, "message": "未选择任何续费请求"})
+    
+    ids = [id_.strip() for id_ in ids_str.split(",") if id_.strip()]
+    if not ids:
+        return JSONResponse({"success": False, "message": "未选择任何续费请求"})
+    
+    data = _load_renewals()
+    reqs = data.get("requests", [])
+    req_ids_set = set(ids)
+    
+    data["requests"] = [r for r in reqs if str(r.get("id") or "") not in req_ids_set]
+    _save_renewals(data)
+    
+    return JSONResponse({
+        "success": True,
+        "message": f"成功忽略 {len(ids)} 个续费请求"
+    })
 
 @app.post("/admin/renewals/dismiss")
 async def admin_renewals_dismiss(request: Request):
