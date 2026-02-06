@@ -4,3 +4,5 @@
 models/
 /errorPic/
 /images/
+.claude/
+.claude/**
