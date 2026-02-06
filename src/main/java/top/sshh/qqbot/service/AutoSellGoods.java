@@ -14,6 +14,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+
+import top.sshh.qqbot.constant.Constant;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.utils.Utils;
@@ -28,10 +30,13 @@ public class AutoSellGoods {
     private static final Logger logger = LoggerFactory.getLogger(AutoSellGoods.class);
     private Map<Long, List<ProductPrice>> herbPackMap = new ConcurrentHashMap();
     private Map<Long, List<ProductPrice>> equipPackMap = new ConcurrentHashMap();
+    private Map<Long, List<ProductPrice>> pillPackMap = new ConcurrentHashMap();
     @Autowired
     private ProductPriceResponse productPriceResponse;
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
+    @Autowired
+    private GroupManager groupManager;
 
     public AutoSellGoods() {
 
@@ -58,11 +63,18 @@ public class AutoSellGoods {
             equipPackMap.clear();
             bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("我的背包"));
         }
+        if ("批量炼金丹药".equals(message)) {
+            botConfig.setCommand("批量炼金丹药");
+            botConfig.setPage(1);
+            pillPackMap.clear();
+            bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("丹药背包"));
+        }
         if ("停止执行".equals(message)) {
             botConfig.setCommand("");
             botConfig.setPage(1);
             herbPackMap.clear();
             equipPackMap.clear();
+            pillPackMap.clear();
         }
     }
 
@@ -106,6 +118,29 @@ public class AutoSellGoods {
                 botConfig.setCommand("");
             } else {
                 this.alchemyEquip(dataList, group, botConfig);
+            }
+
+        }
+
+    }
+
+    @GroupMessageHandler(senderIds = { 3889001741L })
+    public void 成功炼金丹药(Bot bot, Group group, Member member, MessageChain messageChain, String message,
+            Integer messageId) throws InterruptedException {
+        BotConfig botConfig = bot.getBotConfig();
+        if (Utils.isAtSelf(bot, group, message, xxGroupId)
+                && (message.contains("炼金成功") || message.contains("道友的上一条指令还没执行完")
+                        || message.contains("操作失败") || message.contains("物品数量不足"))
+                && "批量炼金丹药".equals(botConfig.getCommand())) {
+            List<ProductPrice> dataList = pillPackMap.get(bot.getBotId());
+            if (dataList != null && !dataList.isEmpty()) {
+                dataList.remove(0);
+            }
+            if (dataList != null && dataList.isEmpty()) {
+                Utils.getRemindGroup(bot, xxGroupId).sendMessage(new MessageChain().text("丹药炼金完成"));
+                botConfig.setCommand("");
+            } else {
+                this.alchemyPill(dataList, group, botConfig);
             }
 
         }
@@ -188,6 +223,46 @@ public class AutoSellGoods {
 
     }
 
+    @GroupMessageHandler(senderIds = { 3889001741L })
+    public void 丹药背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId)
+            throws Exception {
+        BotConfig botConfig = bot.getBotConfig();
+        if (Utils.isAtSelf(bot, group, message, xxGroupId)
+                && (message.contains("上一页") || message.contains("下一页") || message.contains("丹药背包"))
+                && "批量炼金丹药".equals(botConfig.getCommand())) {
+            List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
+            boolean hasNextPage = false;
+            TextMessage textMessage = null;
+            if (textMessages.size() > 1) {
+                textMessage = (TextMessage) textMessages.get(textMessages.size() - 1);
+            } else {
+                textMessage = (TextMessage) textMessages.get(0);
+            }
+
+            if (textMessage != null) {
+                String msg = textMessage.getText();
+                if (message.contains("炼金")) {
+                    String[] lines = msg.split("\n");
+                    this.parsePillList(Arrays.asList(lines), bot);
+                    if (msg.contains("下一页")) {
+                        hasNextPage = true;
+                    }
+                }
+
+                if (hasNextPage) {
+                    botConfig.setPage(botConfig.getPage() + 1);
+                    group.sendMessage((new MessageChain()).at("3889001741").text("丹药背包" + botConfig.getPage()));
+                } else {
+                    if (this.pillPackMap.get(bot.getBotId()) != null) {
+                        alchemyPill(this.pillPackMap.get(bot.getBotId()), group, botConfig);
+                    }
+
+                }
+            }
+        }
+
+    }
+
     public void parseEquipList(String[] lines, Bot bot) throws Exception {
 
         List<ProductPrice> productPrices = this.equipPackMap.get(bot.getBotId());
@@ -229,12 +304,14 @@ public class AutoSellGoods {
             }
 
             name = name.replaceAll("\\s", "");
-            if (!StringUtils.isBlank(name)) {
-                ProductPrice productPrice = new ProductPrice();
-                productPrice.setName(name);
-                productPrice.setHerbCount(quantity);
-                productPrices.add(productPrice);
-                this.equipPackMap.put(bot.getBotId(), productPrices);
+            if (!this.groupManager.isAlchemyExcluded(bot.getBotId(), name)) {
+                if (!StringUtils.isBlank(name)) {
+                    ProductPrice productPrice = new ProductPrice();
+                    productPrice.setName(name);
+                    productPrice.setHerbCount(quantity);
+                    productPrices.add(productPrice);
+                    this.equipPackMap.put(bot.getBotId(), productPrices);
+                }
             }
 
         }
@@ -260,22 +337,67 @@ public class AutoSellGoods {
 
     }
 
-    private void herbsCountLimit10(Bot bot, int quantity, String currentHerb) {
-        int remaining = quantity;
-        while (remaining > 0) {
-            int batchSize = Math.min(10, remaining); // 本次上架数量，最多10个
-            List<ProductPrice> productPrices = this.herbPackMap.get(bot.getBotId());
+    public void parsePillList(List<String> pillList, Bot bot) throws Exception {
+        String currentPill = null;
+        Iterator var2 = pillList.iterator();
+
+        while (var2.hasNext()) {
+            String line = (String) var2.next();
+            line = line.trim();
+            if (line.contains("名字：")) {
+                currentPill = line.replaceAll("名字：", "");
+            } else if (currentPill != null && line.contains("拥有数量:")) {
+                // 使用正则表达式提取数字
+                Pattern pattern = Pattern.compile("拥有数量:(\\d+)");
+                Matcher matcher = pattern.matcher(line);
+                if (matcher.find()) {
+                    int count = Integer.parseInt(matcher.group(1));
+                    pillsCountLimit(bot, count, currentPill);
+                }
+                currentPill = null;
+            }
+        }
+
+    }
+
+    private void pillsCountLimit(Bot bot, int quantity, String currentPill) {
+        boolean b = !"渡厄丹,寒铁铸心炉,陨铁炉,雕花紫铜炉".contains(currentPill);
+        boolean isMakeDan = !Constant.MAKE_DAN_SET.contains(currentPill);
+        if (b && isMakeDan
+                && !this.groupManager.isAlchemyExcluded(bot.getBotId(), currentPill)) {
+            List<ProductPrice> productPrices = this.pillPackMap.get(bot.getBotId());
             if (productPrices == null) {
                 productPrices = new ArrayList<>();
             }
             ProductPrice productPrice = new ProductPrice();
-            productPrice.setName(currentHerb);
-            productPrice.setHerbCount(batchSize);
+            productPrice.setName(currentPill);
+            productPrice.setHerbCount(quantity);
             productPrices.add(productPrice);
-            this.herbPackMap.put(bot.getBotId(), productPrices);
-            remaining -= batchSize;
-
+            this.pillPackMap.put(bot.getBotId(), productPrices);
         }
+
+    }
+
+    private void herbsCountLimit10(Bot bot, int quantity, String currentHerb) {
+
+        if (!this.groupManager.isSellExcluded(bot.getBotId(), currentHerb)) {
+            int remaining = quantity;
+            while (remaining > 0) {
+                int batchSize = Math.min(10, remaining); // 本次上架数量，最多10个
+                List<ProductPrice> productPrices = this.herbPackMap.get(bot.getBotId());
+                if (productPrices == null) {
+                    productPrices = new ArrayList<>();
+                }
+                ProductPrice productPrice = new ProductPrice();
+                productPrice.setName(currentHerb);
+                productPrice.setHerbCount(batchSize);
+                productPrices.add(productPrice);
+                this.herbPackMap.put(bot.getBotId(), productPrices);
+                remaining -= batchSize;
+
+            }
+        }
+
     }
 
     private void buyHerbs(List<ProductPrice> autoBuyList, Group group, BotConfig botConfig) {
@@ -327,7 +449,27 @@ public class AutoSellGoods {
                     break;
                 }
                 group.sendMessage((new MessageChain()).at("3889001741")
-                            .text("炼金 " + productPrice.getName() + " " + productPrice.getHerbCount()));
+                        .text("炼金 " + productPrice.getName() + " " + productPrice.getHerbCount()));
+                break;
+            } catch (Exception var6) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+    }
+
+    private void alchemyPill(List<ProductPrice> autoBuyList, Group group, BotConfig botConfig) {
+        Iterator var3 = autoBuyList.iterator();
+
+        while (var3.hasNext()) {
+            ProductPrice productPrice = (ProductPrice) var3.next();
+
+            try {
+                if (StringUtils.isEmpty(botConfig.getCommand())) {
+                    break;
+                }
+                group.sendMessage((new MessageChain()).at("3889001741")
+                        .text("炼金 " + productPrice.getName() + " " + productPrice.getHerbCount()));
                 break;
             } catch (Exception var6) {
                 Thread.currentThread().interrupt();

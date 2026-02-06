@@ -96,6 +96,8 @@ public class GroupManager {
     public volatile boolean taskReminder = true;
     private final Map<String, Map<String, Long>> taskRecords = new ConcurrentHashMap();
     public  Map<String, String> autoVerifyQQ= new ConcurrentHashMap();
+    public Map<String, List<MonsterKillingRecord>> monsterKillingRecords = new ConcurrentHashMap();
+    public Map<String, Long> tokenRewardTimeMap = new ConcurrentHashMap(); // 令牌奖励时间
 
     public GroupManager() {
 
@@ -360,6 +362,8 @@ public class GroupManager {
             data.put("群结算提醒", this.groupSettlementReminderMap);
             data.put("自动验证", this.autoVerifyQQ);
             data.put("验证统计", this.verifyCount);
+            data.put("打怪记录", this.monsterKillingRecords);
+            data.put("令牌奖励时间", this.tokenRewardTimeMap);
             // 直接写入JSON字节（UTF-8编码）
             Files.write(Paths.get(FILE_PATH),
                     JSON.toJSONString(data).getBytes(StandardCharsets.UTF_8));
@@ -456,6 +460,20 @@ public class GroupManager {
                 this.groupSettlementReminderMap = new ConcurrentHashMap<>();
             }
 
+            this.monsterKillingRecords = data.getObject("打怪记录",
+                    new TypeReference<Map<String, List<MonsterKillingRecord>>>() {
+                    });
+            if (this.monsterKillingRecords == null) {
+                this.monsterKillingRecords = new ConcurrentHashMap<>();
+            }
+
+            this.tokenRewardTimeMap = data.getObject("令牌奖励时间",
+                    new TypeReference<Map<String, Long>>() {
+                    });
+            if (this.tokenRewardTimeMap == null) {
+                this.tokenRewardTimeMap = new ConcurrentHashMap<>();
+            }
+
 
             logger.info("加载成功：{} 个灵田任务，{} 条发言统计",
                     ltmap.size(), MESSAGE_NUMBER_MAP.size());
@@ -478,6 +496,8 @@ public class GroupManager {
         this.groupSettlementReminderMap = new ConcurrentHashMap<>();
         this.autoVerifyQQ = new ConcurrentHashMap<>();
         this.verifyCount = new VerifyCount();
+        this.monsterKillingRecords = new ConcurrentHashMap<>();
+        this.tokenRewardTimeMap = new ConcurrentHashMap<>();
     }
 
     public boolean isGroupXslPriceQueryEnabled(Long groupId) {
@@ -721,20 +741,56 @@ public class GroupManager {
     }
 
     @GroupMessageHandler(
-        // senderIds = {3889001741L}
-        ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+        senderIds = {3889001741L}
+        // ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 秘境挑战结果处理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (this.isGroupSettlementReminderEnabled(group.getGroupId()) && bot.getBotConfig().isEnableAutomaticReply()) {
-            if (message.contains("```bash")) {
-                if (message.contains("的回合") && message.contains("道友大战一番") && !message.contains("修仙令牌额外奖励")) {
-                    extractAndFormatResult(message,group,messageId);
+            if (message.contains("的回合") && message.contains("道友大战一番") && message.contains("成功战胜") && !message.contains("修仙令牌额外奖励")) {
+                    extractAndFormatResult(bot,message,group,messageId,member.getUserId());
+                }
+        }
+    }
+
+    @GroupMessageHandler(
+         senderIds = {3889001741L}
+            // ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 令牌奖励时间处理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        if (this.isGroupSettlementReminderEnabled(group.getGroupId()) && bot.getBotConfig().isEnableAutomaticReply()) {
+            if (message.contains("修仙令牌额外奖励") && message.contains("道友大战一番") && message.contains("成功战胜")) {
+                // 提取QQ号
+                Pattern qqPattern = Pattern.compile("@(\\d{5,12})\\s");
+                Matcher qqMatcher = qqPattern.matcher(message);
+                if (qqMatcher.find()) {
+                    try {
+                        Long qq = Long.parseLong(qqMatcher.group(1));
+                        // 保存令牌奖励时间（只保留最近一次）
+                        tokenRewardTimeMap.put(qq.toString(), System.currentTimeMillis());
+                        saveTasksToFile();
+                        logger.info("记录令牌奖励时间：QQ={}, 时间={}", qq, sdf.format(new Date()));
+                    } catch (NumberFormatException e) {
+                        logger.warn("提取QQ号失败", e);
+                        bot.sendPrivateMessage(bot.getBotId(), new MessageChain().text("提取QQ号失败"+message));
+                    }
                 }
             }
         }
     }
 
-    public void extractAndFormatResult(String battleLog,Group group,Integer messageId) {
+    public void extractAndFormatResult(Bot bot,String battleLog,Group group,Integer messageId,Long userId) {
+        // 提取QQ号（从@819463350格式）
+        Pattern qqPattern = Pattern.compile("@(\\d{5,12})\\s");
+        Matcher qqMatcher = qqPattern.matcher(battleLog);
+        Long extractedQQ = null; // 默认使用发送者QQ
+        if (qqMatcher.find()) {
+            try {
+                extractedQQ = Long.parseLong(qqMatcher.group(1));
+            } catch (NumberFormatException e) {
+                logger.warn("提取QQ号失败", e);
+            }
+        }
+
         // 提取怪物名称（从"成功战胜"到"!"之间的内容）
         Pattern monsterPattern = Pattern.compile("成功战胜([^!]+)!");
         Matcher monsterMatcher = monsterPattern.matcher(battleLog);
@@ -802,6 +858,126 @@ public class GroupManager {
               .append("，获得修为：").append(formattedCultivation)
               .append("，灵石：").append(formattedSpiritStones);
         group.sendMessage(new MessageChain().reply(messageId).text(result.toString()));
+
+        // 保存打怪记录
+        if(extractedQQ != null){
+            saveMonsterKillingRecord(extractedQQ, monsterName, formattedCultivation, battleLog);
+        }else{
+            bot.sendPrivateMessage(bot.getBotId(), new MessageChain().text("没有指定目标QQ号"+battleLog));
+        }
+        
+    }
+
+    private void saveMonsterKillingRecord(Long userId, String monsterName, String cultivation, String battleLog) {
+        try {
+            // 提取道号（用户名）
+            String daoName = extractDaoName(battleLog);
+            if (daoName == null) {
+                daoName = "未知";
+            }
+
+            // 创建记录
+            MonsterKillingRecord record = new MonsterKillingRecord();
+            SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd");
+            record.setDate(dateFormat.format(new Date()));
+            record.setCultivation(cultivation);
+            record.setMonsterName(monsterName);
+            record.setDaoName(daoName);
+
+            // 保存记录
+            String key = userId.toString();
+            List<MonsterKillingRecord> records = monsterKillingRecords.computeIfAbsent(key, k -> new ArrayList<>());
+            records.add(record);
+
+            // 只保留最近50条记录
+            if (records.size() > 50) {
+                records.remove(0);
+            }
+
+            logger.info("保存打怪记录：QQ={}, 道号={}, 怪物={}, 修为={}", userId, daoName, monsterName, cultivation);
+            saveTasksToFile();
+        } catch (Exception e) {
+            logger.error("保存打怪记录失败", e);
+        }
+    }
+
+    private String extractDaoName(String battleLog) {
+        // 尝试提取 "道号：xxx"
+        Pattern daoPattern = Pattern.compile("道号[:：](\\S+)");
+        Matcher daoMatcher = daoPattern.matcher(battleLog);
+        if (daoMatcher.find()) {
+            return daoMatcher.group(1);
+        }
+
+        // 尝试提取 "☆------xxx的回合------☆" 格式
+        Pattern fancyTurnPattern = Pattern.compile("[-]+([\\u4e00-\\u9fa5]+)的回合[-]+");
+        Matcher fancyTurnMatcher = fancyTurnPattern.matcher(battleLog);
+        if (fancyTurnMatcher.find()) {
+            return fancyTurnMatcher.group(1);
+        }
+
+        // 尝试提取普通的 "xxx的回合" 格式（只取中文、字母、数字）
+        Pattern turnPattern = Pattern.compile("([\\u4e00-\\u9fa5\\w]+)的回合");
+        Matcher turnMatcher = turnPattern.matcher(battleLog);
+        if (turnMatcher.find()) {
+            return turnMatcher.group(1);
+        }
+
+        return null;
+    }
+
+    @GroupMessageHandler(
+            isAt = true,
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 查询打怪记录(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        // 检查是否是@机器人 + "历史打怪记录"
+        if (!message.contains("历史打怪记录")) {
+            return;
+        }
+
+        Long userId = member.getUserId();
+        List<MonsterKillingRecord> records = monsterKillingRecords.get(userId.toString());
+
+        if (records == null || records.isEmpty()) {
+            group.sendMessage(new MessageChain().reply(messageId).text("暂无打怪记录"));
+            return;
+        }
+
+        // 获取最近10条记录
+        int startIndex = Math.max(0, records.size() - 10);
+        List<MonsterKillingRecord> recentRecords = new ArrayList<>(records.subList(startIndex, records.size()));
+
+        // 反转列表，让最新的日期排在前面
+        Collections.reverse(recentRecords);
+
+        // 获取道号（从最新记录中获取，反转后是第一条）
+        String daoName = "未知";
+        if (!recentRecords.isEmpty()) {
+            MonsterKillingRecord latestRecord = recentRecords.get(0);
+            if (latestRecord.getDaoName() != null && !latestRecord.getDaoName().isEmpty()) {
+                daoName = latestRecord.getDaoName();
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("道号：").append(daoName).append("\n");
+
+        // 显示令牌奖励时间（如果有）
+        Long tokenRewardTime = tokenRewardTimeMap.get(userId.toString());
+        if (tokenRewardTime != null) {
+            sb.append("月卡怪日期：").append(sdf.format(new Date(tokenRewardTime))).append("\n");
+        }
+
+        sb.append("\n历史打怪记录(最近").append(recentRecords.size()).append("次)：\n");
+
+        for (MonsterKillingRecord record : recentRecords) {
+            sb.append(record.getDate())
+              .append(" 击败 ").append(record.getMonsterName())
+              .append("，获取修为：").append(record.getCultivation()).append("\n");
+        }
+
+        group.sendMessage(new MessageChain().reply(messageId).text(sb.toString()));
     }
 
 
