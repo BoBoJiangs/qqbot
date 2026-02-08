@@ -1,7 +1,7 @@
 /target/
 /.idea/
 /cache/
-models/
+/captcha-api/models/
 /errorPic/
 /images/
 .claude/

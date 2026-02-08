@@ -1,0 +1,9 @@
+INFO:     Started server process [9748]
+INFO:     Waiting for application startup.
+INFO:captcha_api:Captcha API started with modular architecture
+INFO:captcha_api:Admin session hours: 12.0
+INFO:captcha_api:Normal daily limit: 20
+INFO:captcha_api:Month card monthly limit: 0
+INFO:captcha_api:Admin local only: False
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
