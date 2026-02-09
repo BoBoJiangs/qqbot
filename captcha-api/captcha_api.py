@@ -8,7 +8,7 @@ Refactored to use modular architecture with separate layers for:
 import os
 import re
 from datetime import datetime, timezone
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 

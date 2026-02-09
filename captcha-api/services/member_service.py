@@ -1,4 +1,4 @@
-"""Member business logic service.
+白名单"""Member business logic service.
 
 Handles member-related business rules including tier validation,
 expiry checking, and quota management.
@@ -233,9 +233,32 @@ class MemberService:
             css_class: CSS class for styling (ok, warning, expired)
         """
         tier = member.get("tier", "permanent")
-        if tier != "month":
+
+        # 永久会员
+        if tier == "permanent":
             return "永久有效", "ok"
 
+        # 普通用户：显示剩余次数
+        if tier == "normal":
+            member_key = member.get("_key", "")
+            if not member_key:
+                return "未设置", "warning"
+            # 获取今日使用情况
+            usage_counter = self._usage_repo.get_counter(member_key)
+            daily_limit = int(member.get("daily_limit") or 0)
+            if daily_limit > 0:
+                used_count = usage_counter.get("daily_count", 0)
+                remaining = daily_limit - used_count
+                if remaining <= 0:
+                    return f"今日已用完 ({used_count}/{daily_limit})", "expired"
+                elif remaining <= daily_limit * 0.2:  # 剩余少于20%
+                    return f"剩 {remaining} 次 ({used_count}/{daily_limit})", "warning"
+                else:
+                    return f"剩 {remaining} 次", "ok"
+            else:
+                return "无限制", "ok"
+
+        # 月卡会员：显示剩余天数
         expires_at = self._parse_iso_datetime(member.get("expires_at"))
         if not expires_at:
             return "未设置", "warning"

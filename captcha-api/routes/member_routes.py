@@ -107,8 +107,11 @@ async def admin_members_get(
 
         filtered.append((key, member))
 
-    # Build table rows
+    # Build table rows and calculate today's total statistics
     rows = []
+    today_total_count = 0
+    today_total_error = 0
+
     for key, member in filtered:
         name = _h(member.get("name", ""))
         member_tier = member.get("tier", "normal")
@@ -119,6 +122,10 @@ async def admin_members_get(
         total_count = usage_counter.get("total_count", 0)
         error_count = usage_counter.get("error_count", 0)
         accuracy = round((1 - error_count / total_count) * 100, 1) if total_count > 0 else 100.0
+
+        # Accumulate today's total statistics
+        today_total_count += total_count
+        today_total_error += error_count
 
         # If name is empty, try to get from whitelist
         if not name:
@@ -149,7 +156,8 @@ async def admin_members_get(
         else:
             status_badge = '<span class="status-badge enabled">启用</span>'
 
-        # Expiry status
+        # Expiry status - pass member_key for normal tier to calculate remaining calls
+        member["_key"] = key
         expiry_text, expiry_class = member_service.get_expiry_status(member)
         expiry_html = f'<span class="expiry-{expiry_class}">{_h(expiry_text)}</span>'
 
@@ -207,7 +215,30 @@ async def admin_members_get(
     elif expired_filter == "no":
         current_filter.append("未到期")
 
+    # Calculate today's accuracy
+    today_accuracy = round((1 - today_total_error / today_total_count) * 100, 1) if today_total_count > 0 else 100.0
+
     body = f"""
+    <div class="row" style="margin-bottom:16px;">
+      <div class="card" style="flex:1;">
+        <h2>今日总统计</h2>
+        <div style="display:flex;gap:24px;margin-top:10px;">
+          <div>
+            <div class="muted">总次数</div>
+            <div style="font-size:1.5rem;font-weight:bold;color:#4CAF50;">{today_total_count}</div>
+          </div>
+          <div>
+            <div class="muted">错误次数</div>
+            <div style="font-size:1.5rem;font-weight:bold;color:#f44336;">{today_total_error}</div>
+          </div>
+          <div>
+            <div class="muted">准确率</div>
+            <div style="font-size:1.5rem;font-weight:bold;color:{'#4CAF50' if today_accuracy >= 90 else '#ff9800' if today_accuracy >= 70 else '#f44336'};">{today_accuracy:.1f}%</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="card">
       <h2>筛选</h2>
       <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
