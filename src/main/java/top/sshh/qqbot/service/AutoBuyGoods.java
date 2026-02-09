@@ -33,7 +33,7 @@ public class AutoBuyGoods {
     private final ExecutorService customPool = Executors.newCachedThreadPool();
     private static final long AUTO_TASK_REFRESH_BASE_TIMEOUT_MS = 10000L;
 
-    /** 每个 botId 对应的捡漏队列  的*/
+    /** 每个 botId 对应的捡漏队列 的 */
     private final Map<Long, List<ProductPrice>> autoBuyMap = new ConcurrentHashMap<>();
     private final Map<Long, Set<String>> pendingBuyCodeMap = new ConcurrentHashMap<>();
     private final Map<Long, Long> inFlightBuyTimeMap = new ConcurrentHashMap<>();
@@ -41,8 +41,12 @@ public class AutoBuyGoods {
     private final Map<Long, ConcurrentHashMap<String, Long>> recentBuyCodeTimeMap = new ConcurrentHashMap<>();
     /** 每个 botId 对应的顺序循环命令队列 */
     private final Map<Long, Queue<String>> botCommandQueue = new ConcurrentHashMap<>();
-    private final Map<Long,Long> lastMarketTimeMap = new ConcurrentHashMap<>();
-    private final Map<Long,Long> lastBuyTimeMap = new ConcurrentHashMap<>();
+    private final Map<Long, Long> lastMarketTimeMap = new ConcurrentHashMap<>();
+    private final Map<Long, Long> lastBuyTimeMap = new ConcurrentHashMap<>();
+    /** 每个 botId 对应的结缘物品冷却时间映射 <物品名称, 结缘结束时间戳> */
+    private final Map<Long, ConcurrentHashMap<String, Long>> jieyuanCooldownMap = new ConcurrentHashMap<>();
+    /** 跨群的坊市刷新冷却映射 <物品名称, 最后刷新时间戳> */
+    private final ConcurrentHashMap<String, Long> globalMarketRefreshCooldownMap = new ConcurrentHashMap<>();
     private static final Pattern YEMA = Pattern.compile("(查看坊市|坊市查看)\\s*([^\\s@]+)");
     private final ConcurrentHashMap<Long, String> groupPageMap = new ConcurrentHashMap();
 
@@ -52,12 +56,13 @@ public class AutoBuyGoods {
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
 
-    public AutoBuyGoods() {}
+    public AutoBuyGoods() {
+    }
 
     /** 处理用户命令：开始捡漏 / 停止捡漏 */
     @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.ONLY_ITSELF)
     public void enableScheduled(Bot bot, Group group, Member member,
-                                MessageChain messageChain, String message, Integer messageId) {
+            MessageChain messageChain, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
         message = message.trim();
 
@@ -86,7 +91,7 @@ public class AutoBuyGoods {
                 inFlightBuyCodeMap.remove(bot.getBotId());
                 sendNextCommand(bot, botConfig);
 
-                if (botConfig.getCultivationMode() == 1 && frequency<10) {
+                if (botConfig.getCultivationMode() == 1 && frequency < 10) {
                     botConfig.setStartScheduled(false);
                 }
             } catch (Exception e) {
@@ -101,6 +106,7 @@ public class AutoBuyGoods {
             inFlightBuyTimeMap.remove(bot.getBotId());
             inFlightBuyCodeMap.remove(bot.getBotId());
             recentBuyCodeTimeMap.remove(bot.getBotId());
+            jieyuanCooldownMap.remove(bot.getBotId());
             botConfig.setEnableAutoBuyLowPrice(false);
             group.sendMessage(new MessageChain().reply(messageId).text("停止捡漏成功"));
         }
@@ -110,46 +116,75 @@ public class AutoBuyGoods {
     private void sendNextCommand(Bot bot, BotConfig botConfig) {
         Queue<String> queue = botCommandQueue.get(bot.getBotId());
         if (queue != null && !queue.isEmpty()) {
-            String nextCmd = queue.poll();   // 取队头
+            String nextCmd = queue.poll(); // 取队头
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             bot.getGroup(botConfig.getGroupId())
                     .sendMessage(new MessageChain().at("3889001741").text("坊市查看" + nextCmd));
-            queue.offer(nextCmd);  // 放回队尾，实现循环
+            queue.offer(nextCmd); // 放回队尾，实现循环
         }
     }
 
     /** 购买物品成功/失败处理 */
-    @GroupMessageHandler(senderIds = {3889001741L})
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 成功购买物品(Bot bot, Group group, Member member,
-                             MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+            MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         boolean isGroup = group.getGroupId() == botConfig.getGroupId();
         boolean isAtSelf = isAtSelf(bot, group, message, xxGroupId);
 
-        if (autoBuyMap.get(bot.getBotId())!=null && isGroup && isAtSelf && (message.contains("道友成功购买")
+        if (autoBuyMap.get(bot.getBotId()) != null && isGroup && isAtSelf && (message.contains("道友成功购买")
                 || message.contains("卖家正在进行其他操作")
                 || (message.contains("参与") && message.contains("缘定"))
                 || message.contains("今天已经很努力了")
                 || message.contains("坊市现在太繁忙了")
                 || message.contains("没钱还来买东西")
-                ||message.contains("验证码不正确")
+                || message.contains("验证码不正确")
                 || message.contains("未查询"))) {
 
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             inFlightBuyTimeMap.remove(bot.getBotId());
             inFlightBuyCodeMap.remove(bot.getBotId());
 
+            // 处理结缘物品：提取冷却时间
+            if (message.contains("参与") && message.contains("缘定")) {
+                try {
+                    // 提取 "XX分钟后结算" 中的分钟数
+                    Pattern cooldownPattern = Pattern.compile("(\\d+)分钟后结算");
+                    Matcher matcher = cooldownPattern.matcher(message);
+                    if (matcher.find()) {
+                        int minutes = Integer.parseInt(matcher.group(1));
+                        long cooldownEndTime = System.currentTimeMillis() + minutes * 60 * 1000L;
+
+                        // 获取当前处理的物品名称
+                        String itemName = null;
+                        if (!autoBuyMap.get(bot.getBotId()).isEmpty()) {
+                            itemName = autoBuyMap.get(bot.getBotId()).get(0).getName();
+                        }
+
+                        if (itemName != null) {
+                            jieyuanCooldownMap
+                                    .computeIfAbsent(bot.getBotId(), k -> new ConcurrentHashMap<>())
+                                    .put(itemName, cooldownEndTime);
+                            logger.info("记录结缘物品冷却时间: botId={}, itemName={}, minutes={}分钟, 结束时间={}",
+                                    bot.getBotId(), itemName, minutes, new Date(cooldownEndTime));
+                        }
+                    }
+                } catch (Exception e) {
+                    logger.error("处理结缘冷却时间失败", e);
+                }
+            }
+
             // 购买成功
             if (message.contains("道友成功购买")) {
                 try {
-                    if(autoBuyMap.get(bot.getBotId())!=null && !autoBuyMap.get(bot.getBotId()).isEmpty()){
-                        
+                    if (autoBuyMap.get(bot.getBotId()) != null && !autoBuyMap.get(bot.getBotId()).isEmpty()) {
+
                         ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
-                        changeBuyIndex(productPrice,bot);
+                        changeBuyIndex(productPrice, bot);
                         Random random = new Random();
                         String[] successMsgs = getSuccessMsgs(productPrice);
                         sendBuyMessage(bot, random, successMsgs);
-                        
+
                     }
 
                 } catch (ExecutionException e) {
@@ -158,13 +193,13 @@ public class AutoBuyGoods {
             }
 
             // 未查询到该物品
-            if (message.contains("未查询到该物品") ) {
+            if (message.contains("未查询到该物品")) {
 
                 try {
-                    if(autoBuyMap.get(bot.getBotId())!=null && !autoBuyMap.get(bot.getBotId()).isEmpty()){
+                    if (autoBuyMap.get(bot.getBotId()) != null && !autoBuyMap.get(bot.getBotId()).isEmpty()) {
                         Utils.forwardMessage(bot, this.xxGroupId, messageChain);
                         ProductPrice productPrice = autoBuyMap.get(bot.getBotId()).get(0);
-                        changeBuyIndex(productPrice,bot);
+                        changeBuyIndex(productPrice, bot);
                         Random random = new Random();
                         String[] failMsgs = getFailMsgs(productPrice);
                         sendBuyMessage(bot, random, failMsgs);
@@ -185,7 +220,7 @@ public class AutoBuyGoods {
             }
 
             // 移除已处理的物品
-            if (autoBuyMap.get(bot.getBotId())!=null && !autoBuyMap.get(bot.getBotId()).isEmpty()) {
+            if (autoBuyMap.get(bot.getBotId()) != null && !autoBuyMap.get(bot.getBotId()).isEmpty()) {
                 ProductPrice removed = autoBuyMap.get(bot.getBotId()).remove(0);
                 if (removed != null && removed.getCode() != null) {
                     if (message.contains("道友成功购买")) {
@@ -203,7 +238,7 @@ public class AutoBuyGoods {
             }
 
             // 如果队列为空或已处理完，循环发送下一条命令
-            if (autoBuyMap.get(bot.getBotId())!=null && autoBuyMap.get(bot.getBotId()).isEmpty()) {
+            if (autoBuyMap.get(bot.getBotId()) != null && autoBuyMap.get(bot.getBotId()).isEmpty()) {
                 sendNextCommand(bot, botConfig);
             } else {
                 this.buyHerbs(group, bot);
@@ -211,32 +246,33 @@ public class AutoBuyGoods {
         }
     }
 
-    private void changeBuyIndex(ProductPrice productPrice,Bot bot){
-        if(productPrice.getName().contains("无罪")){
-            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备2")));
+    private void changeBuyIndex(ProductPrice productPrice, Bot bot) {
+        if (productPrice.getName().contains("无罪")) {
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList("装备2")));
         }
-        if(productPrice.getName().contains("原罪") || productPrice.getName().contains("东皇") ||
-         productPrice.getName().contains("天罪")){
-            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "装备1")));
+        if (productPrice.getName().contains("原罪") || productPrice.getName().contains("东皇") ||
+                productPrice.getName().contains("天罪")) {
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList("装备1")));
         }
-        if(productPrice.getName().contains("日月双华")){
-            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "技能4")));
+        if (productPrice.getName().contains("日月双华")) {
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList("技能4")));
         }
-        if(productPrice.getName().contains("灭剑")){
-            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "技能5")));
+        if (productPrice.getName().contains("灭剑")) {
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList("技能5")));
         }
-        if(productPrice.getName().contains("阴阳")){
-            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList(  "技能7")));
+        if (productPrice.getName().contains("阴阳")) {
+            botCommandQueue.put(bot.getBotId(), new LinkedList<>(Arrays.asList("技能7")));
         }
     }
 
-    private void sendBuyMessage(Bot bot, Random random, String[] successMsgs) throws InterruptedException, ExecutionException {
+    private void sendBuyMessage(Bot bot, Random random, String[] successMsgs)
+            throws InterruptedException, ExecutionException {
         String successMsg = successMsgs[random.nextInt(successMsgs.length)];
         if (bot.isFriend(bot.getBotConfig().getMasterQQ())) {
             bot.sendPrivateMessage(bot.getBotConfig().getMasterQQ(),
                     (new MessageChain()).text(successMsg));
-        }else{
-            if(xxGroupId>0){
+        } else {
+            if (xxGroupId > 0) {
                 bot.sendGroupMessage(xxGroupId, new MessageChain().text(successMsg));
             }
 
@@ -244,17 +280,17 @@ public class AutoBuyGoods {
     }
 
     private String[] getFailMsgs(ProductPrice productPrice) {
-        return new String[]{
+        return new String[] {
                 "啊哦！" + productPrice.getName() + "(" + productPrice.getBuyPrice() + "万)一眨眼被隔壁老王顺走了！",
-                "糟糕！你正准备拿"+productPrice.getBuyPrice() + "万的" + productPrice.getName() + "时，突然被妖风刮跑，别人拣到了…",
+                "糟糕！你正准备拿" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "时，突然被妖风刮跑，别人拣到了…",
                 "道友刚伸手，就见一只仓鼠叼走了价值" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "！",
-                "真惨！"+productPrice.getBuyPrice() + "万的" + productPrice.getName() + "刚出炉，你还没来得及喊666就被别人抢光了～",
+                "真惨！" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "刚出炉，你还没来得及喊666就被别人抢光了～",
                 "嘿嘿，别哭，" + productPrice.getName() + "(" + productPrice.getBuyPrice() + "万)已经跟别人私奔了～"
         };
     }
 
     private String[] getSuccessMsgs(ProductPrice productPrice) {
-        return new String[]{
+        return new String[] {
                 "咦？系统出Bug了，居然给你掉出来一个" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "！",
                 "道友运气爆棚！" + productPrice.getBuyPrice() + "万的" + productPrice.getName() + "轻轻松松到手～",
                 "叮！快递小哥敲门：您点的" + productPrice.getName() + "(" + productPrice.getBuyPrice() + "万)已到账！",
@@ -264,17 +300,18 @@ public class AutoBuyGoods {
     }
 
     /** 自动购买 */
-    @GroupMessageHandler(senderIds = {3889001741L})
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 自动购买(Bot bot, Group group, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isAtSelf = Utils.isAtSelf(bot,message);
-//        boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
+        boolean isAtSelf = Utils.isAtSelf(bot, message);
+        // boolean isGroup = group.getGroupId() == botConfig.getGroupId() ||
+        // group.getGroupId() == botConfig.getTaskId();
 
         if ((message.contains("不鼓励不保障任何第三方交易行为"))
-                && !message.contains("下架") ) {
+                && !message.contains("下架")) {
             this.customPool.submit(() -> {
                 botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
-                this.processMarketMessage(bot, group, message,isAtSelf);
+                this.processMarketMessage(bot, group, message, isAtSelf);
             });
 
         }
@@ -282,15 +319,14 @@ public class AutoBuyGoods {
 
     private void sendMarketCheckMessage(Bot bot, BotConfig botConfig, long groupId, String itemName) {
 
-
     }
 
     private void getMarketIndex(Bot bot, Group group, String itemName) {
         BotConfig botConfig = bot.getBotConfig();
-//        String name =  ProductLowPrice.getProduceIndex(itemName);
+        // String name = ProductLowPrice.getProduceIndex(itemName);
 
         String finalPageKey = null;
-        String savedPageKey = (String)this.groupPageMap.get(group.getGroupId());
+        String savedPageKey = (String) this.groupPageMap.get(group.getGroupId());
         if (savedPageKey != null && !savedPageKey.isEmpty()) {
             finalPageKey = savedPageKey;
         } else if (itemName != null && !itemName.isEmpty()) {
@@ -299,17 +335,18 @@ public class AutoBuyGoods {
 
         System.out.println("群：" + group.getGroupId() + "坊市发现自动购买物品" + itemName + "，正在查看页码：" + finalPageKey);
         if (finalPageKey != null && !finalPageKey.isEmpty()) {
-            bot.sendGroupMessage(botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("查看坊市" + finalPageKey));
+            bot.sendGroupMessage(botConfig.getGroupId(),
+                    (new MessageChain()).at("3889001741").text("查看坊市" + finalPageKey));
         }
 
-//        if(!StringUtils.isEmpty(name)){
-//            bot.getGroup(botConfig.getGroupId())
-//                    .sendMessage(new MessageChain().at("3889001741").text("坊市查看"+name));
-//        }
+        // if(!StringUtils.isEmpty(name)){
+        // bot.getGroup(botConfig.getGroupId())
+        // .sendMessage(new MessageChain().at("3889001741").text("坊市查看"+name));
+        // }
 
     }
 
-    private void processMarketMessage(Bot bot, Group group, String message,boolean isAtSelf) {
+    private void processMarketMessage(Bot bot, Group group, String message, boolean isAtSelf) {
         String[] split = message.split("\n");
         for (String s : split) {
             if (s.startsWith("价格") && s.contains("mqqapi")) {
@@ -319,14 +356,28 @@ public class AutoBuyGoods {
                 double price = this.extractPrice(s);
                 String itemName = this.extractItemName(split1[1].trim());
 
-
                 Map<String, ProductPrice> productMap = groupManager.autoBuyProductMap
                         .computeIfAbsent(bot.getBotId() + "", k -> new ConcurrentHashMap<>());
 
                 ProductPrice existingProduct = productMap.get(itemName);
+                // 检查结缘冷却状态
+                long currentTime = System.currentTimeMillis();
+                ConcurrentHashMap<String, Long> cooldownMap = jieyuanCooldownMap.get(bot.getBotId());
+                if (cooldownMap != null) {
+                    Long cooldownEndTime = cooldownMap.get(itemName);
+                    if (cooldownEndTime != null && currentTime < cooldownEndTime) {
+                        // 物品还在冷却中，跳过自动购买
+                        long remainingMinutes = (cooldownEndTime - currentTime) / 60000;
+                        logger.info("物品{}在结缘冷却中，剩余{}分钟，跳过自动购买",
+                                itemName, remainingMinutes + 1);
+                        continue;
+                    }
+                }
                 if (existingProduct != null && price <= existingProduct.getPrice()) {
                     if (isAtSelf) {
-                        Set<String> pendingCodes = pendingBuyCodeMap.computeIfAbsent(bot.getBotId(), k -> ConcurrentHashMap.newKeySet());
+
+                        Set<String> pendingCodes = pendingBuyCodeMap.computeIfAbsent(bot.getBotId(),
+                                k -> ConcurrentHashMap.newKeySet());
                         if (pendingCodes.add(code)) {
                             ProductPrice buyItem = new ProductPrice();
                             buyItem.setName(existingProduct.getName());
@@ -337,22 +388,22 @@ public class AutoBuyGoods {
                             autoBuyMap.computeIfAbsent(bot.getBotId(), k -> new CopyOnWriteArrayList<>())
                                     .add(buyItem);
                         }
-                    }else{
-                        long currentTime = System.currentTimeMillis();
-                        if (allowAndUpdate(lastMarketTimeMap, bot.getBotId(), currentTime, 5000L)) {
-                            getMarketIndex(bot,group,itemName);
+                    } else {
+                        currentTime = System.currentTimeMillis();
+                        // 跨群冷却检查：使用物品名称判断，避免不同群的同一物品重复刷新
+                        if (allowAndUpdate(globalMarketRefreshCooldownMap, itemName, currentTime, 5000L)) {
+                            getMarketIndex(bot, group, itemName);
                             break;
                         }
-
 
                     }
                 }
             }
         }
-        if(isAtSelf){
+        if (isAtSelf) {
             if (autoBuyMap.get(bot.getBotId()).isEmpty()) {
                 try {
-                    if(bot.getBotConfig().getFrequency()>0){
+                    if (bot.getBotConfig().getFrequency() > 0) {
                         Thread.sleep(bot.getBotConfig().getFrequency() * 1000L);
                     }
                     sendNextCommand(bot, bot.getBotConfig());
@@ -363,7 +414,7 @@ public class AutoBuyGoods {
                 this.buyHerbs(group, bot);
 
             }
-        }else{
+        } else {
             long currentTime = System.currentTimeMillis();
             if (allowAndUpdate(lastBuyTimeMap, bot.getBotId(), currentTime, 5000L)) {
                 this.buyHerbs(group, bot);
@@ -416,7 +467,8 @@ public class AutoBuyGoods {
                     buyList.remove(0);
                     continue;
                 }
-                if (!allowAndUpdate(recentBuyCodeTimeMap.computeIfAbsent(bot.getBotId(), k -> new ConcurrentHashMap<>()),
+                if (!allowAndUpdate(
+                        recentBuyCodeTimeMap.computeIfAbsent(bot.getBotId(), k -> new ConcurrentHashMap<>()),
                         productPrice.getCode(),
                         now,
                         12000L)) {
@@ -431,6 +483,31 @@ public class AutoBuyGoods {
                 if (currentInFlightCode != null && currentInFlightCode.equals(productPrice.getCode())) {
                     return;
                 }
+
+                // 检查结缘冷却时间
+                ConcurrentHashMap<String, Long> cooldownMap = jieyuanCooldownMap.get(bot.getBotId());
+                if (cooldownMap != null) {
+                    Long cooldownEndTime = cooldownMap.get(productPrice.getName());
+                    if (cooldownEndTime != null) {
+                        if (now < cooldownEndTime) {
+                            // 还在冷却中，跳过此物品
+                            long remainingMinutes = (cooldownEndTime - now) / 60000;
+                            logger.info("物品{}在结缘冷却中，剩余{}分钟，跳过购买",
+                                    productPrice.getName(), remainingMinutes + 1);
+                            buyList.remove(0);
+                            Set<String> pendingCodes = pendingBuyCodeMap.get(bot.getBotId());
+                            if (pendingCodes != null) {
+                                pendingCodes.remove(productPrice.getCode());
+                            }
+                            continue;
+                        } else {
+                            // 冷却已过，移除记录
+                            cooldownMap.remove(productPrice.getName());
+                            logger.info("物品{}结缘冷却已过，允许购买", productPrice.getName());
+                        }
+                    }
+                }
+
                 inFlightBuyTimeMap.put(bot.getBotId(), now);
                 inFlightBuyCodeMap.put(bot.getBotId(), productPrice.getCode());
                 bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage(new MessageChain().at("3889001741")
@@ -472,14 +549,14 @@ public class AutoBuyGoods {
         return allowed.get();
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.NOT_IGNORE)
     public void 记录商店页码(Bot bot, Group group, String message, Integer messageId) {
         long groupId = group.getGroupId();
-        if ((message.contains("@小小") || message.contains("@3889001741")) && (message.contains("查看坊市") || message.contains("坊市查看"))) {
+        if ((message.contains("@小小") || message.contains("@3889001741"))
+                && (message.contains("查看坊市") || message.contains("坊市查看"))) {
             String pageKey = this.extractPageKey(message);
-            if (pageKey != null && (pageKey.contains("技能") || pageKey.contains("装备") || pageKey.contains("丹药") || pageKey.contains("药材") || pageKey.contains("道具"))) {
+            if (pageKey != null && (pageKey.contains("技能") || pageKey.contains("装备") || pageKey.contains("丹药")
+                    || pageKey.contains("药材") || pageKey.contains("道具"))) {
                 this.groupPageMap.put(groupId, pageKey);
             }
         }
@@ -504,13 +581,15 @@ public class AutoBuyGoods {
         BotFactory.getBots().values().forEach(bot -> {
             BotConfig botConfig = bot.getBotConfig();
             if (botConfig.isEnableAutoBuyLowPrice()
-                    && System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > computeAutoTaskRefreshTimeoutMs(botConfig.getFrequency())
+                    && System.currentTimeMillis() - botConfig
+                            .getAutoTaskRefreshTime() > computeAutoTaskRefreshTimeoutMs(botConfig.getFrequency())
                     && botConfig.getAutoVerifyModel() == 2) {
 
                 autoBuyMap.put(bot.getBotId(), new CopyOnWriteArrayList<>());
                 pendingBuyCodeMap.remove(bot.getBotId());
                 inFlightBuyTimeMap.remove(bot.getBotId());
                 inFlightBuyCodeMap.remove(bot.getBotId());
+                jieyuanCooldownMap.remove(bot.getBotId());
                 sendNextCommand(bot, botConfig);
             }
         });
@@ -522,5 +601,22 @@ public class AutoBuyGoods {
         }
         long byFrequency = frequencySeconds * 1000L + 5000L;
         return Math.max(AUTO_TASK_REFRESH_BASE_TIMEOUT_MS, byFrequency);
+    }
+
+    /** 定时清理过期的结缘冷却记录 */
+    @Scheduled(fixedDelay = 300000L, initialDelay = 60000L)
+    public void 清理过期结缘冷却记录() {
+        long now = System.currentTimeMillis();
+        jieyuanCooldownMap.forEach((botId, cooldownMap) -> {
+            if (cooldownMap != null) {
+                cooldownMap.entrySet().removeIf(entry -> {
+                    if (now > entry.getValue()) {
+                        logger.info("清理过期的结缘冷却记录: botId={}, itemName={}", botId, entry.getKey());
+                        return true;
+                    }
+                    return false;
+                });
+            }
+        });
     }
 }
