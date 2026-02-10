@@ -1103,7 +1103,13 @@ class AdminUI:
           </div>
         </body></html>
         """
-        return HTMLResponse(html)
+        return HTMLResponse(
+            html,
+            headers={
+                "Cache-Control": "no-store, max-age=0",
+                "Pragma": "no-cache",
+            },
+        )
 
     def login_page(self, message: str = None) -> HTMLResponse:
         """Render login page.

@@ -59,7 +59,8 @@ async def admin_members_get(
     request: Request,
     q: str = Query(default=""),
     tier: str = Query(default=""),
-    expired: str = Query(default="")
+    expired: str = Query(default=""),
+    msg: str = Query(default="")
 ):
     """Render members list page with filtering."""
     user, redirect = _admin_guard(request)
@@ -108,39 +109,88 @@ async def admin_members_get(
         filtered.append((key, member))
 
     # Build table rows and calculate today's total statistics
-    rows = []
-    today_total_count = 0
-    today_total_error = 0
+    # Group members by name, but keep "未命名" separate
+    grouped_members = {}
+    unnammed_members = []
 
     for key, member in filtered:
-        name = _h(member.get("name", ""))
-        member_tier = member.get("tier", "normal")
-        enabled = member.get("enabled", True)
-
-        # Get usage statistics
-        usage_counter = member_service._usage_repo.get_counter(key)
-        total_count = usage_counter.get("total_count", 0)
-        error_count = usage_counter.get("error_count", 0)
-        accuracy = round((1 - error_count / total_count) * 100, 1) if total_count > 0 else 100.0
-
-        # Accumulate today's total statistics
-        today_total_count += total_count
-        today_total_error += error_count
+        # Try to get name from member data first
+        name = member.get("name", "")
 
         # If name is empty, try to get from whitelist
         if not name:
             if key.startswith("ip:"):
-                kind_value = key[3:]
+                ip_value = key[3:]
                 _, ip_info = whitelist_repo.load_ip_whitelist()
-                name = _h(ip_info.get(kind_value, ""))
+                name = ip_info.get(ip_value, "")
             elif key.startswith("qq:"):
-                kind_value = key[3:]
+                qq_value = key[3:]
                 _, qq_info = whitelist_repo.load_qq_whitelist()
-                # For QQ, need to find which comment group this QQ belongs to
-                for qq_comment, qq_list in qq_info.items():
-                    if kind_value in qq_list.split('#'):
-                        name = _h(qq_comment)
-                        break
+                name = qq_info.get(qq_value, "")
+
+        # Use "未命名" if still empty
+        if not name:
+            name = "未命名"
+
+        if name == "未命名":
+            unnammed_members.append((key, member))
+        else:
+            if name not in grouped_members:
+                grouped_members[name] = []
+            grouped_members[name].append((key, member))
+
+    rows = []
+    today_total_count = 0
+    today_total_error = 0
+
+    # Process named members (grouped)
+    for name, member_list in grouped_members.items():
+        # Use the first member's info for display
+        first_key, first_member = member_list[0]
+        member_tier = first_member.get("tier", "normal")
+        enabled = first_member.get("enabled", True)
+
+        # Aggregate usage statistics for all members with this name
+        group_total_count = 0
+        group_error_count = 0
+        for key, member in member_list:
+            usage_counter = member_service._usage_repo.get_counter(key)
+            group_total_count += usage_counter.get("total_count", 0)
+            group_error_count += usage_counter.get("error_count", 0)
+
+        # Accumulate today's total statistics
+        today_total_count += group_total_count
+        today_total_error += group_error_count
+
+        accuracy = round((1 - group_error_count / group_total_count) * 100, 1) if group_total_count > 0 else 100.0
+
+        # Group all keys by type
+        ip_keys = [k[3:] for k, m in member_list if k.startswith("ip:")]
+        qq_keys = [k[3:] for k, m in member_list if k.startswith("qq:")]
+
+        # Determine kind label and values display
+        if ip_keys and qq_keys:
+            kind_label = "IP+QQ"
+            ip_display = '#'.join(ip_keys[:2])
+            qq_display = '#'.join(qq_keys[:2])
+            kind_values_display = f"IP:{_h(ip_display)}{'...' if len(ip_keys) > 2 else ''} QQ:{_h(qq_display)}{'...' if len(qq_keys) > 2 else ''}"
+            kind_count = f"{len(ip_keys)}+{len(qq_keys)}"
+        elif ip_keys:
+            kind_label = "IP"
+            kind_values_display = _h('#'.join(ip_keys[:3]))
+            if len(ip_keys) > 3:
+                kind_values_display += f"... (+{len(ip_keys)-3})"
+            kind_count = str(len(ip_keys))
+        elif qq_keys:
+            kind_label = "QQ"
+            kind_values_display = _h('#'.join(qq_keys[:3]))
+            if len(qq_keys) > 3:
+                kind_values_display += f"... (+{len(qq_keys)-3})"
+            kind_count = str(len(qq_keys))
+        else:
+            kind_label = "未知"
+            kind_values_display = ""
+            kind_count = "0"
 
         # Tier badge
         tier_badge_class = {
@@ -156,10 +206,62 @@ async def admin_members_get(
         else:
             status_badge = '<span class="status-badge enabled">启用</span>'
 
-        # Expiry status - pass member_key for normal tier to calculate remaining calls
-        member["_key"] = key
-        expiry_text, expiry_class = member_service.get_expiry_status(member)
+        # Expiry status - use first member for display
+        first_member["_key"] = first_key
+        expiry_text, expiry_class = member_service.get_expiry_status(first_member)
         expiry_html = f'<span class="expiry-{expiry_class}">{_h(expiry_text)}</span>'
+
+        # Edit URL - edit grouped user (show all IPs/QQs in the form)
+        edit_buttons = ""
+        if ip_keys:
+            edit_buttons += f"<a class='btn btn-sm' href='/admin/members/form?name={urllib.parse.quote(name)}&kind=ip'>编辑IP</a>"
+        if qq_keys:
+            edit_buttons += f"<a class='btn btn-sm' href='/admin/members/form?name={urllib.parse.quote(name)}&kind=qq'>编辑QQ</a>"
+        if not edit_buttons:
+            edit_buttons = f"<a class='btn btn-sm' href='/admin/members/form?key={urllib.parse.quote(first_key)}'>编辑</a>"
+
+        # Accuracy color
+        accuracy_class = "expiry-ok" if accuracy >= 90 else "expiry-warning" if accuracy >= 70 else "expiry-expired"
+
+        # Collect all keys for batch operations
+        all_keys = [k for k, m in member_list]
+        all_keys_json = str(all_keys).replace("'", "\"")
+
+        rows.append(
+            "<tr>"
+            f"<td style='text-align:center;'><input type='checkbox' class='row-checkbox' data-keys='{all_keys_json}' /></td>"
+            f"<td style='white-space:nowrap;'>{kind_label}</td>"
+            f"<td style='font-family:monospace;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' title='{_h(kind_values_display)}'>{kind_values_display}</td>"
+            f"<td style='max-width:120px;overflow:hidden;text-overflow:ellipsis;'>{_h(name)}</td>"
+            f"<td><span class='status-badge {tier_badge_class}' style='white-space:nowrap;'>{tier_label}</span></td>"
+            f"<td style='white-space:nowrap;'>{status_badge}</td>"
+            f"<td style='white-space:nowrap;font-size:0.8125rem;'>{expiry_html}</td>"
+            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>总计</span> <strong>{group_total_count}</strong></td>"
+            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>错误</span> <strong>{group_error_count}</strong></td>"
+            f"<td style='text-align:center;white-space:nowrap;'><span class='{accuracy_class}'><strong>{accuracy:.1f}%</strong></span></td>"
+            f"<td style='white-space:nowrap;'><div class='actions' style='gap:6px;'>"
+            f"{edit_buttons}"
+            f"<form class='inline' method='post' action='/admin/members/delete'>"
+            f"<input type='hidden' name='name' value='{_h(name)}' />"
+            f"<button class='btn-danger btn-sm' type='submit'>删除</button>"
+            f"</form></div></td>"
+            "</tr>"
+        )
+
+    # Process unnamed members (individual rows)
+    for key, member in unnammed_members:
+        member_tier = member.get("tier", "normal")
+        enabled = member.get("enabled", True)
+
+        # Get usage statistics
+        usage_counter = member_service._usage_repo.get_counter(key)
+        total_count = usage_counter.get("total_count", 0)
+        error_count = usage_counter.get("error_count", 0)
+        accuracy = round((1 - error_count / total_count) * 100, 1) if total_count > 0 else 100.0
+
+        # Accumulate today's total statistics
+        today_total_count += total_count
+        today_total_error += error_count
 
         # Parse key
         if key.startswith("ip:"):
@@ -172,18 +274,40 @@ async def admin_members_get(
             kind_label = "未知"
             kind_value = key
 
+        # Tier badge
+        tier_badge_class = {
+            "permanent": "permanent",
+            "month": "month",
+            "normal": "normal",
+        }.get(member_tier, "normal")
+        tier_label = member_service.get_tier_label(member_tier)
+
+        # Status badge
+        if not enabled:
+            status_badge = '<span class="status-badge disabled">禁用</span>'
+        else:
+            status_badge = '<span class="status-badge enabled">启用</span>'
+
+        # Expiry status
+        member["_key"] = key
+        expiry_text, expiry_class = member_service.get_expiry_status(member)
+        expiry_html = f'<span class="expiry-{expiry_class}">{_h(expiry_text)}</span>'
+
         # Edit URL
         edit_url = f"/admin/members/form?key={urllib.parse.quote(key)}"
 
         # Accuracy color
         accuracy_class = "expiry-ok" if accuracy >= 90 else "expiry-warning" if accuracy >= 70 else "expiry-expired"
 
+        # Single key for batch operations
+        single_keys_json = str([key]).replace("'", "\"")
+
         rows.append(
             "<tr>"
-            f"<td style='text-align:center;'><input type='checkbox' class='row-checkbox' data-key='{_h(key)}' /></td>"
+            f"<td style='text-align:center;'><input type='checkbox' class='row-checkbox' data-keys='{single_keys_json}' /></td>"
             f"<td style='white-space:nowrap;'>{kind_label}</td>"
-            f"<td style='font-family:monospace;white-space:nowrap;'>{_h(kind_value)}</td>"
-            f"<td style='max-width:180px;overflow:hidden;text-overflow:ellipsis;'>{_h(name)}</td>"
+            f"<td style='font-family:monospace;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' title='{_h(kind_value)}'>{_h(kind_value)}</td>"
+            f"<td style='max-width:120px;overflow:hidden;text-overflow:ellipsis;color:var(--text-secondary);'>未命名</td>"
             f"<td><span class='status-badge {tier_badge_class}' style='white-space:nowrap;'>{tier_label}</span></td>"
             f"<td style='white-space:nowrap;'>{status_badge}</td>"
             f"<td style='white-space:nowrap;font-size:0.8125rem;'>{expiry_html}</td>"
@@ -224,6 +348,10 @@ async def admin_members_get(
         <h2>今日总统计</h2>
         <div style="display:flex;gap:24px;margin-top:10px;">
           <div>
+            <div class="muted">用户数</div>
+            <div style="font-size:1.5rem;font-weight:bold;color:#22D3EE;">{len(grouped_members)}</div>
+          </div>
+          <div>
             <div class="muted">总次数</div>
             <div style="font-size:1.5rem;font-weight:bold;color:#4CAF50;">{today_total_count}</div>
           </div>
@@ -244,7 +372,7 @@ async def admin_members_get(
       <form method="get" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
         <div style="flex:1;">
           <label>搜索</label>
-          <input name="q" value="{_h(q)}" placeholder="名称或IP/QQ" />
+          <input name="q" value="{_h(q)}" placeholder="用户名或IP/QQ" />
         </div>
         <div style="flex:0 0 120px;">
           <label>等级</label>
@@ -273,9 +401,10 @@ async def admin_members_get(
 
     <div class="card" style="margin-top:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h2>会员列表 ({len(filtered)})</h2>
+        <h2>用户列表 ({len(grouped_members)} + {len(unnammed_members)} 未命名)</h2>
         <div class="actions">
           <button type="button" class="btn btn-sm" onclick="refreshCache()" title="重新加载白名单和会员数据">🔄 刷新缓存</button>
+          {f'<a class="btn btn-sm" href="/admin/members/form?kind=qq&comment={urllib.parse.quote(q)}">添加同用户QQ</a>' if q else ''}
           <a class="btn btn-sm" href="/admin/members/form">新增会员</a>
         </div>
       </div>
@@ -291,25 +420,25 @@ async def admin_members_get(
         </div>
       </div>
 
-      <div class="table-wrapper" style="margin-top:12px;">
-        <table>
+      <div class="table-wrapper" style="margin-top:12px;overflow-x:auto;">
+        <table style="min-width:900px;">
           <thead>
             <tr>
               <th style="width:50px;text-align:center;"><input type="checkbox" onclick="toggleAllCheckboxes(this)" /></th>
-              <th style="width:70px;">类型</th>
-              <th style="width:130px;">值</th>
-              <th style="width:180px;">名称</th>
-              <th style="width:100px;">等级</th>
-              <th style="width:70px;">状态</th>
-              <th style="width:140px;">到期时间</th>
-              <th style="width:110px;text-align:right;">总次数</th>
-              <th style="width:100px;text-align:right;">错误次数</th>
-              <th style="width:90px;text-align:center;">准确率</th>
-              <th style="width:130px;">操作</th>
+              <th style="width:60px;">类型</th>
+              <th style="width:120px;">IP/QQ</th>
+              <th style="width:120px;">用户名</th>
+              <th style="width:90px;">等级</th>
+              <th style="width:60px;">状态</th>
+              <th style="width:130px;">到期时间</th>
+              <th style="width:90px;text-align:right;">总次数</th>
+              <th style="width:90px;text-align:right;">错误次数</th>
+              <th style="width:80px;text-align:center;">准确率</th>
+              <th style="width:110px;">操作</th>
             </tr>
           </thead>
           <tbody>
-            {"".join(rows) or '<tr><td colspan="11" class="muted">暂无会员</td></tr>'}
+            {"".join(rows) or '<tr><td colspan="11" class="muted">暂无用户</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -324,6 +453,23 @@ async def admin_members_get(
 
     function updateSelectedCount() {{
       const checked = document.querySelectorAll('.row-checkbox:checked');
+      let count = 0;
+      checked.forEach(box => {{
+        const keys = JSON.parse(box.dataset.keys || '[]');
+        count += keys.length;
+      }});
+      document.getElementById('selected-count').textContent = count;
+    }}
+
+    function getCheckedKeys() {{
+      const checked = document.querySelectorAll('.row-checkbox:checked');
+      const keys = [];
+      checked.forEach(box => {{
+        const rowKeys = JSON.parse(box.dataset.keys || '[]');
+        keys.push(...rowKeys);
+      }});
+      return keys;
+    }}
       document.getElementById('selected-count').textContent = checked.length;
     }}
 
@@ -388,13 +534,15 @@ async def admin_members_get(
     </script>
     """
 
-    return _render_admin_page("会员管理", body)
+    safe_msg = _h(msg) if msg else None
+    return _render_admin_page("会员管理", body, safe_msg)
 
 
 @member_routes.get("/admin/members/form", response_class=HTMLResponse)
 async def admin_members_form_get(
     request: Request,
     key: str = Query(default=""),
+    name: str = Query(default=""),
     kind: str = Query(default=""),
     values: str = Query(default=""),
     comment: str = Query(default="")
@@ -404,11 +552,71 @@ async def admin_members_form_get(
     if redirect:
         return redirect
 
-    # Determine if editing or creating
-    is_edit = bool(key)
+    # Support both 'key' (single member) and 'name' (grouped by user) for editing
+    is_edit = False
     member = None
+    renew_days = 30
 
-    if is_edit:
+    # If name parameter is provided, find all members with that name
+    if name and not key:
+        all_members = member_service.get_all_members()
+        # First, try to find members with exact name match
+        members_with_name = [(k, m) for k, m in all_members.items() if m.get("name") == name]
+
+        # If not found, try to match by whitelist (for members with empty name)
+        if not members_with_name:
+            for k, m in all_members.items():
+                # For members without name, check whitelist
+                if not m.get("name"):
+                    whitelist_name = ""
+                    if k.startswith("ip:"):
+                        ip_value = k[3:]
+                        _, ip_info = whitelist_repo.load_ip_whitelist()
+                        whitelist_name = ip_info.get(ip_value, "")
+                    elif k.startswith("qq:"):
+                        qq_value = k[3:]
+                        _, qq_info = whitelist_repo.load_qq_whitelist()
+                        whitelist_name = qq_info.get(qq_value, "")
+
+                    if whitelist_name == name:
+                        members_with_name.append((k, m))
+
+        if members_with_name:
+            # Use first member's data for form defaults
+            key, member = members_with_name[0]
+            is_edit = True
+
+            # Group values by type
+            ip_keys = [k[3:] for k, m in members_with_name if k.startswith("ip:")]
+            qq_keys = [k[3:] for k, m in members_with_name if k.startswith("qq:")]
+
+            # Set kind and values for display
+            kind = (kind or "").strip().lower()
+            if kind == "ip" and ip_keys:
+                values = "#".join(ip_keys)
+            elif kind == "qq" and qq_keys:
+                values = "#".join(qq_keys)
+            elif qq_keys and not ip_keys:
+                kind = "qq"
+                values = "#".join(qq_keys)
+            elif ip_keys and not qq_keys:
+                kind = "ip"
+                values = "#".join(ip_keys)
+            elif qq_keys and ip_keys:
+                kind = "qq"
+                values = "#".join(qq_keys)
+            else:
+                kind = ""
+                values = ""
+        else:
+            # Name not found, treat as new
+            is_edit = False
+            kind = ""
+            values = ""
+
+    elif key:
+        # Old-style single member editing
+        is_edit = True
         member = member_service.get_member(key)
         if not member:
             return _render_admin_page("编辑会员", "<div>会员不存在</div>")
@@ -420,15 +628,18 @@ async def admin_members_form_get(
         elif key.startswith("qq:"):
             kind = "qq"
             values = key[3:]
+        else:
+            kind = ""
+            values = ""
 
-        name = member.get("name", "")
+    if is_edit and member:
+        name = (member.get("name") or name or "").strip()
         tier = member.get("tier", "normal")
         enabled = member.get("enabled", True)
         expires_at = member.get("expires_at", "")
         daily_limit = member.get("daily_limit", config.settings.normal_daily_limit)
 
         # Calculate remaining days for month tier
-        renew_days = 30
         if expires_at and tier == "month":
             try:
                 from datetime import datetime, timezone
@@ -463,18 +674,24 @@ async def admin_members_form_get(
 
     # Pre-fill whitelist info if creating from whitelist
     if not is_edit and kind and values:
+        member_key = f"{kind}:{values}"
+        existing_member = member_service.get_member(member_key)
         if kind == "ip":
             _, ip_info = whitelist_repo.load_ip_whitelist()
-            name = ip_info.get(values, "")
+            # 如果会员已存在且有名称，优先使用会员的名称；否则使用白名单名称
+            if existing_member and existing_member.get("name"):
+                name = existing_member.get("name", "")
+            else:
+                name = ip_info.get(values, "")
         elif kind == "qq":
             _, qq_info = whitelist_repo.load_qq_whitelist()
-            if comment:
-                # Find QQs with this comment
-                for qq, c in qq_info.items():
-                    if c == comment:
-                        values = qq
-                        break
-            name = qq_info.get(values, "")
+            # 如果会员已存在且有名称，优先使用会员的名称；否则使用 comment 或白名单名称
+            if existing_member and existing_member.get("name"):
+                name = existing_member.get("name", "")
+            elif comment:
+                name = comment
+            else:
+                name = qq_info.get(values, "")
 
     body = f"""
     <form method="post" action="/admin/members/form" id="memberForm">
@@ -489,12 +706,13 @@ async def admin_members_form_get(
           </div>
           <div>
             <label>{kind.upper() if kind else 'IP/QQ'}</label>
-            <input name="values" value="{_h(values)}" placeholder="{_h('IP地址' if kind=='ip' else 'QQ号' if kind=='qq' else 'IP地址或QQ号')}" required />
+            <input name="values" value="{_h(values)}" placeholder="{_h('多个IP地址用#分隔' if kind=='ip' else '多个QQ号用#分隔' if kind=='qq' else 'IP地址或QQ号(多个用#分隔)')}" required />
           </div>
         </div>
         <div style="margin-top:10px;">
-          <label>名称（可选）</label>
-          <input name="name" value="{_h(name)}" placeholder="用户名或备注" />
+          <label>名称（必填）</label>
+          <input name="name" value="{_h(name)}" placeholder="用户名或备注" required />
+          <div class="muted" style="margin-top:4px;">相同名称的会员将合并显示和编辑，等级和天数对所有IP/QQ生效</div>
         </div>
       </div>
 
@@ -593,7 +811,7 @@ async def admin_members_form_post(request: Request):
     form = await request.form()
     key = str(form.get("key") or "").strip()
     kind = str(form.get("kind") or "").strip().lower()
-    values = str(form.get("values") or "").strip()
+    values_str = str(form.get("values") or "").strip()
     name = str(form.get("name") or "").strip()
     tier = str(form.get("tier") or "").strip().lower()
     renew_days_str = str(form.get("renew_days") or "30").strip()
@@ -601,14 +819,20 @@ async def admin_members_form_post(request: Request):
     enabled = form.get("enabled") is not None
 
     # Validate
+    if not name:
+        return _render_admin_page("保存会员", "<div>用户名不能为空</div>")
+
     if kind not in ("ip", "qq"):
         return _render_admin_page("保存会员", "<div>类型无效</div>")
 
-    if not values:
+    if not values_str:
         return _render_admin_page("保存会员", "<div>IP/QQ不能为空</div>")
 
     if tier not in ("normal", "month", "permanent"):
         return _render_admin_page("保存会员", "<div>等级无效</div>")
+
+    # Parse multiple values separated by #
+    values_list = [v.strip() for v in values_str.split('#') if v.strip()]
 
     # Calculate expiry date from renew days for month tier
     expires_at = ""
@@ -630,50 +854,120 @@ async def admin_members_form_post(request: Request):
     except:
         daily_limit = None
 
-    # Build member key
-    new_key = f"{kind}:{values}"
+    _, ip_info = whitelist_repo.load_ip_whitelist()
+    _, qq_info = whitelist_repo.load_qq_whitelist()
 
-    # Check if editing different key
-    if key and key != new_key:
-        # Delete old member
-        member_service.delete_member(key)
-        key = new_key
+    all_members = member_service.get_all_members()
+    existing_member = member_service.get_member(key) if key else None
+    group_name = ((existing_member or {}).get("name") or name or "").strip()
 
-    if key:
-        # Update existing member
+    def _belongs_to_group(member_key: str, member: dict, target_name: str) -> bool:
+        if not target_name:
+            return False
+        stored_name = (member.get("name") or "").strip()
+        if stored_name == target_name:
+            return True
+        if stored_name:
+            return False
+        if member_key.startswith("ip:"):
+            return (ip_info.get(member_key[3:]) or "").strip() == target_name
+        if member_key.startswith("qq:"):
+            return (qq_info.get(member_key[3:]) or "").strip() == target_name
+        return False
+
+    existing_members_in_group = {
+        k: m for k, m in all_members.items()
+        if _belongs_to_group(k, m, group_name)
+    } if group_name else {}
+
+    existing_values_in_kind = {
+        k.split(":", 1)[1] for k in existing_members_in_group.keys()
+        if k.startswith(f"{kind}:") and ":" in k
+    }
+
+    values_set = set(values_list)
+    removed_values = sorted(v for v in existing_values_in_kind if v not in values_set)
+
+    deleted_count = 0
+    for value in removed_values:
+        member_key = f"{kind}:{value}"
+        if member_service.delete_member(member_key):
+            deleted_count += 1
+
+    # Create or update members for each submitted value
+    created_count = 0
+    updated_count = 0
+
+    for value in values_list:
+        member_key = f"{kind}:{value}"
+        existing_value_member = member_service.get_member(member_key)
+
+        member_data = {
+            "name": name,
+            "tier": tier,
+            "enabled": enabled,
+            "expires_at": expires_at,
+        }
+
+        if daily_limit is not None and tier == "normal":
+            member_data["daily_limit"] = daily_limit
+
+        if existing_value_member:
+            member_service.update_member(member_key, **member_data)
+            updated_count += 1
+        else:
+            member_service.create_member(member_key, **member_data)
+            created_count += 1
+
+    # Apply tier/enabled/expires/name to other keys in the same group (e.g. QQ + IP)
+    refreshed_members = member_service.get_all_members()
+    group_keys_after = [
+        k for k, m in refreshed_members.items()
+        if _belongs_to_group(k, m, group_name) and k != "" and k != key
+    ] if group_name else []
+    for other_key in group_keys_after:
+        if other_key.startswith(f"{kind}:") and other_key.split(":", 1)[1] in values_set:
+            continue
         member_service.update_member(
-            new_key,
-            name=name,
-            tier=tier,
-            enabled=enabled,
-            expires_at=expires_at if expires_at else None,
-            daily_limit=daily_limit
-        )
-        message = "已更新会员"
-    else:
-        # Create new member
-        member_service.create_member(
-            new_key,
+            other_key,
             name=name,
             tier=tier,
             enabled=enabled,
             expires_at=expires_at,
-            daily_limit=daily_limit
+            daily_limit=daily_limit if tier == "normal" else None,
         )
 
-        # Also add to whitelist
-        if kind == "ip":
-            _, ip_info = whitelist_repo.load_ip_whitelist()
-            ip_info[values] = name
-            whitelist_repo.save_ip_whitelist(ip_info)
-        elif kind == "qq":
-            _, qq_info = whitelist_repo.load_qq_whitelist()
-            qq_info[values] = name
-            whitelist_repo.save_qq_whitelist(qq_info)
+    # Sync with whitelist (update both kinds in the group; delete removed values)
+    refreshed_members = member_service.get_all_members()
+    final_group_keys = [
+        k for k, m in refreshed_members.items()
+        if (m.get("name") or "").strip() == name
+    ]
+    final_ips = [k[3:] for k in final_group_keys if k.startswith("ip:")]
+    final_qqs = [k[3:] for k in final_group_keys if k.startswith("qq:")]
 
-        message = "已创建会员"
+    for ip in final_ips:
+        ip_info[ip] = name
+    for qq in final_qqs:
+        qq_info[qq] = name
 
-    return _render_admin_page("保存会员", f'<div>{message}</div><div style="margin-top:10px;"><a href="/admin/members">返回列表</a></div>')
+    if kind == "ip":
+        for ip in removed_values:
+            ip_info.pop(ip, None)
+    elif kind == "qq":
+        for qq in removed_values:
+            qq_info.pop(qq, None)
+
+    whitelist_repo.save_ip_whitelist(ip_info)
+    whitelist_repo.save_qq_whitelist(qq_info)
+
+    # Clear cache to ensure list displays updated data
+    member_service.clear_cache()
+    whitelist_repo.clear_cache()
+
+    total_count = created_count + updated_count
+    message = f"已保存（新增 {created_count}，更新 {updated_count}，删除 {deleted_count}）"
+    return RedirectResponse(f"/admin/members?msg={urllib.parse.quote(message)}", status_code=303)
 
 
 @member_routes.post("/admin/members/delete")
@@ -685,25 +979,53 @@ async def admin_members_delete(request: Request):
 
     form = await request.form()
     key = str(form.get("key") or "").strip()
+    name = str(form.get("name") or "").strip()
 
-    if key and member_service.delete_member(key):
-        # 同步删除白名单中的对应条目
-        if key.startswith("ip:"):
-            ip = key[3:]
-            _, ip_info = whitelist_repo.load_ip_whitelist()
-            if ip in ip_info:
-                del ip_info[ip]
-                whitelist_repo.save_ip_whitelist(ip_info)
-        elif key.startswith("qq:"):
-            qq = key[3:]
-            _, qq_info = whitelist_repo.load_qq_whitelist()
-            if qq in qq_info:
-                del qq_info[qq]
-                whitelist_repo.save_qq_whitelist(qq_info)
-
-        return _render_admin_page("删除会员", '<div>已删除会员</div><div style="margin-top:10px;"><a href="/admin/members">返回列表</a></div>')
+    # Support both key (single member) and name (batch delete by user)
+    if key:
+        # Delete single member by key
+        keys_to_delete = [key]
+    elif name:
+        # Delete all members with this name
+        all_members = member_service.get_all_members()
+        # For "未命名", also include members with empty name
+        if name == "未命名":
+            keys_to_delete = [k for k, m in all_members.items() if not m.get("name")]
+        else:
+            keys_to_delete = [k for k, m in all_members.items() if m.get("name") == name]
     else:
-        return _render_admin_page("删除会员", '<div>删除失败</div>')
+        return _render_admin_page("删除会员", '<div>参数错误</div>')
+
+    if not keys_to_delete:
+        return _render_admin_page("删除会员", '<div>未找到要删除的会员</div>')
+
+    # Delete all members
+    deleted_count = 0
+    ip_to_delete = []
+    qq_to_delete = []
+
+    for key in keys_to_delete:
+        if member_service.delete_member(key):
+            deleted_count += 1
+            if key.startswith("ip:"):
+                ip_to_delete.append(key[3:])
+            elif key.startswith("qq:"):
+                qq_to_delete.append(key[3:])
+
+    # Sync delete from whitelist
+    if ip_to_delete:
+        _, ip_info = whitelist_repo.load_ip_whitelist()
+        for ip in ip_to_delete:
+            ip_info.pop(ip, None)
+        whitelist_repo.save_ip_whitelist(ip_info)
+
+    if qq_to_delete:
+        _, qq_info = whitelist_repo.load_qq_whitelist()
+        for qq in qq_to_delete:
+            qq_info.pop(qq, None)
+        whitelist_repo.save_qq_whitelist(qq_info)
+
+    return _render_admin_page("删除会员", f'<div>已删除 {deleted_count} 个会员记录</div><div style="margin-top:10px;"><a href="/admin/members">返回列表</a></div>')
 
 
 @member_routes.post("/admin/members/batch")
@@ -723,18 +1045,26 @@ async def admin_members_batch(request: Request):
 
         if action == "enable":
             count = member_service.batch_update_members(keys, enabled=True)
+            # Clear cache
+            member_service.clear_cache()
             return JSONResponse({"success": True, "message": f"已启用 {count} 个会员"})
 
         elif action == "disable":
             count = member_service.batch_update_members(keys, enabled=False)
+            # Clear cache
+            member_service.clear_cache()
             return JSONResponse({"success": True, "message": f"已禁用 {count} 个会员"})
 
         elif action == "set_permanent":
             count = member_service.batch_update_members(keys, tier="permanent")
+            # Clear cache
+            member_service.clear_cache()
             return JSONResponse({"success": True, "message": f"已将 {count} 个会员设为永久"})
 
         elif action == "extend_30":
             count = member_service.batch_update_members(keys, extend_days=30)
+            # Clear cache
+            member_service.clear_cache()
             return JSONResponse({"success": True, "message": f"已延长 {count} 个会员的到期时间"})
 
         elif action == "delete":
@@ -764,6 +1094,10 @@ async def admin_members_batch(request: Request):
                 for qq in qq_to_delete:
                     qq_info.pop(qq, None)
                 whitelist_repo.save_qq_whitelist(qq_info)
+
+            # Clear cache
+            member_service.clear_cache()
+            whitelist_repo.clear_cache()
 
             return JSONResponse({"success": True, "message": f"已删除 {count} 个会员（含白名单同步删除）"})
 

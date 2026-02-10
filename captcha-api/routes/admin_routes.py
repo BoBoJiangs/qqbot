@@ -1,4 +1,4 @@
-、"""Admin authentication and dashboard routes.
+"""Admin authentication and dashboard routes.
 
 Handles admin login, logout, password management, and dashboard.
 """
@@ -242,7 +242,8 @@ async def admin_whitelist_get(request: Request):
     qq_rows = []
     for comment in sorted(qq_groups.keys()):
         qq_list = qq_groups[comment]
-        edit_url = "/admin/members/form?kind=qq&comment=" + urllib.parse.quote(comment)
+        # 跳转到会员列表页面，按用户名搜索
+        manage_url = f"/admin/members?q={urllib.parse.quote(comment)}"
 
         # 限制QQ列表显示，避免过长
         qq_display = "#".join(qq_list)
@@ -255,7 +256,7 @@ async def admin_whitelist_get(request: Request):
             f"<td>{len(qq_list)}</td>"
             f"<td style='max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' title='{_h('#'.join(qq_list))}'>{_h(qq_display)}</td>"
             "<td><div class='actions'>"
-            f"<a class='btn btn-sm' href=\"{_h(edit_url)}\">编辑</a>"
+            f"<a class='btn btn-sm' href=\"{_h(manage_url)}\">查看会员</a>"
             f"<form class='inline' method='post' action='/admin/whitelist/qq_group/delete'>"
             f"<input type='hidden' name='comment' value='{_h(comment)}'/>"
             f"<button class='btn-danger btn-sm' type='submit'>删除</button></form>"

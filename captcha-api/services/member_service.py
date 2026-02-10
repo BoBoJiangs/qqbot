@@ -1,4 +1,4 @@
-白名单"""Member business logic service.
+"""Member business logic service.
 
 Handles member-related business rules including tier validation,
 expiry checking, and quota management.
