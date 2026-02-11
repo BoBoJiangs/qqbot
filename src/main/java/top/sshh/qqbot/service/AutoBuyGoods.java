@@ -146,7 +146,9 @@ public class AutoBuyGoods {
             inFlightBuyCodeMap.remove(bot.getBotId());
 
             // 处理结缘物品：提取冷却时间
+            boolean isJieyuanSuccess = false;
             if (message.contains("参与") && message.contains("缘定")) {
+                isJieyuanSuccess = true;
                 try {
                     // 提取 "XX分钟后结算" 中的分钟数
                     Pattern cooldownPattern = Pattern.compile("(\\d+)分钟后结算");
@@ -223,11 +225,27 @@ public class AutoBuyGoods {
             if (autoBuyMap.get(bot.getBotId()) != null && !autoBuyMap.get(bot.getBotId()).isEmpty()) {
                 ProductPrice removed = autoBuyMap.get(bot.getBotId()).remove(0);
                 if (removed != null && removed.getCode() != null) {
+                    // 道友成功购买：移除所有相同 code 的物品
                     if (message.contains("道友成功购买")) {
                         List<ProductPrice> list = autoBuyMap.get(bot.getBotId());
                         if (list != null && !list.isEmpty()) {
                             String removedCode = removed.getCode();
                             list.removeIf(p -> removedCode.equals(p.getCode()));
+                        }
+                    }
+                    // 结缘成功：移除所有相同名称的物品（因为在冷却期间无法购买）
+                    if (isJieyuanSuccess && removed.getName() != null) {
+                        List<ProductPrice> list = autoBuyMap.get(bot.getBotId());
+                        if (list != null && !list.isEmpty()) {
+                            String removedName = removed.getName();
+                            int removedCount = 0;
+                            for (Iterator<ProductPrice> it = list.iterator(); it.hasNext();) {
+                                if (removedName.equals(it.next().getName())) {
+                                    it.remove();
+                                    removedCount++;
+                                }
+                            }
+                            logger.info("结缘成功，移除队列中所有同名物品: name={}, count={}", removedName, removedCount);
                         }
                     }
                     Set<String> pendingCodes = pendingBuyCodeMap.get(bot.getBotId());
@@ -238,7 +256,11 @@ public class AutoBuyGoods {
             }
 
             // 如果队列为空或已处理完，循环发送下一条命令
-            if (autoBuyMap.get(bot.getBotId()) != null && autoBuyMap.get(bot.getBotId()).isEmpty()) {
+            // 结缘成功后也主动触发刷新，继续捡漏
+            if (isJieyuanSuccess) {
+                logger.info("结缘成功，主动触发坊市刷新继续捡漏");
+                sendNextCommand(bot, botConfig);
+            } else if (autoBuyMap.get(bot.getBotId()) != null && autoBuyMap.get(bot.getBotId()).isEmpty()) {
                 sendNextCommand(bot, botConfig);
             } else {
                 this.buyHerbs(group, bot);

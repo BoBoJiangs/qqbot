@@ -236,8 +236,8 @@ async def admin_members_get(
             f"<td><span class='status-badge {tier_badge_class}' style='white-space:nowrap;'>{tier_label}</span></td>"
             f"<td style='white-space:nowrap;'>{status_badge}</td>"
             f"<td style='white-space:nowrap;font-size:0.8125rem;'>{expiry_html}</td>"
-            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>总计</span> <strong>{group_total_count}</strong></td>"
-            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>错误</span> <strong>{group_error_count}</strong></td>"
+            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>今日</span> <strong>{group_total_count}</strong></td>"
+            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>今日错</span> <strong>{group_error_count}</strong></td>"
             f"<td style='text-align:center;white-space:nowrap;'><span class='{accuracy_class}'><strong>{accuracy:.1f}%</strong></span></td>"
             f"<td style='white-space:nowrap;'><div class='actions' style='gap:6px;'>"
             f"{edit_buttons}"
@@ -311,8 +311,8 @@ async def admin_members_get(
             f"<td><span class='status-badge {tier_badge_class}' style='white-space:nowrap;'>{tier_label}</span></td>"
             f"<td style='white-space:nowrap;'>{status_badge}</td>"
             f"<td style='white-space:nowrap;font-size:0.8125rem;'>{expiry_html}</td>"
-            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>总计</span> <strong>{total_count}</strong></td>"
-            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>错误</span> <strong>{error_count}</strong></td>"
+            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>今日</span> <strong>{total_count}</strong></td>"
+            f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>今日错</span> <strong>{error_count}</strong></td>"
             f"<td style='text-align:center;white-space:nowrap;'><span class='{accuracy_class}'><strong>{accuracy:.1f}%</strong></span></td>"
             f"<td style='white-space:nowrap;'><div class='actions' style='gap:6px;'>"
             f"<a class='btn btn-sm' href='{_h(edit_url)}'>编辑</a>"
@@ -352,11 +352,11 @@ async def admin_members_get(
             <div style="font-size:1.5rem;font-weight:bold;color:#22D3EE;">{len(grouped_members)}</div>
           </div>
           <div>
-            <div class="muted">总次数</div>
+            <div class="muted">今日次数</div>
             <div style="font-size:1.5rem;font-weight:bold;color:#4CAF50;">{today_total_count}</div>
           </div>
           <div>
-            <div class="muted">错误次数</div>
+            <div class="muted">今日错误</div>
             <div style="font-size:1.5rem;font-weight:bold;color:#f44336;">{today_total_error}</div>
           </div>
           <div>
@@ -431,8 +431,8 @@ async def admin_members_get(
               <th style="width:90px;">等级</th>
               <th style="width:60px;">状态</th>
               <th style="width:130px;">到期时间</th>
-              <th style="width:90px;text-align:right;">总次数</th>
-              <th style="width:90px;text-align:right;">错误次数</th>
+              <th style="width:90px;text-align:right;">今日次数</th>
+              <th style="width:90px;text-align:right;">今日错误</th>
               <th style="width:80px;text-align:center;">准确率</th>
               <th style="width:110px;">操作</th>
             </tr>

@@ -261,6 +261,21 @@ public class TestService {
                 saveBotConfig(bot);
             }
 
+            if ("一键启用本群查询功能".equals(message)) {
+                this.groupManager.setGroupXslPriceQueryEnabled(group.getGroupId(), true);
+                botConfig.setEnableXslPriceQuery(true);
+                this.groupManager.setGroupSettlementReminderEnabled(group.getGroupId(), true);
+                botConfig.setEnableAutomaticReply(true);
+                group.sendMessage((new MessageChain()).reply(messageId).text("已启用本群查询功能"));
+            }
+            if ("一键关闭本群查询功能".equals(message)) {
+                this.groupManager.setGroupXslPriceQueryEnabled(group.getGroupId(), false);
+                botConfig.setEnableXslPriceQuery(false);
+                this.groupManager.setGroupSettlementReminderEnabled(group.getGroupId(), false);
+                botConfig.setEnableAutomaticReply(false);
+                group.sendMessage((new MessageChain()).reply(messageId).text("已关闭本群查询功能"));
+            }
+
             if ("启用本群悬赏令价格查询".equals(message)) {
                 this.groupManager.setGroupXslPriceQueryEnabled(group.getGroupId(), true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("已启用本群悬赏价格查询"));
@@ -1101,6 +1116,7 @@ public class TestService {
             sb.append("批量上架药材\n");
             sb.append("一键使用次元之钥\n");
             sb.append("一键使用追捕令\n");
+             sb.append("一键启用/关闭本群查询功能\n");
             sb.append("开始自动悬赏/秘境/宗门任务\n");
 
             sb.append("－－－－－掌门命令－－－－－\n");
@@ -2716,7 +2732,7 @@ public class TestService {
         boolean isAtSelf = Utils.isAtSelf(bot, group, message, xxGroupId);
         if (isAtSelf) {
             if (botConfig.getRewardMode() != 1) {
-                if (message.contains("悬赏令结算") && message.contains("增加修为")) {
+                if (message.contains("悬赏令结算") && message.contains("增加修为") && !message.contains("时间")) {
                     bot.getBotConfig().setXslTime(-1L);
                     if ("一键使用追捕令".equals(botConfig.getCommand())) {
                         bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text(" 道具使用追捕令"));

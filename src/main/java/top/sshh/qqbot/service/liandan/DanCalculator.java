@@ -41,6 +41,7 @@ public class DanCalculator {
     private Map<String, Integer> herbPrices = new LinkedHashMap<>();
     private Map<String, Integer> danMarketValues = new LinkedHashMap<>();
     private Map<String, Integer> danAlchemyValues = new LinkedHashMap<>();
+    private Map<String, List<DanProfile>> danProfilesByTypePairKey = new HashMap<>();
 //    public Config config = new Config();
     public Map<Long, Config> configMap = new ConcurrentHashMap<>();
     @Autowired
@@ -193,7 +194,72 @@ public class DanCalculator {
         }
 
         sortedDans = dans.stream().sorted().collect(Collectors.toList());
+        danProfilesByTypePairKey = buildDanProfilesByKey(sortedDans);
         logger.info("加载丹药数据，数量={}", sortedDans.size());
+    }
+
+    int nextDanThresholdForAssistValueForTest(String mainType, int mainValue, String assistType, int assistValue) {
+        return nextDanThresholdForAssistValue(mainType, mainValue, assistType, assistValue);
+    }
+
+    private int nextDanThresholdForAssistValue(String mainType, int mainValue, String assistType, int assistValue) {
+        String key = normalizePairKey(mainType, assistType);
+        if (key.isEmpty()) return Integer.MAX_VALUE;
+        List<DanProfile> profiles = danProfilesByTypePairKey.getOrDefault(key, Collections.emptyList());
+        int best = Integer.MAX_VALUE;
+        for (DanProfile p : profiles) {
+            Integer candidateAssist = p.getValue(assistType);
+            Integer candidateMain = p.getValue(mainType);
+            if (candidateAssist == null || candidateMain == null) continue;
+            if (candidateAssist > assistValue && candidateMain >= mainValue) {
+                best = Math.min(best, candidateAssist);
+            }
+        }
+        return best;
+    }
+
+    private String normalizePairKey(String typeA, String typeB) {
+        if (typeA == null || typeB == null) return "";
+        return typeA.compareTo(typeB) <= 0 ? typeA + "|" + typeB : typeB + "|" + typeA;
+    }
+
+    private Map<String, List<DanProfile>> buildDanProfilesByKey(List<Dan> dans) {
+        if (dans == null || dans.isEmpty()) return Collections.emptyMap();
+        Map<String, List<DanProfile>> map = new HashMap<>();
+        for (Dan dan : dans) {
+            if (dan == null || dan.requirements == null || dan.requirements.size() != 2) continue;
+            List<Map.Entry<String, Integer>> req = new ArrayList<>(dan.requirements.entrySet());
+            Map.Entry<String, Integer> a = req.get(0);
+            Map.Entry<String, Integer> b = req.get(1);
+            if (a.getKey() == null || b.getKey() == null) continue;
+            DanProfile profile = new DanProfile(dan.name, a.getKey(), a.getValue(), b.getKey(), b.getValue());
+            String key = normalizePairKey(a.getKey(), b.getKey());
+            map.computeIfAbsent(key, k -> new ArrayList<>()).add(profile);
+        }
+        return map;
+    }
+
+    private static final class DanProfile {
+        private final String danName;
+        private final String type1;
+        private final int value1;
+        private final String type2;
+        private final int value2;
+
+        private DanProfile(String danName, String type1, int value1, String type2, int value2) {
+            this.danName = danName;
+            this.type1 = type1;
+            this.value1 = value1;
+            this.type2 = type2;
+            this.value2 = value2;
+        }
+
+        Integer getValue(String type) {
+            if (type == null) return null;
+            if (type.equals(type1)) return value1;
+            if (type.equals(type2)) return value2;
+            return null;
+        }
     }
 
     private void loadDanMarketData() throws IOException {
@@ -482,6 +548,10 @@ public class DanCalculator {
         for (Dan dan : sortedDans) {
             int mainCount = 0, leadCount = 0, assistCount = 0;
             boolean valid = true;
+            String mainReqType = null;
+            int mainNeeded = 0;
+            String assistReqType = null;
+            int assistNeeded = 0;
 
             for (Map.Entry<String, Integer> req : dan.requirements.entrySet()) {
                 String type = req.getKey();
@@ -489,12 +559,17 @@ public class DanCalculator {
 
                 if (main.mainAttr2Type.equals(type)) {
                     if (main.mainAttr2Value == 0) { valid = false; break; }
+                    mainReqType = type;
+                    mainNeeded = needed;
                     mainCount = Math.max(mainCount, (int) Math.ceil((double) needed / main.mainAttr2Value));
                 } else if (assist.assistAttrType.equals(type)) {
                     if (assist.assistAttrValue == 0 || assist.assistAttrValue / needed >= 2) { valid = false; break; }
+                    assistReqType = type;
+                    assistNeeded = needed;
                     assistCount = Math.max(assistCount, (int) Math.ceil((double) needed / assist.assistAttrValue));
                 } else valid = false;
             }
+            if (!valid) continue;
 
             if (main.mainAttr1Type.equals("性平")) leadCount = 1;
             else {
@@ -503,6 +578,10 @@ public class DanCalculator {
                 leadCount = leadNumber / lead.leadAttrValue;
                 if (leadNumber != leadCount * lead.leadAttrValue) continue;
             }
+
+            int assistProvided = assistCount * assist.assistAttrValue;
+            int nextAssistThreshold = nextDanThresholdForAssistValue(mainReqType, mainNeeded, assistReqType, assistNeeded);
+            if (assistProvided >= nextAssistThreshold) continue;
 
             int spend = mainCount * main.price + leadCount * lead.price + assistCount * assist.price;
             int alchemyValue = dan.alchemyValue * config.getDanNumber();

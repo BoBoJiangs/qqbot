@@ -1,0 +1,60 @@
+{
+  "members": {
+    "ip:127.0.0.1": {
+      "name": "本机",
+      "tier": "permanent",
+      "enabled": true,
+      "expires_at": "",
+      "updated_at": "2026-02-10T08:08:41.378559Z",
+      "created_at": "2026-02-10T08:08:41.378559Z"
+    },
+    "ip:192.168.1.100": {
+      "name": "办公室",
+      "tier": "permanent",
+      "enabled": true,
+      "expires_at": "",
+      "updated_at": "2026-02-10T08:08:41.403206Z",
+      "created_at": "2026-02-10T08:08:41.403206Z"
+    },
+    "ip:192.168.1.101": {
+      "name": "办公室",
+      "tier": "permanent",
+      "enabled": true,
+      "expires_at": "",
+      "updated_at": "2026-02-10T08:08:41.408235Z",
+      "created_at": "2026-02-10T08:08:41.408235Z"
+    },
+    "qq:1018454301": {
+      "name": "一心",
+      "tier": "permanent",
+      "enabled": true,
+      "expires_at": "",
+      "updated_at": "2026-02-10T08:08:41.410600Z",
+      "created_at": "2026-02-10T08:08:41.410600Z"
+    },
+    "qq:1212222211": {
+      "name": "虎虎",
+      "tier": "permanent",
+      "enabled": true,
+      "expires_at": "",
+      "updated_at": "2026-02-10T08:08:41.412015Z",
+      "created_at": "2026-02-10T08:08:41.412015Z"
+    },
+    "qq:213321233": {
+      "name": "虎虎",
+      "tier": "permanent",
+      "enabled": true,
+      "expires_at": "",
+      "updated_at": "2026-02-10T08:08:41.415846Z",
+      "created_at": "2026-02-10T08:08:41.415846Z"
+    },
+    "qq:819463350": {
+      "name": "一心",
+      "tier": "permanent",
+      "enabled": true,
+      "expires_at": "",
+      "updated_at": "2026-02-10T08:08:41.418827Z",
+      "created_at": "2026-02-10T08:08:41.418827Z"
+    }
+  }
+}

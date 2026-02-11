@@ -16,7 +16,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.MessageNumber;
-import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.GroupManager;
 
 import java.io.*;
@@ -24,12 +23,10 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static top.sshh.qqbot.constant.Constant.targetDir;
 
 @Component
 public class AutoAlchemyTask {
@@ -65,6 +62,9 @@ public class AutoAlchemyTask {
 
     @Autowired
     public DanCalculator danCalculator;
+
+    @Autowired
+    private DanRecipeQueryService danRecipeQueryService;
 
     @Autowired
     public GroupManager groupManager;
@@ -201,7 +201,7 @@ public class AutoAlchemyTask {
         if (message.startsWith("查丹方")) {
             customPool.submit(() -> {
                 try {
-                    danCalculator.parseRecipes(message, group, bot);
+                    danRecipeQueryService.handleQuery(message, group, bot);
                 } catch (Exception e) {
                     System.out.println("加载基础数据异常");
                 }
@@ -287,7 +287,7 @@ public class AutoAlchemyTask {
             final String string = message.substring(message.indexOf("查丹方")).trim();
             customPool.submit(() -> {
                 try {
-                    danCalculator.parseRecipes(string, group, bot);
+                    danRecipeQueryService.handleQuery(string, group, bot);
                 } catch (Exception var2) {
                     System.out.println("加载基础数据异常");
                 }

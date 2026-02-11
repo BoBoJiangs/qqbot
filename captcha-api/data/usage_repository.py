@@ -99,7 +99,7 @@ class UsageRepository:
                 "data": data
             })
 
-    def get_counter(self, member_key: str) -> Dict[str, Any]:
+    def get_counter(self, member_key: str, now: Optional[datetime] = None) -> Dict[str, Any]:
         """Get usage counter for a member.
 
         Args:
@@ -108,9 +108,12 @@ class UsageRepository:
         Returns:
             Counter data dict with daily_count, monthly_count, total_count, etc.
         """
+        if now is None:
+            now = datetime.now(timezone.utc)
+
         data = self.load()
         counters = data.get("counters", {})
-        return counters.get(member_key, {
+        raw = counters.get(member_key, {
             "daily_date": None,
             "daily_count": 0,
             "monthly_ym": None,
@@ -118,6 +121,27 @@ class UsageRepository:
             "total_count": 0,
             "error_count": 0,
         })
+
+        day = now.date().isoformat()
+        ym = f"{now.year:04d}-{now.month:02d}"
+
+        daily_is_today = raw.get("daily_date") == day
+        monthly_is_current = raw.get("monthly_ym") == ym
+
+        daily_count = int(raw.get("daily_count") or 0) if daily_is_today else 0
+        total_count = int(raw.get("total_count") or 0) if daily_is_today else 0
+        error_count = int(raw.get("error_count") or 0) if daily_is_today else 0
+        monthly_count = int(raw.get("monthly_count") or 0) if monthly_is_current else 0
+
+        return {
+            "daily_date": day,
+            "daily_count": daily_count,
+            "monthly_ym": ym,
+            "monthly_count": monthly_count,
+            "total_count": total_count,
+            "error_count": error_count,
+            "updated_at": raw.get("updated_at", ""),
+        }
 
     def increment_usage(
         self,
