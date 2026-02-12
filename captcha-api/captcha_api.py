@@ -151,7 +151,7 @@ def _usage_key_from_request(request: Request) -> str | None:
 
 def _is_counted_path(path: str) -> bool:
     """Check if path should count towards usage limits."""
-    return path in {"/recognize", "/report_error"}
+    return path in {"/recognize"}
 
 
 def _enforce_membership_and_quota(request: Request):

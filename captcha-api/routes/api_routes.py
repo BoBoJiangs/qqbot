@@ -551,7 +551,7 @@ async def report_error(
             if member_key:
                 now = datetime.now(timezone.utc)
                 try:
-                    usage_repo.increment_usage(member_key, now, daily_limit=None, monthly_limit=None, is_error=True)
+                    usage_repo.increment_usage(member_key, now, daily_limit=None, monthly_limit=None, is_error=True, increment_call=False)
                 except Exception:
                     pass  # Don't fail on error counting
 

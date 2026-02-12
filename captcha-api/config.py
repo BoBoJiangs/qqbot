@@ -56,6 +56,9 @@ class Settings(BaseSettings):
     # Cache TTL for data files (seconds)
     data_cache_ttl: float = 30.0  # 增加到30秒，减少文件读取
 
+    # Usage counter time zone (affects "today" rollover)
+    usage_time_zone: str = "+08:00"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

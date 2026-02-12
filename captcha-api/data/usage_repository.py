@@ -7,8 +7,10 @@ import json
 import os
 import threading
 import time
-from datetime import datetime, timezone
+import re
+from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional
+from zoneinfo import ZoneInfo
 from config import settings
 
 
@@ -25,11 +27,42 @@ class UsageRepository:
         self._file_path = file_path or settings.usage_counters_file
         self._cache_ttl = cache_ttl
         self._lock = threading.Lock()
+        self._usage_tz = self._resolve_time_zone(getattr(settings, "usage_time_zone", "UTC"))
         self._cache = {
             "loaded_at": 0.0,
             "mtime": None,
             "data": {"counters": {}}
         }
+
+    @staticmethod
+    def _resolve_time_zone(name: str):
+        raw = (name or "").strip()
+        if not raw:
+            return timezone.utc
+
+        lowered = raw.lower()
+        if lowered in {"utc", "z"}:
+            return timezone.utc
+        if lowered in {"asia/shanghai", "beijing", "bj", "utc+8", "utc+08", "utc+08:00", "gmt+8", "gmt+08", "gmt+08:00"}:
+            return timezone(timedelta(hours=8))
+
+        m = re.match(r"^(?:utc|gmt)?\s*([+-])\s*(\d{1,2})(?::?(\d{2}))?$", lowered)
+        if m:
+            sign = -1 if m.group(1) == "-" else 1
+            hours = int(m.group(2))
+            minutes = int(m.group(3) or 0)
+            if hours <= 23 and minutes <= 59:
+                return timezone(sign * timedelta(hours=hours, minutes=minutes))
+
+        try:
+            return ZoneInfo(raw)
+        except Exception:
+            return timezone.utc
+
+    def _to_usage_tz(self, dt: datetime) -> datetime:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(self._usage_tz)
 
     def _read_json_file(self, path: str, default: Any) -> Any:
         """Read JSON file with error handling."""
@@ -109,7 +142,8 @@ class UsageRepository:
             Counter data dict with daily_count, monthly_count, total_count, etc.
         """
         if now is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(self._usage_tz)
+        now_local = self._to_usage_tz(now)
 
         data = self.load()
         counters = data.get("counters", {})
@@ -122,8 +156,8 @@ class UsageRepository:
             "error_count": 0,
         })
 
-        day = now.date().isoformat()
-        ym = f"{now.year:04d}-{now.month:02d}"
+        day = now_local.date().isoformat()
+        ym = f"{now_local.year:04d}-{now_local.month:02d}"
 
         daily_is_today = raw.get("daily_date") == day
         monthly_is_current = raw.get("monthly_ym") == ym
@@ -149,7 +183,8 @@ class UsageRepository:
         now: datetime,
         daily_limit: Optional[int] = None,
         monthly_limit: Optional[int] = None,
-        is_error: bool = False
+        is_error: bool = False,
+        increment_call: bool = True,
     ) -> Dict[str, Any]:
         """Increment usage counter for a member.
 
@@ -172,8 +207,9 @@ class UsageRepository:
         counters = usage.setdefault("counters", {})
         c = counters.setdefault(member_key, {})
 
-        day = now.date().isoformat()
-        ym = f"{now.year:04d}-{now.month:02d}"
+        now_local = self._to_usage_tz(now)
+        day = now_local.date().isoformat()
+        ym = f"{now_local.year:04d}-{now_local.month:02d}"
 
         # Reset daily counter if date changed
         if c.get("daily_date") != day:
@@ -187,21 +223,19 @@ class UsageRepository:
             c["monthly_ym"] = ym
             c["monthly_count"] = 0
 
-        # Check daily limit
-        if daily_limit is not None and int(c.get("daily_count") or 0) >= daily_limit:
-            raise HTTPException(
-                status_code=429,
-                detail=f"普通用户每天仅能调用{daily_limit}次"
-            )
+        if increment_call:
+            if daily_limit is not None and int(c.get("daily_count") or 0) >= daily_limit:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"普通用户每天仅能调用{daily_limit}次"
+                )
 
-        # Check monthly limit
-        if monthly_limit is not None and int(c.get("monthly_count") or 0) >= monthly_limit:
-            raise HTTPException(status_code=429, detail="月卡本月调用次数已用完")
+            if monthly_limit is not None and int(c.get("monthly_count") or 0) >= monthly_limit:
+                raise HTTPException(status_code=429, detail="月卡本月调用次数已用完")
 
-        # Increment counters
-        c["daily_count"] = int(c.get("daily_count") or 0) + 1
-        c["monthly_count"] = int(c.get("monthly_count") or 0) + 1
-        c["total_count"] = int(c.get("total_count") or 0) + 1
+            c["daily_count"] = int(c.get("daily_count") or 0) + 1
+            c["monthly_count"] = int(c.get("monthly_count") or 0) + 1
+            c["total_count"] = int(c.get("total_count") or 0) + 1
         if is_error:
             c["error_count"] = int(c.get("error_count") or 0) + 1
 
