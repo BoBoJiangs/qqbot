@@ -59,6 +59,11 @@ public class AutoBuyGoods {
     public AutoBuyGoods() {
     }
 
+    static long remainingMinutesCeil(long remainingMs) {
+        if (remainingMs <= 0) return 0;
+        return (remainingMs + 60_000L - 1) / 60_000L;
+    }
+
     /** 处理用户命令：开始捡漏 / 停止捡漏 */
     @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.ONLY_ITSELF)
     public void enableScheduled(Bot bot, Group group, Member member,
@@ -155,7 +160,7 @@ public class AutoBuyGoods {
                     Matcher matcher = cooldownPattern.matcher(message);
                     if (matcher.find()) {
                         int minutes = Integer.parseInt(matcher.group(1));
-                        long cooldownEndTime = System.currentTimeMillis() + minutes * 60 * 1000L;
+                        long cooldownEndTime = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(minutes);
 
                         // 获取当前处理的物品名称
                         String itemName = null;
@@ -387,12 +392,14 @@ public class AutoBuyGoods {
                 ConcurrentHashMap<String, Long> cooldownMap = jieyuanCooldownMap.get(bot.getBotId());
                 if (cooldownMap != null) {
                     Long cooldownEndTime = cooldownMap.get(itemName);
-                    if (cooldownEndTime != null && currentTime < cooldownEndTime) {
-                        // 物品还在冷却中，跳过自动购买
-                        long remainingMinutes = (cooldownEndTime - currentTime) / 60000;
-                        logger.info("物品{}在结缘冷却中，剩余{}分钟，跳过自动购买",
-                                itemName, remainingMinutes + 1);
-                        continue;
+                    if (cooldownEndTime != null) {
+                        if (currentTime < cooldownEndTime) {
+                            long remainingMinutes = remainingMinutesCeil(cooldownEndTime - currentTime);
+                            logger.info("物品{}在结缘冷却中，剩余{}分钟，跳过自动购买", itemName, remainingMinutes);
+                            continue;
+                        } else {
+                            cooldownMap.remove(itemName);
+                        }
                     }
                 }
                 if (existingProduct != null && price <= existingProduct.getPrice()) {
@@ -513,9 +520,8 @@ public class AutoBuyGoods {
                     if (cooldownEndTime != null) {
                         if (now < cooldownEndTime) {
                             // 还在冷却中，跳过此物品
-                            long remainingMinutes = (cooldownEndTime - now) / 60000;
-                            logger.info("物品{}在结缘冷却中，剩余{}分钟，跳过购买",
-                                    productPrice.getName(), remainingMinutes + 1);
+                            long remainingMinutes = remainingMinutesCeil(cooldownEndTime - now);
+                            logger.info("物品{}在结缘冷却中，剩余{}分钟，跳过购买", productPrice.getName(), remainingMinutes);
                             buyList.remove(0);
                             Set<String> pendingCodes = pendingBuyCodeMap.get(bot.getBotId());
                             if (pendingCodes != null) {

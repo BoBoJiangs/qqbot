@@ -49,7 +49,19 @@ public class DanRecipeQueryServiceTest {
         assertFalse(text.isBlank());
         assertTrue(text.contains("需求：生息2816"));
         assertTrue(text.contains("炼气2816"));
-        assertFalse(text.contains("辅药：森檀木×6"));
+        assertFalse(text.contains("辅药森檀木6"));
+    }
+
+    @Test
+    void pingLeadMustComeFromPingTxt() throws Exception {
+        DanRecipeQueryService service = new DanRecipeQueryService();
+        ProductPriceResponse productPriceResponse = Mockito.mock(ProductPriceResponse.class);
+        Mockito.when(productPriceResponse.getFirstByNameOrderByTimeDesc(Mockito.anyString())).thenReturn(null);
+        ReflectionTestUtils.setField(service, "productPriceResponse", productPriceResponse);
+
+        String text = service.generateRecipeTextForTest("洗髓丹", 6, 50);
+        assertFalse(text.isBlank());
+        assertFalse(text.contains("药引剑心竹"));
     }
 
     @Test
@@ -61,6 +73,24 @@ public class DanRecipeQueryServiceTest {
 
         export(service, "洗髓丹", 6);
         export(service, "极品创世丹", 6);
+    }
+
+    @Test
+    void parseQuery_supportsModeAndDefaultDanNum() throws Exception {
+        DanRecipeQueryService service = new DanRecipeQueryService();
+        ProductPriceResponse productPriceResponse = Mockito.mock(ProductPriceResponse.class);
+        Mockito.when(productPriceResponse.getFirstByNameOrderByTimeDesc(Mockito.anyString())).thenReturn(null);
+        ReflectionTestUtils.setField(service, "productPriceResponse", productPriceResponse);
+        service.generateRecipeSignaturesForTest("洗髓丹", 6);
+
+        Object q1 = ReflectionTestUtils.invokeMethod(service, "parseQuery", "查丹方极品创世丹6 炼金丹");
+        assertTrue(((String) ReflectionTestUtils.getField(q1, "danName")).contains("极品创世丹"));
+        assertTrue(((int) ReflectionTestUtils.getField(q1, "danNum")) == 6);
+        assertTrue(ReflectionTestUtils.getField(q1, "mode").toString().equals("ALCHEMY"));
+
+        Object q2 = ReflectionTestUtils.invokeMethod(service, "parseQuery", "查丹方 极品创世丹 坊市丹");
+        assertTrue(((int) ReflectionTestUtils.getField(q2, "danNum")) == 6);
+        assertTrue(ReflectionTestUtils.getField(q2, "mode").toString().equals("MARKET"));
     }
 
     private static void export(DanRecipeQueryService service, String danName, int danNum) throws Exception {

@@ -66,10 +66,10 @@ bot:
 #    enableAlchemy: true
 #
   - type: ws
-    url: ws://113.44.42.139:8092
+    url: ws://115.120.199.227:8081
     accessToken: 1024*1024*1024
     #    修炼群号
-    groupId: 1055327219
+    groupId: 1055328182
     # 控制小号的QQ
     controlQQ: 1018454301
     masterQQ: 1018454301

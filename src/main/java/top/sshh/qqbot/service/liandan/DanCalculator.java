@@ -42,6 +42,7 @@ public class DanCalculator {
     private Map<String, Integer> danMarketValues = new LinkedHashMap<>();
     private Map<String, Integer> danAlchemyValues = new LinkedHashMap<>();
     private Map<String, List<DanProfile>> danProfilesByTypePairKey = new HashMap<>();
+    private Set<String> pingLeadNames = Collections.emptySet();
 //    public Config config = new Config();
     public Map<Long, Config> configMap = new ConcurrentHashMap<>();
     @Autowired
@@ -155,6 +156,7 @@ public class DanCalculator {
     public void loadData(Long botId) {
         try {
             loadElixirProperties();
+            loadPingLeadNames();
             loadDanMarketData();
             loadDanAlchemyData();
             loadHerbPricesData(botId);
@@ -162,6 +164,30 @@ public class DanCalculator {
         } catch (Exception e) {
             logger.error("加载数据失败", e);
         }
+    }
+
+    void loadPingLeadNames() throws IOException {
+        Path pingPath = Paths.get(targetDir, "properties", "性平.txt");
+        if (!Files.exists(pingPath)) {
+            pingLeadNames = Collections.emptySet();
+            return;
+        }
+        Set<String> set = new HashSet<>();
+        try (BufferedReader br = Files.newBufferedReader(pingPath, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                String v = line.trim();
+                if (!v.isEmpty()) set.add(v);
+            }
+        }
+        pingLeadNames = set;
+    }
+
+    boolean isPingLeadAllowed(String leadAttrType, String leadName) {
+        if (leadAttrType == null || leadName == null) return true;
+        if (!leadAttrType.startsWith("性平")) return true;
+        if (pingLeadNames == null || pingLeadNames.isEmpty()) return true;
+        return pingLeadNames.contains(leadName);
     }
 
     private void loadElixirProperties() throws IOException {
@@ -492,7 +518,7 @@ public class DanCalculator {
                     .filter(main -> main.price > 0)
                     .forEach(main -> {
                         herbs.stream()
-                                .filter(lead -> lead.price > 0 && checkBalance(main, lead))
+                                .filter(lead -> lead.price > 0 && checkBalance(main, lead) && isPingLeadAllowed(lead.leadAttrType, lead.name))
                                 .forEach(lead -> {
                                     herbs.stream()
                                             .filter(assist -> assist.price > 0)

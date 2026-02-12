@@ -504,7 +504,7 @@ public class PriceTask {
         try {
             PriceCalculationResult result = new PriceCalculationResult();
 
-            // 处理回复消息的情况
+            // 处理消息的情况
             if (hasReplyMessage(messageChain)) {
                 processReplyMessage(messageChain, message, result);
             } else {

@@ -856,7 +856,8 @@ public class GroupManager {
         StringBuilder result = new StringBuilder();
         result.append("恭喜道友斩杀").append(monsterName)
               .append("，获得修为：").append(formattedCultivation)
-              .append("，灵石：").append(formattedSpiritStones);
+              .append("，灵石：").append(formattedSpiritStones)
+              .append("\n").append("@我+查询历史打怪记录，可查询打怪记录");
         group.sendMessage(new MessageChain().reply(messageId).text(result.toString()));
 
         // 保存打怪记录
