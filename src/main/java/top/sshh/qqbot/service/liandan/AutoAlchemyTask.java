@@ -506,8 +506,10 @@ public class AutoAlchemyTask {
                 if (canSmelt) {
                     matchedAny = true;
                     int profit = parseProfit(recipe);
+                    String danName = parseDanName(recipe);
                     // 生成配方描述（保留原始数量）并加入炼丹队列
-                    String formulaText = "配方" + main + lead + assist + DAN_LU + " == 炼金收益" + profit;
+                    String formulaText = "配方" + main + lead + assist + DAN_LU + " == "
+                            + danName + "(炼金收益" + profit + ")";
                     getAlchemyList(botId).add(formulaText);
 
                     // 扣减背包药材（按同名合计一次扣减）
@@ -539,6 +541,17 @@ public class AutoAlchemyTask {
             return Integer.parseInt(m.group(1));
         }
         return 0;
+    }
+
+    /** 从丹方字符串里解析丹药名称（例如：6丹 易筋丹 -> 易筋丹） */
+    private String parseDanName(String recipe) {
+        Pattern p = Pattern.compile("\\d+丹\\s+(\\S+)$");
+        Matcher m = p.matcher(recipe.trim());
+        if (m.find()) {
+            return m.group(1);
+        }
+        String[] parts = recipe.trim().split("\\s+");
+        return parts.length > 0 ? parts[parts.length - 1] : "未知丹药";
     }
 
     /** 去掉角色前缀，得到纯药材名 */
