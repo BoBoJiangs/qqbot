@@ -3,10 +3,20 @@ package top.sshh.qqbot.data;
 import com.alibaba.fastjson2.annotation.JSONField;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class QQBotConfig implements Serializable {
     private int FamilyTaskStatus = 0;
     private String controlQQ;
+    // 小北悬赏优先物品列表
+    private List<String> xslRewardPriorityItems = new ArrayList<>(Arrays.asList(
+            "宿命通", "灭剑血胧", "天剑破虚", "仙火焚天", "千慄鬼噬", "封神剑", "明心问道果",
+            "离火梧桐芝", "剑魄竹笋", "尘磊岩麟果", "木灵三针花", "鎏鑫天晶草", "檀芒九叶花",
+            "坎水玄冰果", "大荒星陨指", "八角玄冰草", "地心淬灵乳", "天麻翡石精", "奇茸通天菊",
+            "风神诀", "合欢魔功"
+    ));
     @JSONField(serialize = false)
     private boolean isStartScheduled = false;
     @JSONField(serialize = false)
@@ -150,5 +160,13 @@ public class QQBotConfig implements Serializable {
 
     public void setStartScheduled(boolean startScheduled) {
         isStartScheduled = startScheduled;
+    }
+
+    public List<String> getXslRewardPriorityItems() {
+        return xslRewardPriorityItems;
+    }
+
+    public void setXslRewardPriorityItems(List<String> xslRewardPriorityItems) {
+        this.xslRewardPriorityItems = xslRewardPriorityItems;
     }
 }

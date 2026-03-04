@@ -134,7 +134,7 @@ public class XiaoBeiService {
             }
 
             if ("开始小北自动秘境".equals(message)) {
-                botConfig.setEnableXsl(true);
+                botConfig.setEnableMj(true);
                 this.sendBotMessage(bot, "探索秘境", true);
             }
 
@@ -156,6 +156,45 @@ public class XiaoBeiService {
             if ("关闭小北自动秘境".equals(message)) {
                 botConfig.setEnableMj(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("设置成功"));
+            }
+
+            // 处理多行消息中的小北悬赏优先物品设置
+            String[] messageLines = message.split("\n");
+            if (messageLines.length > 1) {
+                String firstLine = messageLines[0].trim();
+                if (firstLine.equals("设置小北悬赏优先物品")) {
+                    // 直接覆盖当前设置
+                    List<String> newList = new java.util.ArrayList<>();
+                    for (int i = 1; i < messageLines.length; i++) {
+                        String line = messageLines[i].trim();
+                        if (StringUtils.isNotBlank(line)) {
+                            newList.add(line);
+                        }
+                    }
+                    botConfig.setXslRewardPriorityItems(newList);
+                    this.saveMapToFile();
+                    group.sendMessage((new MessageChain()).reply(messageId).text("已设置 " + newList.size() + " 个优先物品"));
+                }
+            }
+
+            if ("查看小北悬赏优先物品".equals(message)) {
+                List<String> items = botConfig.getXslRewardPriorityItems();
+                if (items == null || items.isEmpty()) {
+                    group.sendMessage((new MessageChain()).reply(messageId).text("当前未设置优先物品，将使用默认优先级"));
+                } else {
+                    StringBuilder sb = new StringBuilder("当前悬赏优先物品列表：\n");
+                    for (int i = 0; i < items.size(); i++) {
+                        sb.append(items.get(i) + "\n");
+                    }
+                    sb.append("共 " + items.size() + " 个物品");
+                    group.sendMessage((new MessageChain()).reply(messageId).text(sb.toString()));
+                }
+            }
+
+            if ("重置小北悬赏优先物品".equals(message)) {
+                botConfig.setXslRewardPriorityItems(new java.util.ArrayList<>());
+                this.saveMapToFile();
+                group.sendMessage((new MessageChain()).reply(messageId).text("已重置为默认优先物品列表"));
             }
 
             if (message.startsWith("小北修炼模式")) {
@@ -276,10 +315,16 @@ public class XiaoBeiService {
 
         try {
             if (Files.exists(configFile, new LinkOption[0])) {
-                this.botConfigMap = this.loadMapFromFile();
+                Map<String, QQBotConfig> loadedConfigMap = this.loadMapFromFile();
+                this.botConfigMap = loadedConfigMap != null ? loadedConfigMap : new ConcurrentHashMap();
+            } else if (this.botConfigMap == null) {
+                this.botConfigMap = new ConcurrentHashMap();
             }
         } catch (Exception var3) {
             log.info("配置文件操作失败{}", var3.getMessage());
+            if (this.botConfigMap == null) {
+                this.botConfigMap = new ConcurrentHashMap();
+            }
         }
 
     }
@@ -299,8 +344,9 @@ public class XiaoBeiService {
             Path path = Paths.get("xb_bot_config_map.json");
             if (Files.exists(path, new LinkOption[0])) {
                 String jsonStr = new String(Files.readAllBytes(path));
-                return (Map)JSON.parseObject(jsonStr, new TypeReference<ConcurrentHashMap<String, QQBotConfig>>() {
+                Map<String, QQBotConfig> parsedMap = (Map)JSON.parseObject(jsonStr, new TypeReference<ConcurrentHashMap<String, QQBotConfig>>() {
                 }, new JSONReader.Feature[0]);
+                return parsedMap != null ? parsedMap : new ConcurrentHashMap();
             }
         } catch (Exception var3) {
             var3.printStackTrace();
@@ -325,6 +371,9 @@ public class XiaoBeiService {
                 sb.append("启用/关闭小北自动秘境\n");
                 sb.append("开始自动挑战无尽X\n");
                 sb.append("小北回血丹设置[1/2]  // 1=道源丹, 2=天命血凝丹\n");
+                sb.append("设置小北悬赏优先物品（多行消息，每行一个物品，覆盖当前设置）\n");
+                sb.append("查看小北悬赏优先物品\n");
+                sb.append("重置小北悬赏优先物品（清空自定义设置，使用默认优先级）\n");
                 return sb.toString();
             } else {
                 if (message.equals("小北当前设置")) {
@@ -334,6 +383,12 @@ public class XiaoBeiService {
                     sb.append(Constant.padRight("小北自动宗门悬赏", 11) + ": " + (botConfig.isEnableXsl() ? "启用" : "关闭") + "\n");
                     sb.append(Constant.padRight("小北自动宗门秘境", 11) + ": " + (botConfig.isEnableMj() ? "启用" : "关闭") + "\n");
                     sb.append(Constant.padRight("回血丹类型", 11) + ": " + (botConfig.getRecoveryPillType() == 1 ? "道源丹" : "天命血凝丹") + "\n");
+                    List<String> items = botConfig.getXslRewardPriorityItems();
+                    if (items != null && !items.isEmpty()) {
+                        sb.append(Constant.padRight("悬赏优先物品", 11) + ": 自定义(" + items.size() + "个)\n");
+                    } else {
+                        sb.append(Constant.padRight("悬赏优先物品", 11) + ": 默认\n");
+                    }
                 }
 
                 return sb.toString();
@@ -472,15 +527,19 @@ public class XiaoBeiService {
             cron = "*/5 * * * * *"
     )
     public void 宗门任务接取刷新() throws InterruptedException {
-        if (this.xbGroupId > 0L) {
+        if (this.xbGroupId > 0L && this.botConfigMap != null) {
             BotFactory.getBots().values().forEach((bot) -> {
-                if (bot.getBotConfig() != null && bot.getBotConfig().isEnableXiaoBei()) {
-                    if (this.botConfigMap.get(bot.getBotId() + "") == null) {
-                        this.botConfigMap.put(bot.getBotId() + "", new QQBotConfig());
+                try {
+                    if (bot == null) {
+                        return;
                     }
+                    if (bot.getBotConfig() != null && bot.getBotConfig().isEnableXiaoBei()) {
+                        if (this.botConfigMap.get(bot.getBotId() + "") == null) {
+                            this.botConfigMap.put(bot.getBotId() + "", new QQBotConfig());
+                        }
 
-                    QQBotConfig botConfig = (QQBotConfig)this.botConfigMap.get(bot.getBotId() + "");
-                    bot.getGroup(this.xbGroupId);
+                        QQBotConfig botConfig = (QQBotConfig)this.botConfigMap.get(bot.getBotId() + "");
+                        bot.getGroup(this.xbGroupId);
                     switch (botConfig.getFamilyTaskStatus()) {
                         case 0:
                             return;
@@ -498,8 +557,10 @@ public class XiaoBeiService {
 
                             return;
                     }
+                    }
+                } catch (Exception e) {
+                    log.error("宗门任务接取刷新出错: {}", e.getMessage(), e);
                 }
-
             });
         }
 
@@ -660,7 +721,7 @@ public class XiaoBeiService {
             } else if (message.contains("接取任务") && message.contains("成功")) {
                 this.sendBotMessage(bot, "悬赏令结算", true);
             } else if (message.contains("发布悬赏令如下")) {
-                this.sendBotMessage(bot, "悬赏令接取" + selectBestTask(message), true);
+                this.sendBotMessage(bot, "悬赏令接取" + selectBestTask(message, botConfig), true);
             } else if (message.contains("悬赏令结算") && message.contains("增加修为")) {
                 botConfig.setXslTime(-1L);
                 this.sendBotMessage(bot, "悬赏令刷新", true);
@@ -673,14 +734,35 @@ public class XiaoBeiService {
 
     }
 
-    public static int selectBestTask(String rewardText) {
+    public static int selectBestTask(String rewardText, QQBotConfig botConfig) {
         List<Task> tasks = parseTasks(rewardText);
         if (tasks.isEmpty()) {
             return -1;
         } else {
-            String[] priorityItems = new String[]{"宿命通", "灭剑血胧", "天剑破虚", "仙火焚天", "千慄鬼噬", "封神剑", "明心问道果", "离火梧桐芝", "剑魄竹笋", "尘磊岩麟果", "木灵三针花", "鎏鑫天晶草", "檀芒九叶花", "坎水玄冰果", "大荒星陨指", "八角玄冰草", "地心淬灵乳", "天麻翡石精", "奇茸通天菊", "风神诀", "合欢魔功"};
+            // 从配置中获取优先物品列表，如果为空则使用默认列表
+            List<String> priorityItemsList = botConfig.getXslRewardPriorityItems();
+            if (priorityItemsList == null) {
+                priorityItemsList = new java.util.ArrayList<>(java.util.Arrays.asList(
+                        "宿命通", "灭剑血胧", "天剑破虚", "仙火焚天", "千慄鬼噬", "封神剑", "明心问道果",
+                        "离火梧桐芝", "剑魄竹笋", "尘磊岩麟果", "木灵三针花", "鎏鑫天晶草", "檀芒九叶花",
+                        "坎水玄冰果", "大荒星陨指", "八角玄冰草", "地心淬灵乳", "天麻翡石精", "奇茸通天菊",
+                        "风神诀", "合欢魔功"
+                ));
+            }
+            // 如果列表为空，直接跳到修为优先逻辑
+            if (priorityItemsList.isEmpty()) {
+                long maxExp = -1L;
+                int var101 = -1;
+                for(Task task : tasks) {
+                    if (task.getExp() > maxExp) {
+                        maxExp = task.getExp();
+                        var101 = task.getNumber();
+                    }
+                }
+                return var101;
+            }
 
-            for(String item : priorityItems) {
+            for(String item : priorityItemsList) {
                 for(Task task : tasks) {
                     if (task.getRewardItem() != null && task.getRewardItem().contains(item)) {
                         return task.getNumber();
