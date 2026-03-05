@@ -79,7 +79,7 @@ public class GroupManager {
 //    @Value("${botId}")
 //    private Long botId;
 
-    public static List<Long> remindGroupIdList = Arrays.asList(1023764416L, 971327442L, 679831529L, 824484501L, 690933736L, 978207420L);
+    
     //    @Autowired
 //    public DanCalculator danCalculator;
     private Map<String, Map<String, PendingLingTianRecord>> pendingLingTianRecords = new ConcurrentHashMap();
@@ -1079,7 +1079,7 @@ public class GroupManager {
     )
     public void 悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         message = processReplyMessage(messageChain);
-        if (bot.getBotConfig().isEnableAutomaticReply() && !remindGroupIdList.contains(group.getGroupId())
+        if (bot.getBotConfig().isEnableAutomaticReply()
                 && message.contains("进行中的悬赏令") && message.contains("可结束")) {
 
             if (isRemindGroup(bot, group)) {

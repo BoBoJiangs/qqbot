@@ -134,7 +134,7 @@ public class AutoAlchemyTask {
             customPool.submit(() -> {
                 try {
                     clearFile(botId + "/背包药材.txt", botId);
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+                    bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
                 } catch (Exception e) {
                     log.error("开始自动炼丹任务提交失败, botId=" + botId, e);
                 }
