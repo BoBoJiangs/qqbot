@@ -209,7 +209,7 @@ public class AutoAlchemyTask {
         }
 
         if (message.startsWith("更新炼丹配置")) {
-            Pattern pattern = Pattern.compile("是否是炼金丹药：(是|否).*?炼金丹期望收益：(-?\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?开启全自动炼丹：(是|否).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(\\d+)", Pattern.DOTALL);
+            Pattern pattern = Pattern.compile("是否是炼金丹药：(是|否).*?炼金丹期望收益：(-?\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?开启全自动炼丹：(是|否).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(-?\\d+)(?:.*?坊市刷新频率：(\\d+))?", Pattern.DOTALL);
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) {
                 if ((config.isAlchemy() != "是".equals(matcher.group(1))) ||
@@ -247,7 +247,7 @@ public class AutoAlchemyTask {
                     group.sendMessage((new MessageChain()).text("配置已更新！"));
                 }
             } else {
-                String alchemyConfig = "\n更新炼丹配置\n是否是炼金丹药：" + (config.isAlchemy() ? "是" : "否") + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + (config.isFinishAutoBuyHerb() ? "是" : "否") + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice();
+                String alchemyConfig = "\n更新炼丹配置\n是否是炼金丹药：" + (config.isAlchemy() ? "是" : "否") + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + (config.isFinishAutoBuyHerb() ? "是" : "否") + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice() + "\n坊市刷新频率：" + config.getIntervalTime();
                 group.sendMessage((new MessageChain()).reply(messageId).text("输入格式不正确！示例：" + alchemyConfig));
             }
         }
@@ -276,6 +276,13 @@ public class AutoAlchemyTask {
         config.setFinishAutoBuyHerb("是".equals(matcher.group(7)));
         config.setLimitHerbsCount(Integer.parseInt(matcher.group(8)));
         config.setAddPrice(Integer.parseInt(matcher.group(9)));
+
+        // 坊市刷新频率仅用于控制查看坊市药材的节奏，不参与丹方重新匹配判断
+        String intervalTimeStr = matcher.group(10);
+        if (intervalTimeStr != null && !intervalTimeStr.trim().isEmpty()) {
+            int intervalTime = Integer.parseInt(intervalTimeStr.trim());
+            config.setIntervalTime(Math.max(intervalTime, 0));
+        }
     }
 
     @GroupMessageHandler(
@@ -318,7 +325,7 @@ public class AutoAlchemyTask {
             return sb.toString();
         } else {
             if (message.equals("炼丹设置")) {
-                String alchemyConfig = "是否是炼金丹药：" + (config.isAlchemy() ? "是" : "否") + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + (config.isFinishAutoBuyHerb() ? "是" : "否") + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice();
+                String alchemyConfig = "是否是炼金丹药：" + (config.isAlchemy() ? "是" : "否") + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + (config.isFinishAutoBuyHerb() ? "是" : "否") + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice() + "\n坊市刷新频率：" + config.getIntervalTime();
                 sb.append("－－－－－当前设置－－－－－\n");
                 sb.append(alchemyConfig);
             }

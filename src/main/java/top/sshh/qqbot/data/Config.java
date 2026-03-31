@@ -20,6 +20,8 @@ public class Config implements Serializable {
     private boolean finishAutoBuyHerb;
     private int limitHerbsCount = 3;
     private int addPrice = -20;
+    //坊市刷新间隔时间，单位：秒
+    private int intervalTime = 0;
 
     public Config() {
     }
@@ -102,5 +104,13 @@ public class Config implements Serializable {
 
     public void setAlchemy(boolean alchemy) {
         this.isAlchemy = alchemy;
+    }
+
+    public int getIntervalTime() {
+        return this.intervalTime;
+    }
+
+    public void setIntervalTime(int intervalTime) {
+        this.intervalTime = intervalTime;
     }
 }

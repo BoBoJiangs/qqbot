@@ -34,6 +34,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
 import static top.sshh.qqbot.constant.Constant.targetDir;
@@ -65,6 +66,10 @@ public class AutoBuyHerbs {
     
     // 按 botId 隔离：智能调整药材价格模式
     private final Map<Long, Boolean> smartAdjustModeMap = new ConcurrentHashMap<>();
+
+    // 按 botId 隔离：坊市刷新节流（单位：毫秒）
+    private final Map<Long, Long> nextMarketRefreshAtMsMap = new ConcurrentHashMap<>();
+    private final Map<Long, AtomicBoolean> marketRefreshScheduledFlagMap = new ConcurrentHashMap<>();
 
     @Autowired
     public DanCalculator danCalculator;
@@ -503,7 +508,9 @@ public class AutoBuyHerbs {
                 autoBuyList.remove(0);
             }
             if(autoBuyList.isEmpty()){
-                refreshHerbsIndex(bot);
+                Config config = danCalculator.getConfig(bot.getBotId());
+                 this.refreshHerbsIndexByInterval(bot, config);
+                // refreshHerbsIndex(bot);
             }else{
                 this.buyHerbs(group, bot);
             }
@@ -588,9 +595,50 @@ public class AutoBuyHerbs {
         if(!autoBuyList.isEmpty()){
             this.buyHerbs(group, bot);
         }else{
-            this.refreshHerbsIndex(bot);
+            this.refreshHerbsIndexByInterval(bot, config);
         }
 
+    }
+
+    private void refreshHerbsIndexByInterval(Bot bot, Config config) {
+        long botId = bot.getBotId();
+        int intervalSeconds = config == null ? 0 : Math.max(config.getIntervalTime(), 0);
+        if (intervalSeconds <= 0) {
+            refreshHerbsIndex(bot);
+            return;
+        }
+
+        long intervalMs = intervalSeconds * 1000L;
+        long now = System.currentTimeMillis();
+        Long nextAllowedAt = nextMarketRefreshAtMsMap.get(botId);
+
+        if (nextAllowedAt == null || now >= nextAllowedAt) {
+            nextMarketRefreshAtMsMap.put(botId, now + intervalMs);
+            refreshHerbsIndex(bot);
+            return;
+        }
+
+        AtomicBoolean scheduledFlag = marketRefreshScheduledFlagMap.computeIfAbsent(botId, k -> new AtomicBoolean(false));
+        if (!scheduledFlag.compareAndSet(false, true)) {
+            return;
+        }
+
+        long delayMs = nextAllowedAt - now;
+        customPool.submit(() -> {
+            try {
+                if (delayMs > 0) {
+                    Thread.sleep(delayMs);
+                }
+                refreshHerbsIndex(bot);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                scheduledFlag.set(false);
+                Config latestConfig = danCalculator.getConfig(botId);
+                int latestIntervalSeconds = latestConfig == null ? intervalSeconds : Math.max(latestConfig.getIntervalTime(), 0);
+                nextMarketRefreshAtMsMap.put(botId, System.currentTimeMillis() + latestIntervalSeconds * 1000L);
+            }
+        });
     }
 
     private double extractPrice(String message) {
@@ -645,11 +693,17 @@ public class AutoBuyHerbs {
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             long botId = bot.getBotId();
-            if(botConfig.getAutoBuyHerbsMode() != 0 && !botConfig.isStop() &&
-                    System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > 10000L){
-                autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
-                botConfig.setStop(false);
-                this.refreshHerbsIndex(bot);
+            if (botConfig.getAutoBuyHerbsMode() != 0 && !botConfig.isStop()) {
+                Config config = danCalculator.getConfig(botId);
+                int intervalSeconds = config == null ? 0 : Math.max(config.getIntervalTime(), 0);
+                long thresholdMs = Math.max(10000L, intervalSeconds * 1000L + 2000L);
+
+                if (System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > thresholdMs) {
+                    autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
+                    botConfig.setStop(false);
+                    botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
+                    this.refreshHerbsIndexByInterval(bot, config);
+                }
             }
 
 
