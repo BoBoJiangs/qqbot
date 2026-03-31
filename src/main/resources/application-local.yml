@@ -66,15 +66,14 @@ bot:
 #    enableAlchemy: true
 #
   - type: ws
-    url: ws://115.120.199.227:8081
+    url: ws://127.0.0.1:8083
+    #修炼+任务群
+    groupId: 1051327161
     accessToken: 1024*1024*1024
-    #    修炼群号
-    groupId: 1055328182
-    # 控制小号的QQ
-    controlQQ: 1018454301
-    masterQQ: 1018454301
-    enableAlchemy: false
-    challengeMode: 2
+    #    大号qq
+    controlQQ: 819463350&1018454301
+    #    大号qq
+    masterQQ: 819463350
 
 
 

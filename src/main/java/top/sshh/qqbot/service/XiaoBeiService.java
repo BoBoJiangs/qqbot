@@ -371,9 +371,9 @@ public class XiaoBeiService {
                 sb.append("启用/关闭小北自动秘境\n");
                 sb.append("开始自动挑战无尽X\n");
                 sb.append("小北回血丹设置[1/2]  // 1=道源丹, 2=天命血凝丹\n");
-                sb.append("设置小北悬赏优先物品（多行消息，每行一个物品，覆盖当前设置）\n");
+                sb.append("设置小北悬赏优先物品（多行消息，每行一个物品）\n");
                 sb.append("查看小北悬赏优先物品\n");
-                sb.append("重置小北悬赏优先物品（清空自定义设置，使用默认优先级）\n");
+                sb.append("重置小北悬赏优先物品\n");
                 return sb.toString();
             } else {
                 if (message.equals("小北当前设置")) {

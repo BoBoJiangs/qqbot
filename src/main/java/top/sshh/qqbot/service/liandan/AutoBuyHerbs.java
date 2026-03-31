@@ -68,7 +68,7 @@ public class AutoBuyHerbs {
     private final Map<Long, Boolean> smartAdjustModeMap = new ConcurrentHashMap<>();
 
     // 按 botId 隔离：坊市刷新节流（单位：毫秒）
-    private final Map<Long, Long> nextMarketRefreshAtMsMap = new ConcurrentHashMap<>();
+//    private final Map<Long, Long> nextMarketRefreshAtMsMap = new ConcurrentHashMap<>();
     private final Map<Long, AtomicBoolean> marketRefreshScheduledFlagMap = new ConcurrentHashMap<>();
 
     @Autowired
@@ -609,26 +609,15 @@ public class AutoBuyHerbs {
         }
 
         long intervalMs = intervalSeconds * 1000L;
-        long now = System.currentTimeMillis();
-        Long nextAllowedAt = nextMarketRefreshAtMsMap.get(botId);
-
-        if (nextAllowedAt == null || now >= nextAllowedAt) {
-            nextMarketRefreshAtMsMap.put(botId, now + intervalMs);
-            refreshHerbsIndex(bot);
-            return;
-        }
 
         AtomicBoolean scheduledFlag = marketRefreshScheduledFlagMap.computeIfAbsent(botId, k -> new AtomicBoolean(false));
         if (!scheduledFlag.compareAndSet(false, true)) {
             return;
         }
 
-        long delayMs = nextAllowedAt - now;
         customPool.submit(() -> {
             try {
-                if (delayMs > 0) {
-                    Thread.sleep(delayMs);
-                }
+                Thread.sleep(intervalMs);
                 refreshHerbsIndex(bot);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -636,7 +625,6 @@ public class AutoBuyHerbs {
                 scheduledFlag.set(false);
                 Config latestConfig = danCalculator.getConfig(botId);
                 int latestIntervalSeconds = latestConfig == null ? intervalSeconds : Math.max(latestConfig.getIntervalTime(), 0);
-                nextMarketRefreshAtMsMap.put(botId, System.currentTimeMillis() + latestIntervalSeconds * 1000L);
             }
         });
     }
