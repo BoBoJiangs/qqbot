@@ -23,6 +23,7 @@ public class XiaoYueItemClass {
 
     private static final Map<String, String> ITEM_GRADE_MAP = new HashMap<>();
     private static final Set<String> SPECIAL_ITEMS = new HashSet<>();
+    private static final String botQQ = "3889282919";
 
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
@@ -42,6 +43,14 @@ public class XiaoYueItemClass {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+        if ("磕".equals(message)
+                && group.getGroupId() == 1035502969L
+                && member.getUserId() != bot.getBotId()
+                && member.getUserId() != Long.parseLong(botQQ)
+                && messageChain.size() == 1) {
+
+            group.sendMessage((new MessageChain()).at(botQQ).text("磕"));
         }
     }
 
