@@ -116,7 +116,7 @@ napcat:
 
 update:
   enabled: true
-  baseUrl: http://113.44.42.139:7000/
+  baseUrl: http://81.71.4.234:7000/
   autoApply: true
   autoRestart: true
   checkIntervalMs: 3600000

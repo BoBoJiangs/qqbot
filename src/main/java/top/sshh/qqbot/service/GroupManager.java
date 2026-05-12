@@ -746,7 +746,7 @@ public class GroupManager {
     )
     public void 秘境挑战结果处理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (this.isGroupSettlementReminderEnabled(group.getGroupId()) && bot.getBotConfig().isEnableAutomaticReply()) {
-            if (message.contains("的回合") && message.contains("道友大战一番") && message.contains("成功战胜") && !message.contains("修仙令牌额外奖励")) {
+            if (message.contains("道友大战一番") && message.contains("成功战胜") && (!message.contains("修仙令牌额外奖励")||!message.contains("宗门"))) {
                     extractAndFormatResult(bot,message,group,messageId,member.getUserId());
                 }
         }

@@ -335,11 +335,8 @@ public class RemoteVerifyCode {
         String resultText = "";
         RecognitionResult recognitionResult = new RecognitionResult();
         try {
-            if (shituApiUrl.contains("113.44.42.139")) {
-                recognitionResult = callShituAPI(shituApiUrl, imageUrl,bot.getBotId());
-            } else {
-                recognitionResult = callShituAPI(shituApiUrl, imageUrl, title, "", "1");
-            }
+            
+            recognitionResult = callShituAPI(shituApiUrl, imageUrl,bot.getBotId());
             recognitionResult.url = imageUrl;
             recognitionResult.title = title;
             if (recognitionResult.emojiList == null) {
@@ -758,109 +755,7 @@ public class RemoteVerifyCode {
     }
 
 
-    public RecognitionResult callShituAPI(String shituApiUrl, String imageUrl, String titleText, String annu, String mode) {
-        HttpURLConnection conn = null;
-        annu = GuessIdiom.replaceEmojis(annu);
-        try {
-            String params = "URL=" + URLEncoder.encode(imageUrl, "UTF-8") + "&TEXT=" + URLEncoder.encode(titleText, "UTF-8") + "&Button=" + URLEncoder.encode(annu, "UTF-8") + "&Mode=" + URLEncoder.encode(mode, "UTF-8");
-            URL url = new URL(shituApiUrl + "shitu");
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("POST");
-            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-            conn.setRequestProperty("User-Agent", "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2661.87 Safari/537.36");
-            conn.setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8");
-            conn.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3");
-            conn.setRequestProperty("Connection", "keep-alive");
-            conn.setDoOutput(true);
-            conn.setConnectTimeout(10000);
-            conn.setReadTimeout(30000);
-            OutputStream os = conn.getOutputStream();
-
-            try {
-                os.write(params.getBytes(StandardCharsets.UTF_8));
-            } catch (Throwable var24) {
-                if (os != null) {
-                    try {
-                        os.close();
-                    } catch (Throwable var23) {
-                        var24.addSuppressed(var23);
-                    }
-                }
-
-                throw var24;
-            }
-
-            if (os != null) {
-                os.close();
-            }
-
-            int status = conn.getResponseCode();
-            if (status != 200) {
-                logger.warn("API返回非200状态: {}", status);
-                String[] var32 = new String[]{"服务错误", String.valueOf(status)};
-                return new RecognitionResult(new ArrayList<>(), "服务错误");
-            }
-
-            StringBuilder responseBuilder = new StringBuilder();
-            BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8));
-
-            String line;
-            try {
-                while ((line = br.readLine()) != null) {
-                    responseBuilder.append(line);
-                }
-            } catch (Throwable var25) {
-                try {
-                    br.close();
-                } catch (Throwable var22) {
-                    var25.addSuppressed(var22);
-                }
-
-                throw var25;
-            }
-
-            br.close();
-            String var33 = responseBuilder.toString();
-            logger.info("API响应: {}", var33);
-            JSONObject jsonResponse = JSONObject.parseObject(var33);
-            String message = jsonResponse.getString("message");
-            String data = jsonResponse.getString("data");
-//            return new String[] { message, data };
-            List<String> emojiList = new ArrayList();
-            if (data != null && !data.equals("空")) {
-                int length = data.length();
-                for (int i = 0; i < length; i += 2) {
-                    int end = Math.min(i + 2, length);
-                    emojiList.add(data.substring(i, end));
-                }
-            }
-//            if (data != null && !data.equals("空")) {
-//                if (data.length() >= 6) {
-//                    String segment1 = data.substring(0, 2);
-//                    String segment2 = data.substring(2, 4);
-//                    String segment3 = data.substring(4, 6);
-//                    emojiList.add(segment1);
-//                    emojiList.add(segment2);
-//                    emojiList.add(segment3);
-//                }
-//            }
-            return new RecognitionResult(emojiList, message);
-        } catch (SocketTimeoutException ste) {
-            logger.warn("API读取超时: {}", ste.getMessage());
-            String[] var29 = new String[]{"请求超时", "0"};
-            return new RecognitionResult(new ArrayList<>(), "请求超时");
-        } catch (Exception e) {
-            logger.error("API调用异常: {}", e.getMessage());
-            String[] url = new String[]{"请求异常", "0"};
-            return new RecognitionResult(new ArrayList<>(), "请求异常");
-        } finally {
-            if (conn != null) {
-                conn.disconnect();
-            }
-
-        }
-
-    }
+    
 
     public RecognitionResult callShituAPI(String shituApiUrl, String imageUrl, Long qqNumber) {
         HttpURLConnection conn = null;
