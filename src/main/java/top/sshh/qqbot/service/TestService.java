@@ -271,6 +271,7 @@ public class TestService {
                 this.groupManager.setGroupSettlementReminderEnabled(group.getGroupId(), true);
                 botConfig.setEnableAutomaticReply(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("已启用本群查询功能"));
+                saveBotConfig(bot);
             }
             if ("一键关闭本群查询功能".equals(message)) {
                 this.groupManager.setGroupXslPriceQueryEnabled(group.getGroupId(), false);
@@ -278,6 +279,7 @@ public class TestService {
                 this.groupManager.setGroupSettlementReminderEnabled(group.getGroupId(), false);
                 botConfig.setEnableAutomaticReply(false);
                 group.sendMessage((new MessageChain()).reply(messageId).text("已关闭本群查询功能"));
+                saveBotConfig(bot);
             }
 
             if ("启用本群悬赏令价格查询".equals(message)) {

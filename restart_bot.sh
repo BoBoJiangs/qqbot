@@ -38,7 +38,7 @@ if [ -n "$OLD_PID" ]; then
 fi
 
 log "清理文件锁..."
-(command -v lsof >/dev/null 2>&1 && lsof -t "$SCRIPT_DIR/bot.jar" > /tmp/bot.lock.pids 2>/dev/null) || : > /tmp/bot.lock.pids
+(command -v lsof >/dev/null 2>&1 && (command -v lsof >/dev/null 2>&1 && lsof -t "$SCRIPT_DIR/bot.jar" > /tmp/bot.lock.pids 2>/dev/null) || : > /tmp/bot.lock.pids) || : > /tmp/bot.lock.pids
 if [ -s /tmp/bot.lock.pids ]; then
   log "发现锁定进程: $(tr '\n' ' ' < /tmp/bot.lock.pids)"
   while read -r pid; do
