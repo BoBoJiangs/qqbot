@@ -722,6 +722,8 @@ public class GroupManager {
                 mode = "悬赏";
             } else if (msg.contains("探索秘境")) {
                 mode = "秘境";
+            } else if (msg.contains("秘境结算") || msg.contains("结算秘境")) {
+                mode = "秘境结算";
             } else if (msg.contains("使用次元之钥")) {
                 mode = "次元秘境";
             } else if(msg.contains("灵田收取") || msg.contains("灵田结算")) {
@@ -747,7 +749,8 @@ public class GroupManager {
     public void 秘境挑战结果处理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (this.isGroupSettlementReminderEnabled(group.getGroupId()) && bot.getBotConfig().isEnableAutomaticReply()) {
             if (message.contains("道友大战一番") && message.contains("成功战胜") && (!message.contains("修仙令牌额外奖励")||!message.contains("宗门"))) {
-                    extractAndFormatResult(bot,message,group,messageId,member.getUserId());
+                    Long triggerUserId = resolveRecentTaskUserId(group, "秘境结算", member.getUserId());
+                    extractAndFormatResult(bot,message,group,messageId,triggerUserId);
                 }
         }
     }
@@ -759,20 +762,13 @@ public class GroupManager {
     public void 令牌奖励时间处理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (this.isGroupSettlementReminderEnabled(group.getGroupId()) && bot.getBotConfig().isEnableAutomaticReply()) {
             if (message.contains("修仙令牌额外奖励") && message.contains("道友大战一番") && message.contains("成功战胜")) {
-                // 提取QQ号
-                Pattern qqPattern = Pattern.compile("@(\\d{5,12})\\s");
-                Matcher qqMatcher = qqPattern.matcher(message);
-                if (qqMatcher.find()) {
-                    try {
-                        Long qq = Long.parseLong(qqMatcher.group(1));
-                        // 保存令牌奖励时间（只保留最近一次）
-                        tokenRewardTimeMap.put(qq.toString(), System.currentTimeMillis());
-                        saveTasksToFile();
-                        logger.info("记录令牌奖励时间：QQ={}, 时间={}", qq, sdf.format(new Date()));
-                    } catch (NumberFormatException e) {
-                        logger.warn("提取QQ号失败", e);
-                        bot.sendPrivateMessage(bot.getBotId(), new MessageChain().text("提取QQ号失败"+message));
-                    }
+                Long triggerUserId = resolveRecentTaskUserId(group, "秘境结算", member.getUserId());
+                if (triggerUserId != null && triggerUserId != 3889001741L) {
+                    tokenRewardTimeMap.put(triggerUserId.toString(), System.currentTimeMillis());
+                    saveTasksToFile();
+                    logger.info("记录令牌奖励时间：QQ={}, 时间={}", triggerUserId, sdf.format(new Date()));
+                } else {
+                    logger.warn("未找到秘境结算对应触发QQ，group={}, sender={}, message={}", group.getGroupId(), member.getUserId(), message);
                 }
             }
         }
@@ -799,12 +795,14 @@ public class GroupManager {
             monsterName = monsterMatcher.group(1);
         }
         
-        // 提取修为数值
-        Pattern cultivationPattern = Pattern.compile("修为：([0-9]+)点");
+        boolean isTokenRewardMessage = battleLog.contains("修仙令牌额外奖励");
+
+        // 兼容普通结算“修为：123点”和令牌奖励“获得了修为：123”两种格式
+        Pattern cultivationPattern = Pattern.compile("(?:修为：([0-9]+)点|获得了?修为：([0-9]+))");
         Matcher cultivationMatcher = cultivationPattern.matcher(battleLog);
         String cultivationStr = "";
         if (cultivationMatcher.find()) {
-            cultivationStr = cultivationMatcher.group(1);
+            cultivationStr = StringUtils.defaultIfBlank(cultivationMatcher.group(1), cultivationMatcher.group(2));
         }
         
         // 提取灵石数值
@@ -855,18 +853,45 @@ public class GroupManager {
         // 构建结果字符串
         StringBuilder result = new StringBuilder();
         result.append("恭喜道友斩杀").append(monsterName)
-              .append("，获得修为：").append(formattedCultivation)
-              .append("，灵石：").append(formattedSpiritStones)
-              .append("\n").append("@我+查询历史打怪记录，可查询打怪记录");
+              .append("，获得修为：").append(formattedCultivation);
+        if (!isTokenRewardMessage && StringUtils.isNotBlank(formattedSpiritStones)) {
+            result.append("，灵石：").append(formattedSpiritStones);
+        }
+        result.append("\n").append("@我+查询历史打怪记录，可查询打怪记录");
         group.sendMessage(new MessageChain().reply(messageId).text(result.toString()));
 
+        Long targetUserId = extractedQQ != null ? extractedQQ : userId;
+
         // 保存打怪记录
-        if(extractedQQ != null){
-            saveMonsterKillingRecord(extractedQQ, monsterName, formattedCultivation, battleLog);
+        if(targetUserId != null && targetUserId != 3889001741L){
+            saveMonsterKillingRecord(targetUserId, monsterName, formattedCultivation, battleLog);
         }else{
             bot.sendPrivateMessage(bot.getBotId(), new MessageChain().text("没有指定目标QQ号"+battleLog));
         }
         
+    }
+
+    private Long resolveRecentTaskUserId(Group group, String mode, Long fallbackUserId) {
+        if (group == null || StringUtils.isBlank(mode)) {
+            return fallbackUserId;
+        }
+
+        String taskKey = group.getGroupId() + "_" + mode;
+        Map<String, Long> record = this.taskRecords.get(taskKey);
+        if (record != null) {
+            long recordTime = record.getOrDefault("timestamp", 0L);
+            if (System.currentTimeMillis() - recordTime < 120000L) {
+                Long userId = record.get("userId");
+                if (userId != null) {
+                    logger.info("使用最近任务触发记录：group={}, mode={}, userId={}", group.getGroupId(), mode, userId);
+                    return userId;
+                }
+            } else {
+                this.taskRecords.remove(taskKey);
+            }
+        }
+
+        return fallbackUserId;
     }
 
     private void saveMonsterKillingRecord(Long userId, String monsterName, String cultivation, String battleLog) {
