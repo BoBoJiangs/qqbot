@@ -62,10 +62,14 @@ import top.sshh.qqbot.service.utils.Utils;
 @Component
 public class TestService {
     private static final Logger log = LoggerFactory.getLogger(TestService.class);
+    private static final List<String> DEFAULT_XSL_PRIORITY_ITEMS = Collections.unmodifiableList(Arrays.asList(
+            "五指拳心剑", "真龙九变", "坐忘论"
+    ));
     @Autowired
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
     public Map<Long, Buttons> botButtonMap = new ConcurrentHashMap();
+    private final Map<Long, List<String>> xslPriorityItemsMap = new ConcurrentHashMap();
     private boolean isStartAutoTalent = false;
     @Autowired
     private GroupManager groupManager;
@@ -552,6 +556,25 @@ public class TestService {
                     }
                     saveBotConfig(bot);
                 }
+            } else if ("查看悬赏优先物品".equals(message)) {
+                List<String> priorityItems = getXslPriorityItems(bot);
+                group.sendMessage((new MessageChain()).reply(messageId)
+                        .text("当前悬赏优先物品：\n" + String.join("\n", priorityItems) + "\n共 " + priorityItems.size() + " 个"));
+            } else if ("重置悬赏优先物品".equals(message)) {
+                setXslPriorityItems(bot.getBotId(), DEFAULT_XSL_PRIORITY_ITEMS);
+                saveBotConfig(bot);
+                group.sendMessage((new MessageChain()).reply(messageId).text("已重置悬赏优先物品为默认列表"));
+            } else if (message.startsWith("设置悬赏优先物品")) {
+                List<String> newItems = parsePriorityItems(message, "设置悬赏优先物品");
+                if (newItems.isEmpty()) {
+                    group.sendMessage((new MessageChain()).reply(messageId)
+                            .text("请输入要设置的悬赏优先物品，示例：\n设置悬赏优先物品\n五指拳心剑\n真龙九变\n坐忘论"));
+                } else {
+                    setXslPriorityItems(bot.getBotId(), newItems);
+                    saveBotConfig(bot);
+                    group.sendMessage((new MessageChain()).reply(messageId)
+                            .text("已设置 " + getXslPriorityItems(bot).size() + " 个悬赏优先物品"));
+                }
             } else if (message.startsWith("验证模式")) {
                 String typeString = message.substring(message.indexOf("验证模式") + 4).trim();
                 if (StringUtils.isNotBlank(typeString)) {
@@ -791,6 +814,7 @@ public class TestService {
             persist.setCultivationMode(botConfig.getCultivationMode());
             persist.setSectMode(botConfig.getSectMode());
             persist.setXslPriceLimit(botConfig.getXslPriceLimit());
+            persist.setXslPriorityItems(getXslPriorityItems(bot));
             persist.setLingShiQQ(botConfig.getLingShiQQ());
             persist.setLingShiTotal(botConfig.getLingShiTotal());
             persist.setEnableAlchemy(botConfig.isEnableAlchemy());
@@ -835,6 +859,7 @@ public class TestService {
             botConfig.setCultivationMode(persist.getCultivationMode());
             botConfig.setSectMode(persist.getSectMode());
             botConfig.setXslPriceLimit(persist.getXslPriceLimit());
+            setXslPriorityItems(bot.getBotId(), persist.getXslPriorityItems());
             botConfig.setLingShiQQ(persist.getLingShiQQ());
             botConfig.setLingShiTotal(persist.getLingShiTotal());
             botConfig.setLingShiNum(persist.getLingShiNum());
@@ -1133,6 +1158,9 @@ public class TestService {
             sb.append("检测版本更新\n");
             sb.append("版本更新日志\n");
             sb.append("立即更新\n");
+            sb.append("查看悬赏优先物品\n");
+            sb.append("重置悬赏优先物品\n");
+            sb.append("设置悬赏优先物品\n");
             sb.append("设置主号 QQ号&QQ号\n");
             return sb.toString();
         } else {
@@ -1180,6 +1208,7 @@ public class TestService {
                 sb.append(Constant.padRight("宗门模式", 11) + ": " + (botConfig.getSectMode() == 1 ? "邪修查抄" : "所有") + "\n");
                 sb.append(Constant.padRight("悬赏价格", 11) + ": " + (botConfig.isEnableXslPriceQuery() ? "启用" : "关闭")
                         + "\n");
+                sb.append(Constant.padRight("悬赏优先", 11) + ": " + String.join("、", getXslPriorityItems(bot)) + "\n");
                 sb.append(Constant.padRight("成语查询", 11) + ": " + (botConfig.isEnableGuessTheIdiom() ? "启用" : "关闭")
                         + "\n");
                 sb.append(Constant.padRight("验证模式", 11) + ": " +
@@ -2562,7 +2591,7 @@ public class TestService {
         boolean isAtSelf = Utils.isAtSelf(bot, group, message, xxGroupId);
         if ((botConfig.getRewardMode() == 3 || botConfig.getRewardMode() == 4 || botConfig.getRewardMode() == 5)
                 && isAtSelf && (message.contains("道友的个人悬赏令") || message.contains("天机悬赏令"))) {
-            List<String> prioritySkills = Arrays.asList("坐忘论", "五指拳心剑", "袖里乾坤", "真龙九变", "无暇七绝剑", "灭剑血胧", "万剑归宗");
+            List<String> prioritySkills = getXslPriorityItems(bot);
             Set<String> specialSkills = new HashSet(prioritySkills);
             boolean isSpecialSkill = false;
             int highestPriorityIndex = -1;
@@ -2672,6 +2701,60 @@ public class TestService {
         }
 
         return rewards;
+    }
+
+    private List<String> getXslPriorityItems(Bot bot) {
+        return new ArrayList<>(normalizePriorityItems(this.xslPriorityItemsMap.get(bot.getBotId())));
+    }
+
+    private void setXslPriorityItems(long botId, List<String> items) {
+        this.xslPriorityItemsMap.put(botId, new ArrayList<>(normalizePriorityItems(items)));
+    }
+
+    private List<String> normalizePriorityItems(List<String> items) {
+        LinkedHashSet<String> normalized = new LinkedHashSet();
+        if (items != null) {
+            for (String item : items) {
+                if (StringUtils.isNotBlank(item)) {
+                    normalized.add(item.trim());
+                }
+            }
+        }
+
+        if (normalized.isEmpty()) {
+            normalized.addAll(DEFAULT_XSL_PRIORITY_ITEMS);
+        }
+
+        return new ArrayList<>(normalized);
+    }
+
+    private List<String> parsePriorityItems(String message, String commandPrefix) {
+        List<String> items = new ArrayList();
+        String[] lines = StringUtils.defaultString(message).split("\\r?\\n");
+        if (lines.length > 0) {
+            String firstLine = lines[0].trim();
+            if (firstLine.startsWith(commandPrefix)) {
+                this.addPriorityItems(items, firstLine.substring(commandPrefix.length()));
+            }
+        }
+
+        for (int i = 1; i < lines.length; ++i) {
+            this.addPriorityItems(items, lines[i]);
+        }
+
+        return items;
+    }
+
+    private void addPriorityItems(List<String> items, String rawLine) {
+        if (StringUtils.isBlank(rawLine)) {
+            return;
+        }
+
+        for (String part : rawLine.split("[&,，]")) {
+            if (StringUtils.isNotBlank(part)) {
+                items.add(part.trim());
+            }
+        }
     }
 
     public static int findLongRewardsIndex(List<Long> rewardss) {

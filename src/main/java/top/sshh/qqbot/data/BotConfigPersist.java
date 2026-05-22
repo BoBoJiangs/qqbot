@@ -1,6 +1,9 @@
 package top.sshh.qqbot.data;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 public class BotConfigPersist implements Serializable {
     //悬赏令价格查询
@@ -25,6 +28,10 @@ public class BotConfigPersist implements Serializable {
     private boolean enableAutoSecret = true;
     //悬赏令价格限制（超过这个价格会优先接取）
     private int xslPriceLimit = 1000;
+    //悬赏令优先物品（按顺序匹配）
+    private List<String> xslPriorityItems = new ArrayList<>(Arrays.asList(
+            "五指拳心剑", "真龙九变", "坐忘论"
+    ));
     //编号设置
     private int botNumber;
     //编号设置
@@ -192,6 +199,14 @@ public class BotConfigPersist implements Serializable {
 
     public void setXslPriceLimit(int xslPriceLimit) {
         this.xslPriceLimit = xslPriceLimit;
+    }
+
+    public List<String> getXslPriorityItems() {
+        return xslPriorityItems;
+    }
+
+    public void setXslPriorityItems(List<String> xslPriorityItems) {
+        this.xslPriorityItems = xslPriorityItems;
     }
 
     public int getBotNumber() {
