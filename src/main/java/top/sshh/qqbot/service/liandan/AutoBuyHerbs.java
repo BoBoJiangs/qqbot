@@ -449,9 +449,8 @@ public class AutoBuyHerbs {
     public void 成功购买药材(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
-        boolean isGroup = group.getGroupId() == botConfig.getGroupId();
-        boolean isAtSelf = isAtSelf(group,bot);
-        if (isGroup && isAtSelf && botConfig.getAutoBuyHerbsMode()!=0 && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
+        boolean isGroup = isAutoBuyGroup(group, botConfig);
+        if (isGroup && botConfig.getAutoBuyHerbsMode()!=0 && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作") || message.contains("今天已经很努力了") ||
                 message.contains("坊市现在太繁忙了")||message.contains("验证码不正确") || message.contains("没钱还来买东西")  || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
 
@@ -519,8 +518,8 @@ public class AutoBuyHerbs {
 
     }
 
-    private boolean isAtSelf(Group group,Bot bot){
-        return group.getGroupId() == bot.getBotConfig().getGroupId();
+    private boolean isAutoBuyGroup(Group group, BotConfig botConfig){
+        return group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
     }
 
 
