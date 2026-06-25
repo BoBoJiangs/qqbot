@@ -154,8 +154,9 @@ public class XiaoYueItemClass {
             }
         }
 
-        // 添加总计
-        stringBuilder.append("普通总计 ").append(totalNormal).append(" 特殊总计 ").append(totalSpecial);
+        // 添加总计（× 0.85 保留一位小数）
+        stringBuilder.append("普通总计 ").append(String.format("%.1f", totalNormal * 0.85))
+                .append(" 特殊总计 ").append(String.format("%.1f", totalSpecial * 0.85));
 
         group.sendMessage((new MessageChain()).reply(messageId).text(stringBuilder.toString()));
     }

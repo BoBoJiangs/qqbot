@@ -748,7 +748,7 @@ public class GroupManager {
     )
     public void 秘境挑战结果处理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (this.isGroupSettlementReminderEnabled(group.getGroupId()) && bot.getBotConfig().isEnableAutomaticReply()) {
-            if (message.contains("道友大战一番") && message.contains("成功战胜") && (!message.contains("修仙令牌额外奖励")||!message.contains("宗门"))) {
+            if (!message.contains("时间") && message.contains("道友大战一番") && message.contains("成功战胜") && (!message.contains("修仙令牌额外奖励")||!message.contains("宗门"))) {
                     Long triggerUserId = resolveRecentTaskUserId(group, "秘境结算", member.getUserId());
                     extractAndFormatResult(bot,message,group,messageId,triggerUserId);
                 }
@@ -761,7 +761,7 @@ public class GroupManager {
     )
     public void 令牌奖励时间处理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (this.isGroupSettlementReminderEnabled(group.getGroupId()) && bot.getBotConfig().isEnableAutomaticReply()) {
-            if (message.contains("修仙令牌额外奖励") && message.contains("道友大战一番") && message.contains("成功战胜")) {
+            if (message.contains("修仙令牌额外奖励") && message.contains("道友大战一番") && message.contains("成功战胜") && !message.contains("时间")) {
                 Long triggerUserId = resolveRecentTaskUserId(group, "秘境结算", member.getUserId());
                 if (triggerUserId != null && triggerUserId != 3889001741L) {
                     tokenRewardTimeMap.put(triggerUserId.toString(), System.currentTimeMillis());
