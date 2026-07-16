@@ -58,13 +58,15 @@ public class TaskStore {
     }
 
     /** 添加任务 */
-    public static void addTask(String qq, String time, String taskName, Long group) {
+    public static void addTask(String qq, String time, String taskName, Long group, Integer intervalHours) {
         taskMap.computeIfAbsent(qq, k -> Collections.synchronizedList(new ArrayList<>()));
         TaskInfo task = new TaskInfo();
         task.setTime(time);
         task.setTaskName(taskName);
         task.setExecuted(false);
         task.setExecuteGroup(group);
+        task.setIntervalHours(intervalHours);
+        task.setLastExecuteTime(0L);
         taskMap.get(qq).add(task);
         saveTasks();
     }
@@ -79,13 +81,37 @@ public class TaskStore {
     /** 每分钟检查任务并执行 */
     public static void checkTasks() {
         String now = LocalTime.now().format(TIME_FORMAT);
+        long currentMillis = System.currentTimeMillis();
 
         taskMap.forEach((qq, tasks) -> {
             synchronized (tasks) {
                 for (TaskInfo task : tasks) {
-                    if (!task.isExecuted() && now.equals(task.getTime())) {
+                    boolean shouldExecute = false;
+                    if (task.getIntervalHours() == null || task.getIntervalHours() <= 0) {
+                        // 每天模式：按 HH:mm 匹配，executed 防止当天重复
+                        if (!task.isExecuted() && now.equals(task.getTime())) {
+                            shouldExecute = true;
+                        }
+                    } else {
+                        // 间隔模式
+                        if (task.getLastExecuteTime() <= 0L) {
+                            // 首次执行：按 HH:mm 触发
+                            if (now.equals(task.getTime())) {
+                                shouldExecute = true;
+                            }
+                        } else {
+                            // 后续：到点（上次执行 + 间隔）即触发
+                            long next = task.getLastExecuteTime() + task.getIntervalHours() * 3600_000L;
+                            if (currentMillis >= next) {
+                                shouldExecute = true;
+                            }
+                        }
+                    }
+
+                    if (shouldExecute) {
                         System.out.println("QQ " + qq + " 执行任务：" + task.getTaskName());
                         task.setExecuted(true);
+                        task.setLastExecuteTime(currentMillis);
                         // 遍历当前所有 Bot，发送消息给对应 QQ 的群
                         BotFactory.getBots().values().forEach(bot -> {
                             try {
@@ -116,12 +142,16 @@ public class TaskStore {
         saveTasks();
     }
 
-    /** 每天凌晨重置任务执行状态 */
+    /** 每天凌晨重置任务执行状态（仅对每天模式生效） */
     public static void resetTasks() {
         taskMap.values().forEach(tasks -> {
             synchronized (tasks) {
                 for (TaskInfo task : tasks) {
-                    task.setExecuted(false);
+                    if (task.getIntervalHours() == null || task.getIntervalHours() <= 0) {
+                        // 每天模式：重置已执行状态
+                        task.setExecuted(false);
+                    }
+                    // 间隔模式：不重置，由 checkTasks 按时间戳持续触发
                 }
             }
         });

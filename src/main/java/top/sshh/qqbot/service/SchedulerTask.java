@@ -31,20 +31,24 @@ public class SchedulerTask {
         if (message.startsWith("设置定时任务")) {
             String qq = String.valueOf(bot.getBotId()); // 使用发送消息用户 QQ
             String[] lines = message.split("\n");
+            // 格式1: HH:mm 内容        （每天执行）
+            // 格式2: HH:mm 间隔N 内容  （每 N 小时执行一次）
+            Pattern pattern = Pattern.compile("(\\d{1,2}:\\d{2})(?:\\s*间隔(\\d+))?\\s*(.+)");
             for (int i = 1; i < lines.length; i++) {
                 String line = lines[i].trim();
                 if (line.isEmpty()) continue;
-                Pattern pattern = Pattern.compile("(\\d{1,2}:\\d{2})\\s*(.+)");
                 Matcher matcher = pattern.matcher(line);
 
                 if (matcher.find()) {
                     String time = matcher.group(1); // "23:30"
-                    String content = matcher.group(2); // "@819463349 开始捡漏 频率1"
+                    Integer intervalHours = null;
+                    String intervalStr = matcher.group(2); // 可能为 null
+                    if (intervalStr != null && !intervalStr.isEmpty()) {
+                        intervalHours = Integer.parseInt(intervalStr);
+                    }
+                    String content = matcher.group(3); // "@819463349 开始捡漏 频率1"
 
-//                    System.out.println("时间: " + time);
-//                    System.out.println("内容: " + content);
-
-                    TaskStore.addTask(qq, time, content,group.getGroupId());
+                    TaskStore.addTask(qq, time, content, group.getGroupId(), intervalHours);
                 }
             }
             group.sendMessage(new MessageChain().text("✅ 已为你成功设置定时任务!"));
@@ -56,8 +60,14 @@ public class SchedulerTask {
             } else {
                 StringBuilder sb = new StringBuilder("📋 你的定时任务列表：\n");
                 for (TaskInfo task : tasks) {
-                    sb.append(task.getTime())
-                            .append(" ")
+                    sb.append(task.getTime());
+                    Integer interval = task.getIntervalHours();
+                    if (interval != null && interval > 0) {
+                        sb.append(" 间隔").append(interval).append("小时");
+                    } else {
+                        sb.append(" 每天");
+                    }
+                    sb.append(" ")
                             .append(task.getTaskName())
                             .append(task.isExecuted() ? " ✅ 已执行" : " ⏳ 未执行")
                             .append("\n");
