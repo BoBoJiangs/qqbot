@@ -66,9 +66,9 @@ bot:
 #    enableAlchemy: true
 #
   - type: ws
-    url: ws://127.0.0.1:8083
+    url: ws://42.194.185.3:8080
     #修炼+任务群
-    groupId: 1051327161
+    groupId: 740850234
     accessToken: 1024*1024*1024
     #    大号qq
     controlQQ: 819463350&1018454301

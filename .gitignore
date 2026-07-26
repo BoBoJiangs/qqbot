@@ -8,3 +8,10 @@
 .claude/**
 /__pycache__/
 **/__pycache__/
+
+# Local runtime artifacts
+/bot.jar.bak
+/update/
+
+# Per-bot local runtime configs
+/config/bot-*.json
