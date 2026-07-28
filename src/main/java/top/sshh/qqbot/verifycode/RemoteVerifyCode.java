@@ -96,7 +96,7 @@ public class RemoteVerifyCode {
         if (botConfig.isEnableSavePic() && buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 5) {
             getImageInfo(message, buttons, messageChain);
             saveErrorImage(buttons.getImageUrl());
-//            saveEmojiToFile(buttons.getButtonList());
+            saveEmojiToFile(buttons.getButtonList());
         }
 
         if (bot.getBotConfig().getAutoVerifyModel() != 0 && isSelfGroup && buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 5) {
