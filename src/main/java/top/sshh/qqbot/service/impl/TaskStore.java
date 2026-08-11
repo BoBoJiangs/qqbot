@@ -8,6 +8,7 @@ import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.MessageChain;
+import top.sshh.qqbot.service.utils.Utils;
 import top.sshh.qqbot.data.TaskInfo;
 
 import java.io.*;
@@ -125,9 +126,9 @@ public class TaskStore {
                                     if (matcher.matches()) {
                                         String atQQ = matcher.group(1);        // 3889001741
                                         String command = matcher.group(2);   // 灵石
-                                        bot.getGroup(task.getExecuteGroup()).sendMessage(new MessageChain().at(atQQ).text(command));
+                                        Utils.sendGroupMessage(bot, task.getExecuteGroup(), new MessageChain().at(atQQ).text(command));
                                     } else {
-                                        bot.getGroup(task.getExecuteGroup()).sendMessage(new MessageChain().text(task.getTaskName()));
+                                        Utils.sendGroupMessage(bot, task.getExecuteGroup(), new MessageChain().text(task.getTaskName()));
                                     }
                                     Thread.sleep(1000);
                                 }

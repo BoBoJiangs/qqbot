@@ -8,6 +8,7 @@ import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.MessageChain;
+import top.sshh.qqbot.service.utils.Utils;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
@@ -736,7 +737,7 @@ public class AutoBuyHerbs {
             List<Integer> makeDrugIndexList = makeDrugIndexListMap.computeIfAbsent(botId, k -> new ArrayList<>());
             if(!makeDrugIndexList.isEmpty()){
                 int drugIndex = drugIndexMap.getOrDefault(botId,0);
-                bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + makeDrugIndexList.get(drugIndex)));
+                Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("查看坊市药材" + makeDrugIndexList.get(drugIndex)));
                 if(drugIndex == makeDrugIndexList.size() - 1){
                     drugIndexMap.put(botId,0);
                 }else{
@@ -749,7 +750,7 @@ public class AutoBuyHerbs {
 
                 if (botConfig.getTaskStatusHerbs() < 9) {
                     try {
-                        bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
+                        Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
                         botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
                         noQueriedCountMap.put(botId,0);
                     } catch (Exception var6) {

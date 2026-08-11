@@ -17,6 +17,7 @@ import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
+import top.sshh.qqbot.service.utils.Utils;
 import com.zhuangxv.bot.message.support.AtMessage;
 import com.zhuangxv.bot.message.support.ReplyMessage;
 import com.zhuangxv.bot.message.support.TextMessage;
@@ -621,7 +622,7 @@ public class XiaoBeiService {
 
     private void sendGroupMessage(Bot bot, String message) {
         if (this.xbGroupId > 0L) {
-            bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text(message));
+            Utils.sendGroupMessage(bot, this.xbGroupId, (new MessageChain()).text(message));
         }
 
     }
@@ -1040,7 +1041,7 @@ public class XiaoBeiService {
                         if (botConfig != null && botConfig.isEnableFamilyTask()) {
                             this.sendBotMessage(bot, "宗门丹药领取", true);
                             Thread.sleep(2000L);
-                            bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text("开始小北自动宗门任务"));
+                            Utils.sendGroupMessage(bot, this.xbGroupId, (new MessageChain()).text("开始小北自动宗门任务"));
                         }
                     } catch (Exception var4) {
                     }
@@ -1070,7 +1071,7 @@ public class XiaoBeiService {
             } else if (message.contains("无尽模式挑战失败")) {
                 ++state.retryCount;
                 if (state.retryCount > 50) {
-                    bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text("无尽挑战" + floor + "失败（超过重试次数）"));
+                    Utils.sendGroupMessage(bot, this.xbGroupId, (new MessageChain()).text("无尽挑战" + floor + "失败（超过重试次数）"));
                     this.endlessStateMap.remove(bot.getBotId());
                 } else {
                     bot.sendPrivateMessage(3889029313L, (new MessageChain()).text(recoveryPill));
@@ -1078,11 +1079,11 @@ public class XiaoBeiService {
                     bot.sendPrivateMessage(3889029313L, (new MessageChain()).text("无尽镜像挑战" + floor));
                 }
             } else if (message.contains("无尽模式胜利")) {
-                bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text("无尽挑战" + floor + "成功"));
+                Utils.sendGroupMessage(bot, this.xbGroupId, (new MessageChain()).text("无尽挑战" + floor + "成功"));
                 this.endlessStateMap.remove(bot.getBotId());
             } else if (message.contains("请检查该道具是否在背包内")) {
                 String pillName = botConfig.getRecoveryPillType() == 1 ? "道源丹" : "天命血凝丹";
-                bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text(pillName + "不足"));
+                Utils.sendGroupMessage(bot, this.xbGroupId, (new MessageChain()).text(pillName + "不足"));
                 this.endlessStateMap.remove(bot.getBotId());
             }
         }
@@ -1111,10 +1112,10 @@ public class XiaoBeiService {
                 bot.sendPrivateMessage(Long.parseLong("3889029313"), (new MessageChain()).text(message));
             } else if (isAtBot) {
                 Thread.sleep(2000L);
-                bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).at("3889029313").text(message));
+                Utils.sendGroupMessage(bot, this.xbGroupId, (new MessageChain()).at("3889029313").text(message));
             } else {
                 Thread.sleep(2000L);
-                bot.getGroup(this.xbGroupId).sendMessage((new MessageChain()).text(message));
+                Utils.sendGroupMessage(bot, this.xbGroupId, (new MessageChain()).text(message));
             }
         } catch (InterruptedException var5) {
             var5.printStackTrace();

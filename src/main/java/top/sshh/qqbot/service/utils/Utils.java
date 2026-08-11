@@ -44,6 +44,24 @@ public class Utils {
         return bot.getGroup(groupId);
     }
 
+    /**
+     * 向机器人当前已加入的群发送消息。目标群不在本地群列表时直接跳过，
+     * 避免机器人退群或群配置错误导致空指针异常。
+     *
+     * @return 是否已发起发送
+     */
+    public static boolean sendGroupMessage(Bot bot, long groupId, MessageChain messageChain) {
+        if (bot == null || groupId <= 0L || messageChain == null) {
+            return false;
+        }
+        Group group = bot.getGroup(groupId);
+        if (group == null) {
+            return false;
+        }
+        group.sendMessage(messageChain);
+        return true;
+    }
+
     // 计算手续费率
     public static double calculateFeeRate(int price) {
         if (price <= 500) return 0.05;

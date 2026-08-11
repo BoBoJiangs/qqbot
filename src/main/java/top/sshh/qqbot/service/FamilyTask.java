@@ -157,6 +157,9 @@ public class FamilyTask {
 //                }
 
                 Group group = bot.getGroup(groupId);
+                if (group == null) {
+                    return;
+                }
                 switch (botConfig.getFamilyTaskStatus()) {
                     case 0:
                         return;
@@ -552,7 +555,7 @@ public class FamilyTask {
                 if (remindMap.get(bot.getBotId()) == null) {
                     logger.info("bot.getBotId()==" + remindMap.get(bot.getBotId()));
                     remindMap.put(bot.getBotId(), 9223372036854175807L);
-                    bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
+                    Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("灵田结算"));
                     continue;
                 }
 
@@ -560,7 +563,7 @@ public class FamilyTask {
                     logger.info(String.format("bot.getBotId()==%d", remindMap.get(bot.getBotId())));
 //                    botConfig.setLastExecuteTime(9223372036854175807L);
                     remindMap.put(bot.getBotId(), 9223372036854175807L);
-                    bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
+                    Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("灵田结算"));
 
                 }
 
@@ -648,7 +651,7 @@ public class FamilyTask {
             Bot bot = (Bot) var1.next();
             if (bot.getBotConfig().isEnableAutoTask()) {
                 try {
-                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain().at("3889001741")).text("修仙签到"));
+                    Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain().at("3889001741")).text("修仙签到"));
                 } catch (Exception e) {
                     logger.error("定时发送消息失败", e);
                 }
@@ -665,7 +668,7 @@ public class FamilyTask {
             Bot bot = (Bot) var1.next();
             if (bot.getBotConfig().isEnableAutoTask()) {
                 try {
-                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain().at("3889001741")).text("宗门丹药领取"));
+                    Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain().at("3889001741")).text("宗门丹药领取"));
                 } catch (Exception e) {
                     logger.error("定时发送消息失败", e);
                 }
@@ -682,7 +685,7 @@ public class FamilyTask {
             Bot bot = (Bot) var1.next();
             if (bot.getBotConfig().isEnableAutoTask()) {
                 try {
-                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).text("开始自动秘境"));
+                    Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain()).text("开始自动秘境"));
                 } catch (Exception e) {
                     logger.error("定时发送消息失败", e);
                 }
@@ -719,7 +722,7 @@ public class FamilyTask {
             Bot bot = (Bot) var1.next();
             if (bot.getBotConfig().isEnableAutoTask()) {
                 try {
-                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain().at("3889001741")).text("宗门任务接取"));
+                    Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain().at("3889001741")).text("宗门任务接取"));
                 } catch (Exception e) {
                     logger.error("开始宗门任务失败", e);
                 }
@@ -736,7 +739,7 @@ public class FamilyTask {
             Bot bot = (Bot) var1.next();
             if (bot.getBotConfig().isEnableAutoTask()) {
                 try {
-                    bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).text("开始自动悬赏"));
+                    Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain()).text("开始自动悬赏"));
                 } catch (Exception e) {
                     logger.info("开始悬赏任务失败", e);
                 }

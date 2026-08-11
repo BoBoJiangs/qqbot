@@ -16,6 +16,7 @@ import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.MessageChain;
+import top.sshh.qqbot.service.utils.Utils;
 import com.zhuangxv.bot.message.support.ReplyMessage;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
@@ -1461,15 +1462,15 @@ public class GroupManager {
                         }
                         switch (remindTime.getText()) {
                             case "悬赏":
-                                bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
+                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
                                         .at(remindTime.getQq() + "").text(XSL_TEXT_LIST.get(new Random().nextInt(XSL_TEXT_LIST.size()))));
                                 break;
                             case "秘境":
-                                bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
+                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
                                         .at(remindTime.getQq() + "").text(MJ_TEXT_LIST.get(new Random().nextInt(MJ_TEXT_LIST.size()))));
                                 break;
                             case "灵田":
-                                bot.getGroup(remindTime.getGroupId()).sendMessage((new MessageChain())
+                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
                                         .at(remindTime.getQq() + "").text(LT_TEXT_LIST.get(new Random().nextInt(LT_TEXT_LIST.size()))));
                                 break;
                         }

@@ -123,8 +123,8 @@ public class AutoBuyGoods {
         if (queue != null && !queue.isEmpty()) {
             String nextCmd = queue.poll(); // 取队头
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
-            bot.getGroup(botConfig.getGroupId())
-                    .sendMessage(new MessageChain().at("3889001741").text("坊市查看" + nextCmd));
+            Utils.sendGroupMessage(bot, botConfig.getGroupId(),
+                    new MessageChain().at("3889001741").text("坊市查看" + nextCmd));
             queue.offer(nextCmd); // 放回队尾，实现循环
         }
     }
@@ -538,7 +538,7 @@ public class AutoBuyGoods {
 
                 inFlightBuyTimeMap.put(bot.getBotId(), now);
                 inFlightBuyCodeMap.put(bot.getBotId(), productPrice.getCode());
-                bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage(new MessageChain().at("3889001741")
+                Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), new MessageChain().at("3889001741")
                         .text("坊市购买 " + productPrice.getCode()));
                 break;
             } catch (Exception e) {

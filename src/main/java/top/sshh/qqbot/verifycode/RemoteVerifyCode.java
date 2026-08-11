@@ -516,9 +516,9 @@ public class RemoteVerifyCode {
            
             Long masterQQ = bot.getBotConfig().getMasterQQ();
             if (masterQQ != null && masterQQ > 0) {
-                bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).at(masterQQ + "").text(tip));
+                Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain()).at(masterQQ + "").text(tip));
             } else {
-                bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).text(tip));
+                Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain()).text(tip));
             }
         } catch (Exception e) {
             logger.warn("发送验证码识别服务提示失败: {}", e.getMessage());
@@ -556,9 +556,9 @@ public class RemoteVerifyCode {
                 }else{
                      sendFailMessage(bot, message, buttons, messageChain, recognitionResult);
                 }
-                bot.getGroup(xxGroupId).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
+                Utils.sendGroupMessage(bot, xxGroupId, (new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
             } else {
-                bot.getGroup(bot.getBotConfig().getGroupId()).sendMessage((new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
+                Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
             }
         }else{
             errorClickButton(buttons,bot,group,recognitionResult);
@@ -585,7 +585,7 @@ public class RemoteVerifyCode {
             MessageChain messageChain1 = new MessageChain();
             messageChain1.text("\n").image(buttons.getImageUrl()).text(stringBuilder.toString());
             // bot.sendPrivateMessage(bot.getBotId(), messageChain1);
-            bot.getGroup(xxGroupId).sendMessage(messageChain1);
+            Utils.sendGroupMessage(bot, xxGroupId, messageChain1);
         }
     }
 

@@ -7,6 +7,7 @@ import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.message.MessageChain;
+import top.sshh.qqbot.service.utils.Utils;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
@@ -134,7 +135,7 @@ public class AutoAlchemyTask {
             customPool.submit(() -> {
                 try {
                     clearFile(botId + "/背包药材.txt", botId);
-                    bot.getGroup(botConfig.getGroupId()).sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+                    Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
                 } catch (Exception e) {
                     log.error("开始自动炼丹任务提交失败, botId=" + botId, e);
                 }

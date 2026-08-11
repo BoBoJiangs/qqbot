@@ -55,19 +55,19 @@ public class AutoSellGoods {
             botConfig.setCommand("批量上架药材");
             botConfig.setPage(1);
             herbPackMap.clear();
-            bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+            Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("药材背包"));
         }
         if ("批量炼金装备".equals(message)) {
             botConfig.setCommand("批量炼金装备");
             botConfig.setPage(1);
             equipPackMap.clear();
-            bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("我的背包"));
+            Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("我的背包"));
         }
         if ("批量炼金丹药".equals(message)) {
             botConfig.setCommand("批量炼金丹药");
             botConfig.setPage(1);
             pillPackMap.clear();
-            bot.getGroup(groupId).sendMessage((new MessageChain()).at("3889001741").text("丹药背包"));
+            Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("丹药背包"));
         }
         if ("停止执行".equals(message)) {
             botConfig.setCommand("");
