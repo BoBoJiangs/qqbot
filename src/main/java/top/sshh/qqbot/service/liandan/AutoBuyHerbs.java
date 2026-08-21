@@ -24,6 +24,7 @@ import top.sshh.qqbot.service.GroupManager;
 import top.sshh.qqbot.service.ProductPriceResponse;
 
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -48,9 +49,17 @@ public class AutoBuyHerbs {
     private static final long SENDER_ID = 3889001741L;
     private static final String BUY_COMMAND = "坊市购买";
     private static final String MARKET_COMMAND = "查看坊市药材";
+    private static final String REPEAT_BUY_COMMAND = "重复采购药材";
+    private static final String REPEAT_BUY_CONFIG_FILE = "重复采购药材.txt";
 
     /** 保持原有的按 botId 隔离的采购价格表 */
     public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_HERBS = new ConcurrentHashMap<>();
+
+    /** 按 botId 隔离的重复采购药材名称。 */
+    private final Map<Long, Set<String>> repeatBuyHerbMap = new ConcurrentHashMap<>();
+    /** 按 botId 隔离的重复采购价格，不与 AUTO_BUY_HERBS 中的普通采购价格共享。 */
+    private final Map<Long, Map<String, Integer>> repeatBuyPriceMap = new ConcurrentHashMap<>();
+    private final Map<Long, AtomicBoolean> repeatBuyConfigLoadedMap = new ConcurrentHashMap<>();
 
     private final ExecutorService customPool = Executors.newCachedThreadPool();
 
@@ -159,6 +168,7 @@ public class AutoBuyHerbs {
 
     private void resetPram(Bot bot, BotConfig botConfig) {
         long botId = bot.getBotId();
+        loadRepeatBuyConfig(botId);
         pageMap.put(botId, 1);
         noQueriedCountMap.put(botId, 0);
         drugIndexMap.put(botId, 0);
@@ -247,7 +257,22 @@ public class AutoBuyHerbs {
     private void handlePurchaseCommands(Bot bot, Group group, String message, Integer messageId) {
         long botId = bot.getBotId();
         Map<String, ProductPrice> productMap = AUTO_BUY_HERBS.computeIfAbsent(botId, (k) -> new ConcurrentHashMap<>());
-        if (message.startsWith("取消采购药材")) {
+        Set<String> repeatBuyHerbs = getRepeatBuyHerbs(botId);
+        Map<String, Integer> repeatBuyPrices = getRepeatBuyPrices(botId);
+        if (message.startsWith("批量取消重复采购药材")) {
+            repeatBuyHerbs.clear();
+            repeatBuyPrices.clear();
+            saveRepeatBuyConfig(botId);
+            group.sendMessage((new MessageChain()).reply(messageId).text("批量取消重复采购成功"));
+
+        } else if (message.startsWith("取消重复采购药材")) {
+            String productName = message.substring("取消重复采购药材".length()).trim();
+            repeatBuyHerbs.remove(productName);
+            repeatBuyPrices.remove(productName);
+            saveRepeatBuyConfig(botId);
+            group.sendMessage((new MessageChain()).reply(messageId).text(productName + "已取消重复采购"));
+
+        } else if (message.startsWith("取消采购药材")) {
             String productName = message.substring("取消采购药材".length()).trim();
             productMap.remove(productName);
             group.sendMessage((new MessageChain()).reply(messageId).text(productName + "取消成功"));
@@ -260,10 +285,14 @@ public class AutoBuyHerbs {
                 e.printStackTrace();
             }
             group.sendMessage((new MessageChain()).reply(messageId).text("批量取消成功"));
+        } else if (message.startsWith(REPEAT_BUY_COMMAND)) {
+            this.addProductsToMap(bot, group, message, messageId, productMap, true);
         } else if (message.startsWith("采购药材")) {
-            this.addProductsToMap(bot, group, message, messageId, productMap);
+            this.addProductsToMap(bot, group, message, messageId, productMap, false);
+        } else if (message.equals("查询重复采购药材")) {
+            this.queryRepeatPurchaseProducts(group, messageId, productMap, botId);
         } else if (message.equals("查询采购药材")) {
-            this.queryPurchasedProducts(group, messageId, productMap);
+            this.queryPurchasedProducts(group, messageId, productMap, botId);
         }else if (message.startsWith("批量修改性平价格")) {
             String price = message.substring("批量修改性平价格".length()).trim();
             if(StringUtils.isNumeric(price)){
@@ -273,6 +302,76 @@ public class AutoBuyHerbs {
             }
         }
 
+    }
+
+    private Set<String> getRepeatBuyHerbs(long botId) {
+        loadRepeatBuyConfig(botId);
+        return repeatBuyHerbMap.computeIfAbsent(botId, k -> ConcurrentHashMap.newKeySet());
+    }
+
+    private Map<String, Integer> getRepeatBuyPrices(long botId) {
+        loadRepeatBuyConfig(botId);
+        return repeatBuyPriceMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>());
+    }
+
+    private void loadRepeatBuyConfig(long botId) {
+        AtomicBoolean loaded = repeatBuyConfigLoadedMap.computeIfAbsent(botId, k -> new AtomicBoolean(false));
+        if (!loaded.compareAndSet(false, true)) {
+            return;
+        }
+
+        Set<String> repeatBuyHerbs = repeatBuyHerbMap.computeIfAbsent(botId, k -> ConcurrentHashMap.newKeySet());
+        Map<String, Integer> repeatBuyPrices = repeatBuyPriceMap.computeIfAbsent(
+                botId, k -> new ConcurrentHashMap<>());
+        Path filePath = getRepeatBuyConfigPath(botId);
+        if (!Files.exists(filePath)) {
+            return;
+        }
+
+        try {
+            for (String line : Files.readAllLines(filePath, StandardCharsets.UTF_8)) {
+                String[] parts = line.trim().split("\\s+", 2);
+                if (parts.length == 2) {
+                    try {
+                        repeatBuyPrices.put(parts[1].trim(), Integer.parseInt(parts[0].trim()));
+                        repeatBuyHerbs.add(parts[1].trim());
+                    } catch (NumberFormatException e) {
+                        logger.warn("忽略无效的重复采购价格配置 botId={} line={}", botId, line);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("读取重复采购药材配置失败 botId={}", botId, e);
+        }
+    }
+
+    private void saveRepeatBuyConfig(long botId) {
+        Set<String> repeatBuyHerbs = repeatBuyHerbMap.computeIfAbsent(botId, k -> ConcurrentHashMap.newKeySet());
+        Map<String, Integer> repeatBuyPrices = repeatBuyPriceMap.computeIfAbsent(
+                botId, k -> new ConcurrentHashMap<>());
+        Path filePath = getRepeatBuyConfigPath(botId);
+        try {
+            Path parent = filePath.getParent();
+            if (parent != null) {
+                Files.createDirectories(parent);
+            }
+            List<String> sortedHerbs = new ArrayList<>(repeatBuyHerbs);
+            sortedHerbs.removeIf(herbName -> !repeatBuyPrices.containsKey(herbName));
+            Collections.sort(sortedHerbs);
+            List<String> lines = sortedHerbs.stream()
+                    .map(herbName -> repeatBuyPrices.get(herbName) + " " + herbName)
+                    .collect(Collectors.toList());
+            Files.write(filePath, lines, StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE);
+        } catch (IOException e) {
+            logger.error("保存重复采购药材配置失败 botId={}", botId, e);
+        }
+    }
+
+    private Path getRepeatBuyConfigPath(long botId) {
+        return Paths.get(targetDir, String.valueOf(botId), REPEAT_BUY_CONFIG_FILE);
     }
 
     private void updateXingPing(String price,Group group) {
@@ -294,23 +393,49 @@ public class AutoBuyHerbs {
         }
     }
 
-    private void addProductsToMap(Bot bot, Group group, String message, Integer messageId, Map<String, ProductPrice> productMap) {
+    private void addProductsToMap(Bot bot, Group group, String message, Integer messageId,
+                                   Map<String, ProductPrice> productMap, boolean repeatMode) {
         long botId = bot.getBotId();
+        String commandPrefix = repeatMode ? REPEAT_BUY_COMMAND : "采购药材";
         try {
-            String[] lines = message.split("\n");
+            String[] lines = message.split("\\r?\\n");
             List<ProductPrice> priceList = new ArrayList<>();
+            Set<String> repeatBuyHerbs = getRepeatBuyHerbs(botId);
+            Map<String, Integer> repeatBuyPrices = getRepeatBuyPrices(botId);
+            int parsedCount = 0;
             for(int i = 0; i < lines.length; ++i) {
-                String line = lines[i];
-                String[] parts = line.split(" ");
+                String line = lines[i].trim();
+                if (!line.startsWith(commandPrefix)) {
+                    continue;
+                }
+                String[] parts = line.substring(commandPrefix.length()).trim().split("\\s+");
                 if (parts.length >= 2) {
                     ProductPrice productPrice = new ProductPrice();
-                    productPrice.setName(parts[0].substring(4).trim());
+                    productPrice.setName(parts[0].trim());
                     productPrice.setPrice(Integer.parseInt(parts[1].trim()));
                     productPrice.setTime(LocalDateTime.now());
                     productPrice.setId((long)i);
-                    productMap.put(productPrice.getName(), productPrice);
-                    priceList.add(productPrice);
+                    if (repeatMode) {
+                        repeatBuyHerbs.add(productPrice.getName());
+                        repeatBuyPrices.put(productPrice.getName(), productPrice.getPrice());
+                    } else {
+                        productMap.put(productPrice.getName(), productPrice);
+                        priceList.add(productPrice);
+                    }
+                    parsedCount++;
                 }
+            }
+
+            if (parsedCount == 0) {
+                group.sendMessage((new MessageChain()).reply(messageId)
+                        .text("格式错误，请使用：" + commandPrefix + "药材名 价格"));
+                return;
+            }
+
+            if (repeatMode) {
+                saveRepeatBuyConfig(botId);
+                group.sendMessage((new MessageChain()).text("重复采购设置成功"));
+                return;
             }
 
             this.updateMedicinePrices(priceList,botId);
@@ -377,7 +502,8 @@ public class AutoBuyHerbs {
         }
     }
 
-    private void queryPurchasedProducts(Group group, Integer messageId, Map<String, ProductPrice> productMap) {
+    private void queryPurchasedProducts(Group group, Integer messageId, Map<String, ProductPrice> productMap,
+                                        long botId) {
 //        StringBuilder result = new StringBuilder();
 //        Iterator var5 = productMap.values().iterator();
 //
@@ -392,6 +518,7 @@ public class AutoBuyHerbs {
 //        }
         StringBuilder result = new StringBuilder();
         StringBuilder belowMarketResult = new StringBuilder();
+        Map<String, Integer> repeatBuyPrices = getRepeatBuyPrices(botId);
 
         // 按价格从高到低排序
         List<ProductPrice> sortedProducts = productMap.values().stream()
@@ -401,6 +528,7 @@ public class AutoBuyHerbs {
         for (ProductPrice value : sortedProducts) {
             ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(value.getName().trim());
             result.append(value.getName())
+                    .append(repeatBuyPrices.containsKey(value.getName().trim()) ? " [重复采购]" : "")
                     .append(" ")
                     .append(value.getPrice())
                     .append("万 坊市:")
@@ -430,6 +558,29 @@ public class AutoBuyHerbs {
             group.sendMessage(new MessageChain().text(belowMarketMessage.toString().trim()));
         }
 
+    }
+
+    private void queryRepeatPurchaseProducts(Group group, Integer messageId,
+                                             Map<String, ProductPrice> productMap, long botId) {
+        Map<String, Integer> repeatBuyPrices = getRepeatBuyPrices(botId);
+        if (repeatBuyPrices.isEmpty()) {
+            group.sendMessage((new MessageChain()).reply(messageId).text("当前没有设置重复采购药材"));
+            return;
+        }
+
+        List<String> sortedHerbs = new ArrayList<>(repeatBuyPrices.keySet());
+        Collections.sort(sortedHerbs);
+        StringBuilder result = new StringBuilder("重复采购药材：\n");
+        for (String herbName : sortedHerbs) {
+            result.append(herbName)
+                    .append(" ").append(repeatBuyPrices.get(herbName)).append("万");
+            ProductPrice normalPrice = productMap.get(herbName);
+            if (normalPrice != null) {
+                result.append("（普通采购 ").append(normalPrice.getPrice()).append("万）");
+            }
+            result.append("\n");
+        }
+        group.sendMessage((new MessageChain()).reply(messageId).text(result.toString().trim()));
     }
 
     @GroupMessageHandler(
@@ -463,9 +614,13 @@ public class AutoBuyHerbs {
         if (isGroup && botConfig.getAutoBuyHerbsMode()!=0 && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作")  ||
                 message.contains("坊市现在太繁忙了")||message.contains("验证码不正确") || message.contains("没钱还来买东西")  || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
+            CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(
+                    botId, k -> new CopyOnWriteArrayList<>());
+            ProductPrice currentProduct = autoBuyList.isEmpty() ? null : autoBuyList.get(0);
+            boolean repeatPurchase = isRepeatPurchase(botId, currentProduct);
+            boolean itemNotFound = message.contains("未查询到该物品");
 
             if (message.contains("道友成功购买")) {
-                CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>());
                 if(!autoBuyList.isEmpty()){
                     ProductPrice price = herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).get(autoBuyList.get(0).getName());
                     if(price!=null){
@@ -491,34 +646,46 @@ public class AutoBuyHerbs {
 
             if(message.contains("没钱还来买东西")){
                 Config config = danCalculator.getConfig(bot.getBotId());
-                if(config.isFinishAutoBuyHerb()){
+                if(config != null && config.isFinishAutoBuyHerb()){
                     group.sendMessage((new MessageChain()).text("开始自动炼丹"));
                 }else{
                     botConfig.setStartAuto(false);
                     botConfig.setAutoBuyHerbsMode(0);
                 }
-
+                // 没钱是全局状态，不能在重复采购模式下继续重试当前购买码。
+                return;
             }
 
             if(message.contains("未查询")){
-                int cnt = noQueriedCountMap.getOrDefault(botId,0)+1;
-                noQueriedCountMap.put(botId,cnt);
-                if(cnt >= 3){
-                    autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
+                if (repeatPurchase) {
                     noQueriedCountMap.put(botId,0);
+                } else {
+                    int cnt = noQueriedCountMap.getOrDefault(botId,0)+1;
+                    noQueriedCountMap.put(botId,cnt);
+                    if(cnt >= 3){
+                        autoBuyList.clear();
+                        noQueriedCountMap.put(botId,0);
+                    }
                 }
             }
 
-            CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>());
             if (!autoBuyList.isEmpty()) {
-                autoBuyList.remove(0);
+                if (repeatPurchase && itemNotFound) {
+                    removeRepeatPurchaseCandidates(autoBuyList, currentProduct);
+                } else if (!repeatPurchase) {
+                    // 普通采购保持原逻辑：收到一次购买结果后移除当前队首。
+                    autoBuyList.remove(0);
+                }
             }
             if(autoBuyList.isEmpty()){
                 Config config = danCalculator.getConfig(bot.getBotId());
                  this.refreshHerbsIndexByInterval(bot, config);
                 // refreshHerbsIndex(bot);
             }else{
-                if (message.contains("道友成功购买")) {
+                if (repeatPurchase && !itemNotFound) {
+                    // 重复采购成功或遇到临时错误，都继续使用当前购买码。
+                    this.buyNextHerbAfterDelay(group, bot);
+                } else if (message.contains("道友成功购买")) {
                     this.buyNextHerbAfterDelay(group, bot);
                 } else {
                     this.buyHerbs(group, bot);
@@ -527,6 +694,18 @@ public class AutoBuyHerbs {
 
         }
 
+    }
+
+    private void removeRepeatPurchaseCandidates(CopyOnWriteArrayList<ProductPrice> autoBuyList,
+                                                 ProductPrice currentProduct) {
+        if (currentProduct == null || currentProduct.getName() == null) {
+            if (!autoBuyList.isEmpty()) {
+                autoBuyList.remove(0);
+            }
+            return;
+        }
+        String herbName = currentProduct.getName();
+        autoBuyList.removeIf(product -> herbName.equals(product.getName()));
     }
 
     private boolean isAutoBuyGroup(Group group, BotConfig botConfig){
@@ -597,34 +776,20 @@ public class AutoBuyHerbs {
                 Map<String, ProductPrice> productMap = AUTO_BUY_HERBS.computeIfAbsent(bot.getBotId(), (k) -> {
                     return new ConcurrentHashMap<>();
                 });
-                ProductPrice existingProduct = productMap.get(itemName);
-                if (existingProduct != null && price <= (double)existingProduct.getPrice()) {
-                    if (herbPackMapMap.get(botId) == null) {
-                        ProductPrice productPrice = new ProductPrice();
-                        productPrice.setName(itemName);
-                        productPrice.setHerbCount(0);
-                        herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).put(itemName, productPrice);
-                    }
-
-                    ProductPrice packPrice = herbPackMapMap.get(botId).get(itemName);
-                    if (packPrice != null && packPrice.getHerbCount() > config.getLimitHerbsCount()) {
-                        if (price <= (double)existingProduct.getPrice() - (double)config.getAddPrice()) {
-                            existingProduct.setCode(code);
-                            existingProduct.setPriceDiff((int) (existingProduct.getPrice() - price));
-                            autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).add(existingProduct);
-                        }
-                    } else {
-                        existingProduct.setCode(code);
-                        existingProduct.setPriceDiff((int) (existingProduct.getPrice() - price));
-                        autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).add(existingProduct);
+                ProductPrice normalPurchaseRule = productMap.get(itemName);
+                ProductPrice repeatPurchaseRule = getRepeatPurchaseRule(botId, itemName, normalPurchaseRule);
+                ProductPrice purchaseRule = repeatPurchaseRule != null ? repeatPurchaseRule : normalPurchaseRule;
+                if (isMarketPriceAllowed(price, purchaseRule)) {
+                    if (canPurchaseHerb(botId, purchaseRule, itemName, price, config)) {
+                        ProductPrice candidate = createPurchaseCandidate(purchaseRule, code, price);
+                        enqueuePurchaseCandidate(botId, candidate);
                     }
                 }
             }
         }
 
         CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>());
-        autoBuyList.sort(Comparator.comparingLong(ProductPrice::getId));
-        autoBuyList.sort(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed());
+        sortPurchaseCandidates(botId, autoBuyList);
         if (botConfig.getAutoBuyHerbsMode() == 0) {
             autoBuyList.clear();
             return;
@@ -635,6 +800,83 @@ public class AutoBuyHerbs {
             this.refreshHerbsIndexByInterval(bot, config);
         }
 
+    }
+
+    private boolean isMarketPriceAllowed(double marketPrice, ProductPrice purchaseRule) {
+        return purchaseRule != null && marketPrice <= (double) purchaseRule.getPrice();
+    }
+
+    private ProductPrice getRepeatPurchaseRule(long botId, String herbName, ProductPrice normalRule) {
+        Integer repeatPrice = getRepeatBuyPrices(botId).get(herbName);
+        if (repeatPrice == null) {
+            return null;
+        }
+
+        ProductPrice repeatRule = new ProductPrice();
+        repeatRule.setName(herbName);
+        repeatRule.setPrice(repeatPrice);
+        if (normalRule != null) {
+            repeatRule.setId(normalRule.getId());
+            repeatRule.setTime(normalRule.getTime());
+        }
+        return repeatRule;
+    }
+
+    private void sortPurchaseCandidates(long botId, CopyOnWriteArrayList<ProductPrice> autoBuyList) {
+        autoBuyList.sort(Comparator
+                // 重复采购药材优先于普通采购药材。
+                .comparing((ProductPrice product) -> !isRepeatPurchase(botId, product))
+                // 同一模式下，优先购买优惠差价更大的条目。
+                .thenComparing(Comparator.comparingLong(ProductPrice::getPriceDiff).reversed())
+                // 差价相同时，保持原有的药材配置顺序。
+                .thenComparingLong(product -> product.getId() == null ? Long.MAX_VALUE : product.getId()));
+    }
+
+    private boolean canPurchaseHerb(long botId, ProductPrice purchaseRule, String herbName,
+                                    double marketPrice, Config config) {
+        Map<String, ProductPrice> herbPackMap = herbPackMapMap.computeIfAbsent(
+                botId, k -> new ConcurrentHashMap<>());
+        ProductPrice packPrice = herbPackMap.computeIfAbsent(herbName, name -> {
+            ProductPrice productPrice = new ProductPrice();
+            productPrice.setName(name);
+            productPrice.setHerbCount(0);
+            return productPrice;
+        });
+
+        if (packPrice.getHerbCount() <= (config == null ? Integer.MAX_VALUE : config.getLimitHerbsCount())) {
+            return true;
+        }
+
+        int addPrice = config == null ? 0 : config.getAddPrice();
+        return marketPrice <= (double) purchaseRule.getPrice() - addPrice;
+    }
+
+    private ProductPrice createPurchaseCandidate(ProductPrice purchaseRule, String code, double marketPrice) {
+        ProductPrice candidate = new ProductPrice();
+        candidate.setId(purchaseRule.getId());
+        candidate.setName(purchaseRule.getName());
+        candidate.setPrice(purchaseRule.getPrice());
+        candidate.setTime(purchaseRule.getTime());
+        candidate.setCode(code);
+        candidate.setPriceDiff((int) (purchaseRule.getPrice() - marketPrice));
+        return candidate;
+    }
+
+    private void enqueuePurchaseCandidate(long botId, ProductPrice candidate) {
+        CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(
+                botId, k -> new CopyOnWriteArrayList<>());
+        if (isRepeatPurchase(botId, candidate)
+                && autoBuyList.stream().anyMatch(item -> candidate.getName().equals(item.getName()))) {
+            // 重复采购必须保留当前购买码，避免同一药材的其他坊市条目覆盖队首购买码。
+            return;
+        }
+        autoBuyList.add(candidate);
+    }
+
+    private boolean isRepeatPurchase(long botId, ProductPrice productPrice) {
+        return productPrice != null
+                && productPrice.getName() != null
+                && getRepeatBuyPrices(botId).containsKey(productPrice.getName());
     }
 
     private void refreshHerbsIndexByInterval(Bot bot, Config config) {
