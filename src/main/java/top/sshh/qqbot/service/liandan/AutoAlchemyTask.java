@@ -24,6 +24,8 @@ import java.util.*;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -45,6 +47,9 @@ public class AutoAlchemyTask {
 
     // 与每个 botId 对应的 group（启动自动炼丹时保存，发送消息使用）
     private final Map<Long, Group> groupMap = new ConcurrentHashMap<>();
+
+    // 按 botId 隔离：炼丹命令发送延迟任务，避免重复发送下一炉炼丹命令
+    private final Map<Long, AtomicBoolean> alchemyDelayScheduledFlagMap = new ConcurrentHashMap<>();
 
     
 
@@ -82,6 +87,10 @@ public class AutoAlchemyTask {
         pageMap.put(botId, 1);
         alchemyListMap.put(botId, new CopyOnWriteArrayList<>());
         groupMap.remove(botId);
+        AtomicBoolean scheduledFlag = alchemyDelayScheduledFlagMap.get(botId);
+        if (scheduledFlag != null) {
+            scheduledFlag.set(false);
+        }
     }
 
     private List<String> getMedicinalList(Long botId) {
@@ -210,7 +219,7 @@ public class AutoAlchemyTask {
         }
 
         if (message.startsWith("更新炼丹配置")) {
-            Pattern pattern = Pattern.compile("是否是炼金丹药：(是|否).*?炼金丹期望收益：(-?\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?开启全自动炼丹：(是|否).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(-?\\d+)(?:.*?坊市刷新频率：(\\d+))?", Pattern.DOTALL);
+            Pattern pattern = Pattern.compile("是否是炼金丹药：(是|否).*?炼金丹期望收益：(-?\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?开启全自动炼丹：(是|否).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(-?\\d+)(?:.*?间隔随机延迟：(\\d+))?", Pattern.DOTALL);
             Matcher matcher = pattern.matcher(message);
             if (matcher.find()) {
                 if ((config.isAlchemy() != "是".equals(matcher.group(1))) ||
@@ -248,7 +257,7 @@ public class AutoAlchemyTask {
                     group.sendMessage((new MessageChain()).text("配置已更新！"));
                 }
             } else {
-                String alchemyConfig = "\n更新炼丹配置\n是否是炼金丹药：" + (config.isAlchemy() ? "是" : "否") + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + (config.isFinishAutoBuyHerb() ? "是" : "否") + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice() + "\n坊市刷新频率：" + config.getIntervalTime();
+                String alchemyConfig = "\n更新炼丹配置\n是否是炼金丹药：" + (config.isAlchemy() ? "是" : "否") + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + (config.isFinishAutoBuyHerb() ? "是" : "否") + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice() + "\n间隔随机延迟：" + config.getRandomDelay();
                 group.sendMessage((new MessageChain()).reply(messageId).text("输入格式不正确！示例：" + alchemyConfig));
             }
         }
@@ -278,11 +287,10 @@ public class AutoAlchemyTask {
         config.setLimitHerbsCount(Integer.parseInt(matcher.group(8)));
         config.setAddPrice(Integer.parseInt(matcher.group(9)));
 
-        // 坊市刷新频率仅用于控制查看坊市药材的节奏，不参与丹方重新匹配判断
-        String intervalTimeStr = matcher.group(10);
-        if (intervalTimeStr != null && !intervalTimeStr.trim().isEmpty()) {
-            int intervalTime = Integer.parseInt(intervalTimeStr.trim());
-            config.setIntervalTime(Math.max(intervalTime, 0));
+        // 查看坊市药材与成功购买药材共用最大随机延迟，单位为秒。
+        String randomDelayStr = matcher.group(10);
+        if (randomDelayStr != null && !randomDelayStr.trim().isEmpty()) {
+            config.setRandomDelay(Math.max(Integer.parseInt(randomDelayStr.trim()), 0));
         }
     }
 
@@ -326,7 +334,7 @@ public class AutoAlchemyTask {
             return sb.toString();
         } else {
             if (message.equals("炼丹设置")) {
-                String alchemyConfig = "是否是炼金丹药：" + (config.isAlchemy() ? "是" : "否") + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + (config.isFinishAutoBuyHerb() ? "是" : "否") + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice() + "\n坊市刷新频率：" + config.getIntervalTime();
+                String alchemyConfig = "是否是炼金丹药：" + (config.isAlchemy() ? "是" : "否") + "\n炼金丹期望收益：" + config.getAlchemyNumber() + "\n坊市丹期望收益：" + config.getMakeNumber() + "\n丹药数量：" + config.getDanNumber() + "\n坊市丹名称：" + config.getMakeName() + "\n炼丹QQ号码：" + config.getAlchemyQQ() + "\n开启全自动炼丹：" + (config.isFinishAutoBuyHerb() ? "是" : "否") + "\n背包药材数量限制：" + config.getLimitHerbsCount() + "\n降低采购药材价格：" + config.getAddPrice() + "\n间隔随机延迟：" + config.getRandomDelay();
                 sb.append("－－－－－当前设置－－－－－\n");
                 sb.append(alchemyConfig);
             }
@@ -377,18 +385,39 @@ public class AutoAlchemyTask {
     }
 
     private void autoAlchemy(Long botId) {
-        CopyOnWriteArrayList<String> alchemyList = getAlchemyList(botId);
-        Group g = groupMap.get(botId);
-        for (String remedy : alchemyList) {
-            try {
-                if (g != null) {
-                    g.sendMessage((new MessageChain()).at("3889001741").text(remedy));
-                }
-                break;
-            } catch (Exception e) {
-                Thread.currentThread().interrupt();
-            }
+        Config config = danCalculator.getConfig(botId);
+        long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
+        AtomicBoolean scheduledFlag = alchemyDelayScheduledFlagMap.computeIfAbsent(botId, k -> new AtomicBoolean(false));
+        if (!scheduledFlag.compareAndSet(false, true)) {
+            return;
         }
+
+        long delayMs = maxDelayMs <= 0 ? 0 : ThreadLocalRandom.current().nextLong(maxDelayMs + 1);
+        // log.info("准备发送炼丹命令，botId={}，随机延迟{}毫秒", botId, delayMs);
+        customPool.submit(() -> {
+            try {
+                if (delayMs > 0) {
+                    Thread.sleep(delayMs);
+                }
+
+                CopyOnWriteArrayList<String> alchemyList = getAlchemyList(botId);
+                Group g = groupMap.get(botId);
+                for (String remedy : alchemyList) {
+                    try {
+                        if (g != null) {
+                            g.sendMessage((new MessageChain()).at("3889001741").text(remedy));
+                        }
+                        break;
+                    } catch (Exception e) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                scheduledFlag.set(false);
+            }
+        });
     }
 
     // -------------------- 药材背包 处理（来自系统发送的药材背包消息） --------------------

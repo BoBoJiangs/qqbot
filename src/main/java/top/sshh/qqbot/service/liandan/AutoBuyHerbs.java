@@ -36,6 +36,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 import static top.sshh.qqbot.constant.Constant.targetDir;
@@ -71,6 +72,9 @@ public class AutoBuyHerbs {
     // 按 botId 隔离：坊市刷新节流（单位：毫秒）
 //    private final Map<Long, Long> nextMarketRefreshAtMsMap = new ConcurrentHashMap<>();
     private final Map<Long, AtomicBoolean> marketRefreshScheduledFlagMap = new ConcurrentHashMap<>();
+
+    // 按 botId 隔离：购买成功后下一件药材的延迟任务，避免重复发送购买命令
+    private final Map<Long, AtomicBoolean> purchaseDelayScheduledFlagMap = new ConcurrentHashMap<>();
 
     @Autowired
     public DanCalculator danCalculator;
@@ -514,7 +518,11 @@ public class AutoBuyHerbs {
                  this.refreshHerbsIndexByInterval(bot, config);
                 // refreshHerbsIndex(bot);
             }else{
-                this.buyHerbs(group, bot);
+                if (message.contains("道友成功购买")) {
+                    this.buyNextHerbAfterDelay(group, bot);
+                } else {
+                    this.buyHerbs(group, bot);
+                }
             }
 
         }
@@ -534,6 +542,10 @@ public class AutoBuyHerbs {
         AtomicBoolean scheduledFlag = marketRefreshScheduledFlagMap.get(botId);
         if (scheduledFlag != null) {
             scheduledFlag.set(false);
+        }
+        AtomicBoolean purchaseScheduledFlag = purchaseDelayScheduledFlagMap.get(botId);
+        if (purchaseScheduledFlag != null) {
+            purchaseScheduledFlag.set(false);
         }
     }
 
@@ -630,13 +642,11 @@ public class AutoBuyHerbs {
         if (bot.getBotConfig().getAutoBuyHerbsMode() == 0) {
             return;
         }
-        int intervalSeconds = config == null ? 0 : Math.max(config.getIntervalTime(), 0);
-        if (intervalSeconds <= 0) {
+        long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
+        if (maxDelayMs <= 0) {
             refreshHerbsIndex(bot);
             return;
         }
-
-        long intervalMs = intervalSeconds * 1000L;
 
         AtomicBoolean scheduledFlag = marketRefreshScheduledFlagMap.computeIfAbsent(botId, k -> new AtomicBoolean(false));
         if (!scheduledFlag.compareAndSet(false, true)) {
@@ -645,7 +655,11 @@ public class AutoBuyHerbs {
 
         customPool.submit(() -> {
             try {
-                Thread.sleep(intervalMs);
+                long delayMs = ThreadLocalRandom.current().nextLong(maxDelayMs + 1);
+                // logger.info("等待查看坊市药材，botId={}，随机延迟{}毫秒", botId, delayMs);
+                if (delayMs > 0) {
+                    Thread.sleep(delayMs);
+                }
                 if (bot.getBotConfig().getAutoBuyHerbsMode() == 0) {
                     return;
                 }
@@ -654,8 +668,6 @@ public class AutoBuyHerbs {
                 Thread.currentThread().interrupt();
             } finally {
                 scheduledFlag.set(false);
-                Config latestConfig = danCalculator.getConfig(botId);
-                int latestIntervalSeconds = latestConfig == null ? intervalSeconds : Math.max(latestConfig.getIntervalTime(), 0);
             }
         });
     }
@@ -707,6 +719,41 @@ public class AutoBuyHerbs {
 
     }
 
+    private void buyNextHerbAfterDelay(Group group, Bot bot) {
+        BotConfig botConfig = bot.getBotConfig();
+        long botId = bot.getBotId();
+        Config config = danCalculator.getConfig(botId);
+        long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
+
+        if (maxDelayMs <= 0) {
+            this.buyHerbs(group, bot);
+            return;
+        }
+
+        AtomicBoolean scheduledFlag = purchaseDelayScheduledFlagMap.computeIfAbsent(botId, k -> new AtomicBoolean(false));
+        if (!scheduledFlag.compareAndSet(false, true)) {
+            return;
+        }
+
+        long delayMs = ThreadLocalRandom.current().nextLong(maxDelayMs + 1);
+        // logger.info("药材购买成功，botId={}，将在{}毫秒后购买下一件药材", botId, delayMs);
+        customPool.submit(() -> {
+            try {
+                if (delayMs > 0) {
+                    Thread.sleep(delayMs);
+                }
+                if (botConfig.getAutoBuyHerbsMode() != 0
+                        && !autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).isEmpty()) {
+                    this.buyHerbs(group, bot);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                scheduledFlag.set(false);
+            }
+        });
+    }
+
     @Scheduled(fixedDelay = 5000L, initialDelay = 30000L)
     public void 定时查询坊市() {
         BotFactory.getBots().values().forEach((bot) -> {
@@ -714,8 +761,8 @@ public class AutoBuyHerbs {
             long botId = bot.getBotId();
             if (botConfig.getAutoBuyHerbsMode() != 0 && !botConfig.isStop()) {
                 Config config = danCalculator.getConfig(botId);
-                int intervalSeconds = config == null ? 0 : Math.max(config.getIntervalTime(), 0);
-                long thresholdMs = Math.max(10000L, intervalSeconds * 1000L + 2000L);
+                long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
+                long thresholdMs = Math.max(10000L, maxDelayMs + 2000L);
 
                 if (System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > thresholdMs) {
                     autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();

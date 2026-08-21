@@ -20,8 +20,8 @@ public class Config implements Serializable {
     private boolean finishAutoBuyHerb;
     private int limitHerbsCount = 3;
     private int addPrice = -20;
-    //坊市刷新间隔时间，单位：秒
-    private int intervalTime = 0;
+    //查看坊市药材与连续购买药材共用的最大随机延迟，单位：秒
+    private int randomDelay = 0;
 
     public Config() {
     }
@@ -106,11 +106,11 @@ public class Config implements Serializable {
         this.isAlchemy = alchemy;
     }
 
-    public int getIntervalTime() {
-        return this.intervalTime;
+    public int getRandomDelay() {
+        return this.randomDelay;
     }
 
-    public void setIntervalTime(int intervalTime) {
-        this.intervalTime = intervalTime;
+    public void setRandomDelay(int randomDelay) {
+        this.randomDelay = randomDelay;
     }
 }

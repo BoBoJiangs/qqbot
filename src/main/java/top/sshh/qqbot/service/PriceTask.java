@@ -486,7 +486,13 @@ public class PriceTask {
 
 
     private String formatCultivation(long reward) {
-        return reward >= 100000000L ? String.format("%.2f亿", (double) reward / 1.0E8) : reward / 10000L + "万";
+        if (reward >= 1_000_000_000_000L) {
+            return String.format(Locale.ROOT, "%.2f兆", (double) reward / 1.0E12);
+        }
+        if (reward >= 100_000_000L) {
+            return String.format(Locale.ROOT, "%.2f亿", (double) reward / 1.0E8);
+        }
+        return reward / 10_000L + "万";
     }
 
     @GroupMessageHandler(
