@@ -50,6 +50,7 @@ public class GroupManager {
     private static final Logger logger = LoggerFactory.getLogger(GroupManager.class);
     private static final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     Map<String, RemindTime> mjXslmap = new ConcurrentHashMap();
+    Map<String, RemindTime> cgmap = new ConcurrentHashMap();
     Map<String, RemindTime> ltmap = new ConcurrentHashMap();
 
     public static final ForkJoinPool customPool = new ForkJoinPool(20);
@@ -76,6 +77,18 @@ public class GroupManager {
             "【灵田结算提醒】灵田中的灵植焕发生机！此刻收取，定能收获满满灵气，助您修为一日千里！",
             "【灵田结算提醒】灵植成熟可收！您的灵田培育出的珍稀作物，能为您带来意想不到的修仙助力！",
             "【灵田结算提醒】灵田收获时间到！这片充满灵气的土地，为您孕育出了珍贵的灵植，速来采摘！");
+    private static final List<String> MY_TEXT_LIST = Arrays.asList(" 【秘域结算提醒】秘域探索时限已至！幽都深处搜刮的战利品即将到账，快发『秘域结算』清点收获！",
+            "【秘域结算提醒】断头台旧址的阴风已停，赤泉血海的浪涛已静，您在秘域的收获正等待开启！",
+            "【秘域结算提醒】幽都之行圆满收官！高危路线上拾取的奇珍异宝已装满行囊，速来结算！",
+            "【秘域结算提醒】秘域探索时间到！您在幽都历经凶险带回的机缘，正等您发『秘域结算』揭晓！",
+            "【秘域结算提醒】镇冥塔基的尘埃落定，您的秘域之旅已到终点，快查收这份高危换来的大礼！",
+            "【秘域结算提醒】秘域时限已至！血与冥铸就的收获不容错过，快发『秘域结算』一探所获！",
+            "【秘域结算提醒】幽都的大门即将关闭，您探索秘域的成果斐然，丰厚奖励静待领取！");
+    private static final List<String> CG_TEXT_LIST = Arrays.asList("【传功提醒】传功冷却已结束！快去找徒弟传授修为，莫让真元白白积压！",
+            "【传功提醒】叮！传功CD已转好，徒弟的修为正等着师父的馈赠，速去传功！",
+            "【传功提醒】传功冷却完毕！这一次又能收获海量修为，师徒亲密度再+1！",
+            "【传功提醒】时间到！徒弟嗷嗷待哺，师父的真元已蓄势待发，快去传功吧！",
+            "【传功提醒】传功冷却已到！把握机缘，将毕生修为倾囊相授，助徒弟一日千里！");
     private static final String FILE_PATH = "./cache/task_data.json";
 //    @Value("${botId}")
 //    private Long botId;
@@ -351,6 +364,7 @@ public class GroupManager {
         try {
             Map<String, Object> data = new HashMap<>();
             data.put("灵田", this.ltmap);
+            data.put("传功", this.cgmap);
             data.put("发言统计", MESSAGE_NUMBER_MAP);
             data.put("任务统计", taskStateMap);
             data.put("自动购买", this.autoBuyProductMap);
@@ -389,6 +403,13 @@ public class GroupManager {
             this.ltmap = data.getObject("灵田",
                     new TypeReference<Map<String, RemindTime>>() {
                     });
+
+            this.cgmap = data.getObject("传功",
+                    new TypeReference<Map<String, RemindTime>>() {
+                    });
+            if (this.cgmap == null) {
+                this.cgmap = new ConcurrentHashMap<>();
+            }
 
             // 2. 处理发言统计（Map<String, MessageNumber>）
             this.MESSAGE_NUMBER_MAP = data.getObject("发言统计",
@@ -1052,6 +1073,220 @@ public class GroupManager {
         }
     }
 
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 秘域结算提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
+        if (!bot.getBotConfig().isEnableAutomaticReply() || !isRemindGroup(bot, group)) {
+            return;
+        }
+        boolean isMiYuMessage = (msg.contains("道友已入") && msg.contains("秘域结算"))
+                || (msg.contains("秘域探索仍在进行") && msg.contains("分钟"));
+        if (!isMiYuMessage) {
+            return;
+        }
+        logger.info("收到秘域消息，原始内容：group={}, msg={}", group.getGroupId(), msg);
+        Long targetUserId = extractMentionedUserId(msg, bot);
+        String extractWay = "文本@QQ提取";
+        if (targetUserId == null) {
+            targetUserId = resolveMarkdownMentionUserId(msg, group, bot);
+            extractWay = "markdown提及解析";
+        }
+        if (targetUserId == null) {
+            targetUserId = resolveUserIdByNickname(msg, group, bot);
+            extractWay = "昵称反查";
+        }
+        if (targetUserId == null) {
+            logger.info("秘域消息提取QQ失败（文本提取/markdown提及/昵称反查均未命中），跳过提醒：group={}", group.getGroupId());
+            return;
+        }
+        logger.info("秘域提醒注册：提取方式={}，qq={}", extractWay, targetUserId);
+        this.extractInfo(msg, "秘域", group, bot, targetUserId);
+    }
+
+    private static final Pattern MARKDOWN_MENTION_PATTERN = Pattern.compile(
+            "\\[([^\\]]{1,25})\\]\\(mqqapi://markdown/mention\\?[^)]*?at_tinyid=(\\d{5,15})\\)");
+
+    /**
+     * 解析markdown提及格式[@昵称](mqqapi://markdown/mention?at_type=1&at_tinyid=xxx)。
+     * tinyid是腾讯内部ID不一定是真实QQ：先校验tinyid是否命中群成员，未命中时用昵称反查。
+     */
+    private Long resolveMarkdownMentionUserId(String msg, Group group, Bot bot) {
+        Matcher matcher = MARKDOWN_MENTION_PATTERN.matcher(msg);
+        if (!matcher.find()) {
+            return null;
+        }
+        String nickname = matcher.group(1).trim();
+        long tinyId = Long.parseLong(matcher.group(2));
+        if (tinyId != 3889001741L && tinyId != bot.getBotId()) {
+            try {
+                if (bot.getMember(group.getGroupId(), tinyId) != null) {
+                    logger.info("markdown提及tinyid命中群成员，直接使用：tinyid={}", tinyId);
+                    return tinyId;
+                }
+            } catch (Exception e) {
+                logger.warn("校验tinyid群成员失败：group={}, tinyid={}", group.getGroupId(), tinyId, e);
+            }
+        }
+        Long userId = findMemberIdByNickname(nickname, group, bot);
+        if (userId == null) {
+            try {
+                bot.flushGroupMembers(group);
+            } catch (Exception e) {
+                logger.warn("刷新群成员列表失败：group={}", group.getGroupId(), e);
+                return null;
+            }
+            userId = findMemberIdByNickname(nickname, group, bot);
+        }
+        if (userId == null) {
+            logger.info("markdown提及反查未命中群成员：group={}, nickname={}, tinyid={}", group.getGroupId(), nickname, tinyId);
+        }
+        return userId;
+    }
+
+    /**
+     * 从消息中提取"@昵称"文本，并通过群成员列表反查QQ。
+     * 部分游戏消息（如秘域进入提示）@玩家时是纯文本昵称而非真实at段，文本中不含QQ号。
+     */
+    private Long resolveUserIdByNickname(String msg, Group group, Bot bot) {
+        Matcher matcher = Pattern.compile("@([^@\\r\\n\\s，。；！？\\[\\]()：:/|]{1,25})").matcher(msg);
+        if (!matcher.find()) {
+            return null;
+        }
+        String nickname = matcher.group(1).trim();
+        Long userId = findMemberIdByNickname(nickname, group, bot);
+        if (userId == null) {
+            try {
+                bot.flushGroupMembers(group);
+            } catch (Exception e) {
+                logger.warn("刷新群成员列表失败：group={}", group.getGroupId(), e);
+                return null;
+            }
+            userId = findMemberIdByNickname(nickname, group, bot);
+        }
+        if (userId == null) {
+            logger.info("昵称反查未命中群成员：group={}, nickname={}", group.getGroupId(), nickname);
+        }
+        return userId;
+    }
+
+    private Long findMemberIdByNickname(String nickname, Group group, Bot bot) {
+        Collection<Member> members;
+        try {
+            members = bot.getMembers(group.getGroupId());
+        } catch (Exception e) {
+            return null;
+        }
+        if (members == null) {
+            return null;
+        }
+        // 先精确匹配群名片/昵称，再双向前缀匹配（处理"（串门）"等名片后缀）
+        for (Member m : members) {
+            if (m.getUserId() == 3889001741L || m.getUserId() == bot.getBotId()) {
+                continue;
+            }
+            if (nickname.equals(m.getCard()) || nickname.equals(m.getNickname())) {
+                return m.getUserId();
+            }
+        }
+        for (Member m : members) {
+            if (m.getUserId() == 3889001741L || m.getUserId() == bot.getBotId()) {
+                continue;
+            }
+            String card = m.getCard();
+            String nick = m.getNickname();
+            if ((StringUtils.isNotBlank(card) && (card.startsWith(nickname) || nickname.startsWith(card)))
+                    || (StringUtils.isNotBlank(nick) && (nick.startsWith(nickname) || nickname.startsWith(nick)))) {
+                return m.getUserId();
+            }
+        }
+        return null;
+    }
+
+    @GroupMessageHandler(
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 传功结算提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
+        if (!bot.getBotConfig().isEnableAutomaticReply() || !isRemindGroup(bot, group)) {
+            return;
+        }
+        boolean isChuangongResult = msg.contains("传功完毕") && msg.contains("徒弟") && msg.contains("获得");
+        boolean isChuangongCd = msg.contains("传功冷却中") && msg.contains("后可再次传功");
+        if (!isChuangongResult && !isChuangongCd) {
+            return;
+        }
+        logger.info("收到传功消息，原始内容：group={}, msg={}", group.getGroupId(), msg);
+        if (!this.isGroupSettlementReminderEnabled(group.getGroupId())) {
+            logger.info("群结算提醒未启用，跳过传功提醒：group={}", group.getGroupId());
+            return;
+        }
+        Long targetUserId = extractMentionedUserId(msg, bot);
+        String extractWay = "文本@QQ提取";
+        if (targetUserId == null) {
+            targetUserId = resolveMarkdownMentionUserId(msg, group, bot);
+            extractWay = "markdown提及解析";
+        }
+        if (targetUserId == null) {
+            targetUserId = resolveUserIdByNickname(msg, group, bot);
+            extractWay = "昵称反查";
+        }
+        if (targetUserId == null) {
+            logger.info("传功消息提取QQ失败（文本提取/markdown提及/昵称反查均未命中），跳过提醒：group={}", group.getGroupId());
+            return;
+        }
+        long delayMillis;
+        if (isChuangongResult) {
+            // 传功成功后固定47小时（48小时冷却提前1小时）提醒再次传功
+            delayMillis = 47L * 60 * 60 * 1000;
+        } else {
+            delayMillis = parseChuangongCdMillis(msg);
+        }
+        if (delayMillis <= 0) {
+            logger.warn("传功消息未解析到冷却时间，跳过：group={}, msg={}", group.getGroupId(), msg);
+            return;
+        }
+        logger.info("传功提醒注册：提取方式={}，qq={}，{}后提醒", extractWay, targetUserId, formatDelayText(delayMillis));
+        addChuangongRemind(String.valueOf(targetUserId), group, delayMillis, bot);
+    }
+
+    /**
+     * 解析传功冷却文字时间，如"46小时59分53秒"，支持缺项（如仅"59分53秒"）
+     */
+    private long parseChuangongCdMillis(String msg) {
+        long totalSeconds = 0;
+        Matcher hourMatcher = Pattern.compile("(\\d+)小时").matcher(msg);
+        Matcher minuteMatcher = Pattern.compile("(\\d+)分(?!钟)").matcher(msg);
+        Matcher secondMatcher = Pattern.compile("(\\d+)秒").matcher(msg);
+        if (hourMatcher.find()) {
+            totalSeconds += Long.parseLong(hourMatcher.group(1)) * 3600L;
+        }
+        if (minuteMatcher.find()) {
+            totalSeconds += Long.parseLong(minuteMatcher.group(1)) * 60L;
+        }
+        if (secondMatcher.find()) {
+            totalSeconds += Long.parseLong(secondMatcher.group(1));
+        }
+        return totalSeconds * 1000L;
+    }
+
+    private String formatDelayText(long delayMillis) {
+        long hours = delayMillis / 3600000L;
+        long minutes = (delayMillis % 3600000L) / 60000L;
+        return hours > 0 ? hours + "小时" + minutes + "分" : minutes + "分钟";
+    }
+
+    private void addChuangongRemind(String qq, Group group, long delayMillis, Bot bot) {
+        RemindTime remindTime = new RemindTime();
+        remindTime.setQq(Long.parseLong(qq));
+        remindTime.setExpireTime(System.currentTimeMillis() + delayMillis);
+        remindTime.setText("传功");
+        remindTime.setGroupId(group.getGroupId());
+        remindTime.setRemindQq(bot.getBotId());
+        this.cgmap.put(qq, remindTime);
+        group.sendMessage(new MessageChain().at(qq).text("收到传功结算提醒，将在" + formatDelayText(delayMillis) + "后提醒你再次传功"));
+        this.saveTasksToFile();
+    }
+
     private Long extractMentionedUserId(String message, Bot bot) {
         Matcher matcher = Pattern.compile("@(\\d{5,12})").matcher(message);
         while (matcher.find()) {
@@ -1457,6 +1692,7 @@ public class GroupManager {
     )
     public void 结算() {
         this.checkAndNotify(this.mjXslmap, "悬赏", "秘境");
+        this.checkAndNotify(this.cgmap, "传功", "传功");
         this.checkAndNotify(this.ltmap, "灵田", "灵田");
     }
 
@@ -1482,6 +1718,14 @@ public class GroupManager {
                             case "秘境":
                                 Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
                                         .at(remindTime.getQq() + "").text(MJ_TEXT_LIST.get(new Random().nextInt(MJ_TEXT_LIST.size()))));
+                                break;
+                            case "秘域":
+                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
+                                        .at(remindTime.getQq() + "").text(MY_TEXT_LIST.get(new Random().nextInt(MY_TEXT_LIST.size()))));
+                                break;
+                            case "传功":
+                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
+                                        .at(remindTime.getQq() + "").text(CG_TEXT_LIST.get(new Random().nextInt(CG_TEXT_LIST.size()))));
                                 break;
                             case "灵田":
                                 Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())

@@ -82,6 +82,9 @@ public class TestService {
     @Value("${custom.shitu-api-url:#{null}}")
     private String shituApiUrl;
     private boolean isFirst = true;
+
+    // 秘域自动结算：botId -> 预计到期时间戳（bot-core 的 BotConfig 无法加字段，内存态即可）
+    private final Map<Long, Long> myTimeMap = new ConcurrentHashMap<>();
     private static final List<String> KEYWORDS = Arrays.asList("机缘巧合", "古洞深处", "烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后",
             "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困",
             "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得",
@@ -135,6 +138,11 @@ public class TestService {
                         (new MessageChain()).reply(messageId).text(this.showReplyMessage(message, botConfig, bot)));
             }
 
+            String helpDetail = this.showHelpDetail(message);
+            if (helpDetail != null) {
+                group.sendMessage((new MessageChain()).reply(messageId).text(helpDetail));
+            }
+
             if ("当前设置".equals(message)) {
                 group.sendMessage(
                         (new MessageChain()).reply(messageId).text(this.showReplyMessage(message, botConfig, bot)));
@@ -161,6 +169,14 @@ public class TestService {
 
             if ("开始自动秘境".equals(message)) {
                 botConfig.setCommand("开始自动秘境");
+                if (cultivationMode == 3) {
+                    familyBotList.add(bot);
+                }
+                this.startAutoTask(bot, botConfig, cultivationMode, groupId, message);
+            }
+
+            if ("开始自动秘域".equals(message)) {
+                botConfig.setCommand("开始自动秘域");
                 if (cultivationMode == 3) {
                     familyBotList.add(bot);
                 }
@@ -907,6 +923,11 @@ public class TestService {
                 botConfig.setCommand("");
                 Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("探索秘境"));
             }
+
+            if ("开始自动秘域".equals(command)) {
+                botConfig.setCommand("");
+                Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("秘域快捷开始"));
+            }
             if ("一键使用次元之钥".equals(command)) {
                 botConfig.setCommand("");
                 Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("道具使用次元之钥"));
@@ -952,6 +973,18 @@ public class TestService {
                             (new MessageChain()).at("3889001741").text("探索秘境"));
                 } catch (InterruptedException var11) {
                     throw new RuntimeException(var11);
+                }
+            }
+
+            if ("开始自动秘域".equals(botConfig.getCommand())) {
+                botConfig.setCommand("");
+
+                try {
+                    TimeUnit.SECONDS.sleep(2L);
+                    Utils.sendGroupMessage(bot, botConfig.getGroupId(),
+                            (new MessageChain()).at("3889001741").text("秘域快捷开始"));
+                } catch (InterruptedException var10) {
+                    throw new RuntimeException(var10);
                 }
             }
             if (isCiYuan) {
@@ -1104,66 +1137,160 @@ public class TestService {
 
     }
 
+    /**
+     * 功能分类子菜单，回复对应"××帮助"返回明细，返回null表示非帮助命令
+     */
+    private String showHelpDetail(String message) {
+        StringBuilder sb = new StringBuilder();
+        switch (message) {
+            case "悬赏帮助":
+                sb.append("〓悬赏菜单〓\n");
+                sb.append("悬赏令模式(1手动2半自动3自动)\n");
+                sb.append("悬赏优先价值/修为/时长最短\n");
+                sb.append("悬赏价格限制××\n");
+                sb.append("设置/查看/重置悬赏优先物品\n");
+                sb.append("启用/关闭悬赏令价格查询\n");
+                sb.append("启用/关闭本群悬赏令价格查询\n");
+                sb.append("开始自动悬赏\n");
+                sb.append("一键使用追捕令\n");
+                break;
+            case "秘境帮助":
+                sb.append("〓秘境菜单〓\n");
+                sb.append("启用/关闭自动秘境\n");
+                sb.append("开始自动秘境\n");
+                sb.append("开始自动秘域\n");
+                sb.append("一键使用次元之钥\n");
+                sb.append("取消一键使用\n");
+                break;
+            case "修炼帮助":
+                sb.append("〓修炼菜单〓\n");
+                sb.append("开始/停止自动修炼\n");
+                sb.append("修炼模式(0无1修炼2闭关3宗门闭关)\n");
+                sb.append("启用/关闭无偿双修\n");
+                sb.append("开始/停止一键刷灵根\n");
+                sb.append("开启/停止妖塔挑战\n");
+                sb.append("妖塔挑战模式(0无1不回血2回血)\n");
+                sb.append("开始/停止自动刷天赋\n");
+                sb.append("我的双修次数\n");
+                sb.append("请双修××\n");
+                break;
+            case "宗门帮助":
+                sb.append("〓宗门菜单〓\n");
+                sb.append("启用/关闭/停止自动宗门任务\n");
+                sb.append("设置宗门任务(1邪修查抄2所有)\n");
+                sb.append("开始自动宗门任务\n");
+                break;
+            case "炼金帮助":
+                sb.append("〓炼金菜单〓\n");
+                sb.append("批量炼金丹药\n");
+                sb.append("批量炼金装备\n");
+                sb.append("批量上架药材\n");
+                sb.append("引用背包 一键上架/炼金\n");
+                sb.append("查看/添加/移除炼金排除物品××&××\n");
+                break;
+            case "购买帮助":
+                sb.append("〓购买菜单〓\n");
+                sb.append("开始/停止捡漏\n");
+                sb.append("自动购买××(物品 价格单位：万)\n");
+                sb.append("取消自动购买××\n");
+                sb.append("批量取消自动购买\n");
+                sb.append("查询自动购买\n");
+                sb.append("开始/停止更新坊市\n");
+                break;
+            case "提醒帮助":
+                sb.append("〓提醒菜单〓\n");
+                sb.append("启用/关闭结算提醒\n");
+                sb.append("启用/关闭本群结算提醒\n");
+                sb.append("启用/关闭价格查询\n");
+                sb.append("启用/关闭猜成语查询\n");
+                sb.append("一键启用/关闭本群查询功能\n");
+                sb.append("设置购买提醒物品××\n");
+                sb.append("查询购买提醒物品\n");
+                sb.append("开启/关闭本群购买提醒\n");
+                sb.append("坊市查看××\n");
+                sb.append("任务统计\n");
+                break;
+            case "多号帮助":
+                sb.append("〓多号菜单〓\n");
+                sb.append("编号/爱称听令1(不@)\n");
+                sb.append("编号/爱称听令2(@小小)\n");
+                sb.append("编号/爱称听令3(@小北)\n");
+                sb.append("弟子听令执行××\n");
+                sb.append("弟子听令执行命令××\n");
+                sb.append("弟子听令循环执行××\n");
+                sb.append("弟子听令循环执行命令××\n");
+                sb.append("循环执行××/循环执行命令××\n");
+                sb.append("设置主号 QQ号&QQ号\n");
+                sb.append("添加主号 QQ号\n");
+                sb.append("设置爱称(@机器人 你的编号是××)\n");
+                sb.append("设置/添加提醒群号××\n");
+                sb.append("设置赠送灵石群号××\n");
+                sb.append("更新赠送灵石××\n");
+                sb.append("我要灵石××\n");
+                break;
+            case "系统帮助":
+                sb.append("〓系统菜单〓\n");
+                sb.append("检测版本更新\n");
+                sb.append("版本更新日志\n");
+                sb.append("立即更新\n");
+                sb.append("验证模式(0手动1半自动2全自动)\n");
+                break;
+            case "炼丹帮助":
+                sb.append("〓炼丹菜单〓\n");
+                sb.append("采购药材×× ××(万价)\n");
+                sb.append("取消采购药材×× / 批量取消采购药材\n");
+                sb.append("查询采购药材\n");
+                sb.append("重复采购药材×× ××\n");
+                sb.append("取消重复采购药材×× / 批量取消重复采购药材\n");
+                sb.append("查询重复采购药材\n");
+                sb.append("开始/停止自动炼丹\n");
+                sb.append("查询炼丹配方 / 查丹方××\n");
+                sb.append("查询药材价格\n");
+                sb.append("更新炼丹配置××\n");
+                sb.append("刷新指定药材坊市×&×&×\n");
+                sb.append("取消刷新指定药材坊市\n");
+                sb.append("批量修改性平价格××\n");
+                sb.append("分析背包药材\n");
+                break;
+            case "小北帮助":
+                sb.append("〓小北菜单〓\n");
+                sb.append("开始/停止小北自动宗门任务\n");
+                sb.append("启用/关闭小北自动宗门任务\n");
+                sb.append("启用/关闭小北自动悬赏\n");
+                sb.append("启用/关闭小北自动秘境\n");
+                sb.append("开始小北自动悬赏/秘境\n");
+                sb.append("启用/关闭小北私聊\n");
+                sb.append("小北自动药材上架\n");
+                sb.append("开始自动挑战无尽X\n");
+                sb.append("小北回血丹设置(1道源丹2天命血凝丹)\n");
+                sb.append("设置/查看/重置小北悬赏优先物品\n");
+                break;
+            case "定时帮助":
+                sb.append("〓定时任务菜单〓\n");
+                sb.append("设置定时任务(多行，每行一条)\n");
+                sb.append("　每天执行：HH:mm 内容\n");
+                sb.append("　间隔执行：HH:mm 间隔N 内容\n");
+                sb.append("查询定时任务\n");
+                sb.append("移除定时任务 HH:mm\n");
+                sb.append("清空定时任务\n");
+                break;
+            default:
+                return null;
+        }
+        return sb.toString();
+    }
+
     private String showReplyMessage(String message, BotConfig botConfig, Bot bot) {
         StringBuilder sb = new StringBuilder();
         if (message.equals("命令")) {
-            sb.append("－－－－－功能设置－－－－－\n");
-            sb.append("启用/关闭悬赏令价格查询\n");
-            sb.append("启用/关闭本群悬赏令价格查询\n");
-            sb.append("启用/关闭自动秘境\n");
-            sb.append("启用/关闭无偿双修\n");
-            sb.append("开始/停止捡漏\n");
-            sb.append("开始/停止一键刷灵根\n");
-            sb.append("开始/停止自动修炼\n");
-            sb.append("修炼模式(0无1修炼2闭关3宗门闭关)\n");
-            sb.append("启用/关闭/停止自动宗门任务\n");
-            sb.append("设置宗门任务(1邪修查抄2所有)\n");
-            sb.append("悬赏令模式(1手动2半自动3自动)\n");
-            sb.append("悬赏优先价值/修为/时长最短\n");
-            sb.append("启用/关闭价格查询\n");
-            sb.append("启用/关闭猜成语查询\n");
-            sb.append("启用/关闭结算提醒\n");
-            sb.append("启用/关闭本群结算提醒\n");
-            sb.append("开始/停止更新坊市\n");
-            sb.append("开启/停止妖塔挑战\n");
-            sb.append("妖塔挑战模式(0无1不回血2回血)\n");
-            sb.append("自动购买××(物品 价格单位：万)\n");
-            sb.append("取消自动购买××\n");
-            sb.append("批量取消自动购买\n");
-            sb.append("查询自动购买\n");
-            sb.append("循环执行××\n");
-            sb.append("循环执行命令××\n");
-            sb.append("引用背包 一键上架/炼金\n");
-            sb.append("悬赏价格限制 ××\n");
-            sb.append("设置定时任务\n");
-            sb.append("任务统计\n");
-            sb.append("－－－－－快捷命令－－－－－\n");
-            sb.append("批量炼金丹药\n");
-            sb.append("批量炼金装备\n");
-            sb.append("批量上架药材\n");
-            sb.append("一键使用次元之钥\n");
-            sb.append("一键使用追捕令\n");
-             sb.append("一键启用/关闭本群查询功能\n");
-            sb.append("开始自动悬赏/秘境/宗门任务\n");
-
-            sb.append("－－－－－掌门命令－－－－－\n");
-            sb.append("编号/爱称听令1(不@)\n");
-            sb.append("编号/爱称听令2(@小小)\n");
-            sb.append("编号/爱称听令3(@小北)\n");
-            sb.append("弟子听令执行××\n");
-            sb.append("弟子听令执行命令××\n");
-            sb.append("弟子听令循环执行××\n");
-            sb.append("弟子听令循环执行命令××\n");
-            sb.append("查看/添加/移除炼金排除物品××&××\n");
-            sb.append("－－－－－其它设置－－－－－\n");
-
-            sb.append("检测版本更新\n");
-            sb.append("版本更新日志\n");
-            sb.append("立即更新\n");
-            sb.append("查看悬赏优先物品\n");
-            sb.append("重置悬赏优先物品\n");
-            sb.append("设置悬赏优先物品\n");
-            sb.append("设置主号 QQ号&QQ号\n");
+            sb.append("〓〓〓〓功能菜单〓〓〓〓\n");
+            sb.append("【悬赏帮助】 【秘境帮助】\n");
+            sb.append("【修炼帮助】 【宗门帮助】\n");
+            sb.append("【炼金帮助】 【购买帮助】\n");
+            sb.append("【提醒帮助】 【多号帮助】\n");
+            sb.append("【系统帮助】 【炼丹帮助】\n");
+            sb.append("【小北帮助】 【定时帮助】\n");
+            sb.append("回复对应菜单名查看明细\n");
             return sb.toString();
         } else {
             if (message.equals("当前设置")) {
@@ -1697,7 +1824,7 @@ public class TestService {
             bot.getBotConfig().setAutoBuyHerbsMode(0);
         }
 
-        if (message.contains("https") && message.contains("qqbot") && message.contains("" + bot.getBotId())) {
+        if (message.contains("请点击") && message.contains("表情")) {
             if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 5) {
                 BotConfig botConfig = bot.getBotConfig();
                 botConfig.setStop(true);
@@ -2523,6 +2650,32 @@ public class TestService {
     }
 
     @GroupMessageHandler(senderIds = { 3889001741L })
+    public void 秘域(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        BotConfig botConfig = bot.getBotConfig();
+        boolean isAtSelf = Utils.isAtSelf(bot, group, message, xxGroupId);
+        if (!botConfig.isEnableAutoSecret() || !isAtSelf) {
+            return;
+        }
+        // 道友已入【幽都】...约 90 分钟后可发『秘域结算』一探所获。
+        if (message.contains("道友已入") && message.contains("秘域结算") && message.contains("分钟")) {
+            Matcher matcher = Pattern.compile("约\\s*(\\d+(?:\\.\\d+)?)\\s*分钟").matcher(message);
+            if (matcher.find()) {
+                long minutes = (long) Math.ceil(Double.parseDouble(matcher.group(1)));
+                this.myTimeMap.put(bot.getBotId(), System.currentTimeMillis() + minutes * 60L * 1000L);
+            }
+        } else if (message.contains("秘域探索仍在进行") && message.contains("分钟")) {
+            // 秘域探索仍在进行，约还需 79 分钟。（结算时间未到时收到，重新计时等待下次结算）
+            Matcher matcher = Pattern.compile("约还需\\s*(\\d+(?:\\.\\d+)?)\\s*分钟").matcher(message);
+            if (matcher.find()) {
+                long minutes = (long) Math.ceil(Double.parseDouble(matcher.group(1)));
+                this.myTimeMap.put(bot.getBotId(), System.currentTimeMillis() + minutes * 60L * 1000L);
+            } else {
+                this.myTimeMap.remove(bot.getBotId());
+            }
+        }
+    }
+
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 悬赏令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId)
             throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
@@ -2969,6 +3122,32 @@ public class TestService {
 
     @Scheduled(fixedDelay = 60000L, initialDelay = 3000L)
     public void 结算() {
+        BotFactory.getBots().values().forEach((bot) -> {
+            BotConfig botConfig = bot.getBotConfig();
+            Long myExpireTime = this.myTimeMap.get(bot.getBotId());
+            if (botConfig.isEnableAutoSecret() && myExpireTime != null && myExpireTime > 0L
+                    && myExpireTime < System.currentTimeMillis()) {
+                if (botConfig.isStop() && botConfig.getAutoVerifyModel() == 0) {
+                    this.myTimeMap.remove(bot.getBotId());
+                    Bot remindBot = this.getRemindAtQQ(bot);
+                    if (remindBot == null) {
+                        return;
+                    }
+                    Utils.sendGroupMessage(bot, this.getRemindGroupId(bot),
+                            (new MessageChain()).at(remindBot.getBotConfig().getMasterQQ() + "").text("秘域结算异常，请手动结算！"));
+                    return;
+                }
+
+                // 先移除再发送，未到时间时游戏会回复"仍在进行约还需N分钟"并重新计时，避免重复发送
+                this.myTimeMap.remove(bot.getBotId());
+                long groupId = botConfig.getGroupId();
+                try {
+                    Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("秘域结算"));
+                    Thread.sleep(3000L);
+                } catch (InterruptedException var6) {
+                }
+            }
+        });
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             if (botConfig.isEnableAutoSecret() && botConfig.getMjTime() > 0L
