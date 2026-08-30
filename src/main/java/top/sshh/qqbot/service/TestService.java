@@ -1482,6 +1482,9 @@ public class TestService {
         BotConfig botConfig = bot.getBotConfig();
         if (botConfig.getLingShiQQ() != null && group.getGroupId() == botConfig.getLingShiQQ()) {
             messageChain = this.getMessageText(messageChain);
+            if (messageChain.size() == 0) {
+                return;
+            }
             message = ((TextMessage) messageChain.get(0)).getText().trim();
             if (group.getGroupId() == botConfig.getLingShiQQ() || this.checkControlQQ(bot, member)) {
                 this.setLingShiNum(bot, group, member, messageChain, message);
@@ -1490,6 +1493,9 @@ public class TestService {
 
         if (this.checkControlQQ(bot, member)) {
             messageChain = this.getMessageText(messageChain);
+            if (messageChain.size() == 0) {
+                return;
+            }
             message = ((TextMessage) messageChain.get(0)).getText().trim();
             if (this.checkControlQQ(bot, member)) {
                 this.setLingShiNum(bot, group, member, messageChain, message);
@@ -1604,7 +1610,15 @@ public class TestService {
         if (botConfig.getLingShiNum() > 0 && botConfig.getLingShiQQ() != null
                 && botConfig.getLingShiQQ() == group.getGroupId()) {
             if (message.contains("您的接收码为")) {
-                String code = message.split("您的接收码为：| ")[1];
+                String code;
+                Matcher uuidMatcher = Pattern
+                        .compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+                        .matcher(message);
+                if (uuidMatcher.find()) {
+                    code = uuidMatcher.group();
+                } else {
+                    code = message.split("您的接收码为：| ")[1];
+                }
                 group.sendMessage((new MessageChain()).at("3889001741").text("赠送灵石 ").text(code + " ")
                         .text(botConfig.getLingShiNum() * 10000 + ""));
             }
@@ -1641,6 +1655,10 @@ public class TestService {
     @GroupMessageHandler(senderIds = { 3889001741L })
     public void 自动点击按钮(Bot bot, Group group, Member member, MessageChain messageChain, String message,
             Integer messageId, Buttons buttons) {
+        if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
+            // SnowLuma 等协议端注入不出按钮，从消息里的 inline_keyboard 段兜底解析
+            buttons = Utils.parseButtonsFromMessage(message, messageId);
+        }
         if (buttons != null && !buttons.getButtonList().isEmpty() && message.contains("请确认是否")
                 && message.contains("灵石")) {
             String pattern = "at_tinyid=(\\d+)";
@@ -1809,6 +1827,10 @@ public class TestService {
     @GroupMessageHandler(senderIds = { 3889001741L })
     public void 验证码判断(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId,
             Buttons buttons) {
+        if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
+            // SnowLuma 等协议端注入不出按钮，从消息里的 inline_keyboard 段兜底解析
+            buttons = Utils.parseButtonsFromMessage(message, messageId);
+        }
         if (message.contains("解除限制") && bot.getBotConfig().getGroupId() == group.getGroupId()) {
             bot.getBotConfig().setStop(true);
             bot.getBotConfig().setLastRefreshTime(System.currentTimeMillis() + 300000L);
@@ -1848,9 +1870,10 @@ public class TestService {
                     buttons.setImageText(((Message) messageChain.get(messageChain.size() - 1)).toString());
                 }
                 if (StringUtils.isNotBlank(shituApiUrl)) {
+                    final Buttons buttonsForPic = buttons;
                     customPool.submit(new Runnable() {
                         public void run() {
-                            getPictureText(bot, botConfig, buttons, message, messageChain);
+                            getPictureText(bot, botConfig, buttonsForPic, message, messageChain);
                         }
                     });
 

@@ -1,7 +1,11 @@
 package top.sshh.qqbot.service.utils;
 
+import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
+import com.alibaba.fastjson2.JSONObject;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Button;
+import com.zhuangxv.bot.core.Buttons;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
@@ -198,5 +202,102 @@ public class Utils {
             double hundredMillion = number / 100000000.0;
             return String.format("%.2f亿", hundredMillion);
         }
+    }
+
+    /**
+     * 从消息字符串中解析 inline_keyboard 段重建按钮。
+     * SnowLuma 等协议端不携带 NapCat 的 elements/msgSeq 扩展结构，bot-core 注入的
+     * Buttons 会是空列表，此时调用本方法兜底；NapCat 下注入成功则无需调用。
+     */
+    public static Buttons parseButtonsFromMessage(String message, Integer messageId) {
+        if (StringUtils.isBlank(message) || !message.contains("inline_keyboard")) {
+            return null;
+        }
+        JSONObject keyboardData = null;
+        // 格式1：message整体是JSON数组
+        try {
+            JSONArray segments = JSON.parseArray(message);
+            if (segments != null) {
+                for (int i = 0; i < segments.size(); i++) {
+                    JSONObject seg = segments.getJSONObject(i);
+                    if (seg != null && "inline_keyboard".equals(seg.getString("type"))) {
+                        keyboardData = seg.getJSONObject("data");
+                        break;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        // 格式2：拼接文本中嵌着 json[{"type":"inline_keyboard",...}] 渲染段
+        if (keyboardData == null) {
+            String extracted = extractJsonSegment(message, "inline_keyboard");
+            if (extracted != null) {
+                try {
+                    keyboardData = JSON.parseObject(extracted).getJSONObject("data");
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        if (keyboardData == null) {
+            return null;
+        }
+        JSONArray rows = keyboardData.getJSONArray("rows");
+        if (rows == null || rows.isEmpty()) {
+            return null;
+        }
+        Buttons buttons = new Buttons();
+        buttons.setBotAppid(keyboardData.getString("bot_appid"));
+        for (int j = 0; j < rows.size(); j++) {
+            JSONObject row = rows.getJSONObject(j);
+            JSONArray buttonArray = row == null ? null : row.getJSONArray("buttons");
+            if (buttonArray == null || buttonArray.isEmpty()) {
+                continue;
+            }
+            buttons.addButtonList(JSON.parseArray(buttonArray.toJSONString(), Button.class));
+        }
+        if (buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
+            return null;
+        }
+        buttons.setMsgSeq(messageId == null ? "" : String.valueOf(messageId));
+        return buttons;
+    }
+
+    /**
+     * 从拼接渲染的消息文本中提取包含指定 type 的完整 JSON 对象（花括号配平，容忍字符串内的转义）
+     */
+    private static String extractJsonSegment(String message, String typeMarker) {
+        int marker = message.indexOf("\"type\":\"" + typeMarker + "\"");
+        if (marker < 0) {
+            return null;
+        }
+        int start = message.lastIndexOf('{', marker);
+        if (start < 0) {
+            return null;
+        }
+        boolean inString = false;
+        boolean escaped = false;
+        int depth = 0;
+        for (int i = start; i < message.length(); i++) {
+            char c = message.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+            } else if (c == '"') {
+                inString = true;
+            } else if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return message.substring(start, i + 1);
+                }
+            }
+        }
+        return null;
     }
 }

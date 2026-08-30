@@ -1,6 +1,7 @@
 package top.sshh.qqbot.verifycode;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
@@ -90,8 +91,21 @@ public class RemoteVerifyCode {
             Integer messageId, Buttons buttons) {
         boolean isSelfGroup = Utils.isAtSelf(bot, group, message, xxGroupId);
         BotConfig botConfig = bot.getBotConfig();
-
+        if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
+            // SnowLuma 等协议端不携带 NapCat 的 elements/msgSeq 结构，bot-core 注入不出按钮，
+            // 此时从消息里的 inline_keyboard 段自行解析
+            buttons = Utils.parseButtonsFromMessage(message, messageId);
+        }
+        logger.info("[验证码调试] group={}, buttons={}, msgLen={}, 含请点击={}, 含表情={}, isSelfGroup={}, autoVerifyModel={}",
+                group.getGroupId(),
+                buttons == null ? "null" : "按钮数" + buttons.getButtonList().size(),
+                message == null ? 0 : message.length(),
+                message != null && message.contains("请点击"),
+                message != null && message.contains("表情"),
+                isSelfGroup, botConfig.getAutoVerifyModel());
         if (message.contains("请点击") && message.contains("表情")) {
+            logger.info("[验证码调试] 验证码消息原文前400字符: {}",
+                    message == null ? "null" : message.substring(0, Math.min(400, message.length())));
             if (botConfig.isEnableSavePic() && buttons != null && !buttons.getButtonList().isEmpty()
                     && buttons.getButtonList().size() > 5) {
                 getImageInfo(message, buttons, messageChain);
@@ -127,10 +141,11 @@ public class RemoteVerifyCode {
 
                     }
 
+                    final Buttons buttonsForVerify = buttons;
                     customPool.submit(new Runnable() {
                         public void run() {
                             if (StringUtils.isNotBlank(shituApiUrl)) {
-                                autoVerifyCode(bot, group, messageChain, message, messageId, buttons);
+                                autoVerifyCode(bot, group, messageChain, message, messageId, buttonsForVerify);
                             }
                         }
                     });
@@ -607,7 +622,20 @@ public class RemoteVerifyCode {
 
         while (matcher.find()) {
             buttons.setImageUrl(matcher.group());
-            buttons.setImageText(messageChain.get(messageChain.size() - 1).toString());
+        }
+        // 题目文本从后往前找包含"请点击"的消息段（SnowLuma 下最后一段可能是
+        // inline_keyboard，不含文字；NapCat 下最后一段即为题目，行为不变）
+        if (messageChain != null) {
+            for (int i = messageChain.size() - 1; i >= 0; i--) {
+                Message seg = messageChain.get(i);
+                if (seg != null && seg.toString().contains("请点击")) {
+                    buttons.setImageText(seg.toString());
+                    break;
+                }
+            }
+        }
+        if (StringUtils.isBlank(buttons.getImageText())) {
+            buttons.setImageText(message);
         }
     }
 
