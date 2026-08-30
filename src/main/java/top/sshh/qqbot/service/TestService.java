@@ -1657,7 +1657,7 @@ public class TestService {
             Integer messageId, Buttons buttons) {
         if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
             // SnowLuma 等协议端注入不出按钮，从消息里的 inline_keyboard 段兜底解析
-            buttons = Utils.parseButtonsFromMessage(message, messageId);
+            buttons = Utils.parseButtonsFromMessage(bot, message, messageId);
         }
         if (buttons != null && !buttons.getButtonList().isEmpty() && message.contains("请确认是否")
                 && message.contains("灵石")) {
@@ -1829,7 +1829,7 @@ public class TestService {
             Buttons buttons) {
         if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
             // SnowLuma 等协议端注入不出按钮，从消息里的 inline_keyboard 段兜底解析
-            buttons = Utils.parseButtonsFromMessage(message, messageId);
+            buttons = Utils.parseButtonsFromMessage(bot, message, messageId);
         }
         if (message.contains("解除限制") && bot.getBotConfig().getGroupId() == group.getGroupId()) {
             bot.getBotConfig().setStop(true);

@@ -3,6 +3,7 @@ package top.sshh.qqbot.service.utils;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.zhuangxv.bot.api.ApiResult;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Button;
 import com.zhuangxv.bot.core.Buttons;
@@ -209,7 +210,7 @@ public class Utils {
      * SnowLuma 等协议端不携带 NapCat 的 elements/msgSeq 扩展结构，bot-core 注入的
      * Buttons 会是空列表，此时调用本方法兜底；NapCat 下注入成功则无需调用。
      */
-    public static Buttons parseButtonsFromMessage(String message, Integer messageId) {
+    public static Buttons parseButtonsFromMessage(Bot bot, String message, Integer messageId) {
         if (StringUtils.isBlank(message) || !message.contains("inline_keyboard")) {
             return null;
         }
@@ -258,8 +259,30 @@ public class Utils {
         if (buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
             return null;
         }
-        buttons.setMsgSeq(messageId == null ? "" : String.valueOf(messageId));
+        buttons.setMsgSeq(resolveMsgSeq(bot, messageId));
         return buttons;
+    }
+
+    /**
+     * SnowLuma 的 click_inline_keyboard_button 要求 msg_seq 为无符号的消息序号
+     * （message_seq），而事件里只能拿到 message_id，这里通过 get_msg 反查换算。
+     */
+    private static String resolveMsgSeq(Bot bot, Integer messageId) {
+        if (bot == null || messageId == null) {
+            return messageId == null ? "" : String.valueOf(messageId);
+        }
+        try {
+            ApiResult result = bot.invoke(new GetMsgApi(messageId));
+            if (result != null && result.getData() != null) {
+                JSONObject data = (JSONObject) JSON.toJSON(result.getData());
+                Long seq = data == null ? null : data.getLong("message_seq");
+                if (seq != null && seq > 0) {
+                    return String.valueOf(seq);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return String.valueOf(messageId);
     }
 
     /**

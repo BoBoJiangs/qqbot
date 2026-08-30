@@ -94,7 +94,7 @@ public class RemoteVerifyCode {
         if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
             // SnowLuma 等协议端不携带 NapCat 的 elements/msgSeq 结构，bot-core 注入不出按钮，
             // 此时从消息里的 inline_keyboard 段自行解析
-            buttons = Utils.parseButtonsFromMessage(message, messageId);
+            buttons = Utils.parseButtonsFromMessage(bot, message, messageId);
         }
         logger.info("[验证码调试] group={}, buttons={}, msgLen={}, 含请点击={}, 含表情={}, isSelfGroup={}, autoVerifyModel={}",
                 group.getGroupId(),
