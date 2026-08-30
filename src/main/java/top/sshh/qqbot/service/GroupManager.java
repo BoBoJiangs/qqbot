@@ -100,7 +100,9 @@ public class GroupManager {
     private Map<String, Set<String>> excludeAlchemyMap = new ConcurrentHashMap();
     private Map<String, Set<String>> excludeSellMap = new ConcurrentHashMap();
     public Map<String, Map<String, ProductPrice>> autoBuyProductMap = new ConcurrentHashMap();
-    public Map<String, Set<String>> buyRemindItemsMap = new ConcurrentHashMap();
+    /** 用户定制专属提醒配置：key1 为 botId，key2 为用户QQ */
+    public Map<String, Map<String, UserRemindConfig>> userRemindConfigMap = new ConcurrentHashMap();
+    /** 专属提醒群开关：群开关未开启的群不能订制提醒、不发送提醒 */
     public Map<String, Boolean> buyRemindGroupEnabledMap = new ConcurrentHashMap();
     public Map<String, MessageNumber> MESSAGE_NUMBER_MAP = new ConcurrentHashMap();
     public Map<String, TaskStatus> taskStateMap = new ConcurrentHashMap();
@@ -368,7 +370,7 @@ public class GroupManager {
             data.put("发言统计", MESSAGE_NUMBER_MAP);
             data.put("任务统计", taskStateMap);
             data.put("自动购买", this.autoBuyProductMap);
-            data.put("购买提醒物品", this.buyRemindItemsMap);
+            data.put("专属提醒配置", this.userRemindConfigMap);
             data.put("购买提醒群", this.buyRemindGroupEnabledMap);
             data.put("炼金排除", this.excludeAlchemyMap);
             data.put("上架排除", this.excludeSellMap);
@@ -435,13 +437,25 @@ public class GroupManager {
             this.autoBuyProductMap = data.getObject("自动购买",
                     new TypeReference<Map<String, Map<String, ProductPrice>>>() {
                     });
-            this.buyRemindItemsMap = data.getObject("购买提醒物品",
-                    new TypeReference<Map<String, Set<String>>>() {
+            this.userRemindConfigMap = data.getObject("专属提醒配置",
+                    new TypeReference<Map<String, Map<String, UserRemindConfig>>>() {
                     });
-            if (this.buyRemindItemsMap == null) {
-                this.buyRemindItemsMap = new ConcurrentHashMap<>();
+            if (this.userRemindConfigMap == null) {
+                this.userRemindConfigMap = new ConcurrentHashMap<>();
+            } else {
+                // 反序列化生成的是 HashMap，统一转 ConcurrentHashMap 保证线程安全
+                Map<String, Map<String, UserRemindConfig>> converted = new ConcurrentHashMap<>();
+                this.userRemindConfigMap.forEach((botKey, userMap) -> {
+                    Map<String, UserRemindConfig> tmp = new ConcurrentHashMap<>();
+                    if (userMap != null) {
+                        userMap.forEach(tmp::put);
+                    }
+                    converted.put(botKey, tmp);
+                });
+                this.userRemindConfigMap = converted;
             }
 
+            // 沿用旧的"购买提醒群"key，升级前开过提醒的群自动继承开关状态
             this.buyRemindGroupEnabledMap = data.getObject("购买提醒群",
                     new TypeReference<Map<String, Boolean>>() {
                     });
@@ -509,7 +523,7 @@ public class GroupManager {
         this.ltmap = new ConcurrentHashMap<>();
         this.MESSAGE_NUMBER_MAP = new ConcurrentHashMap<>();
         this.autoBuyProductMap = new ConcurrentHashMap<>();
-        this.buyRemindItemsMap = new ConcurrentHashMap<>();
+        this.userRemindConfigMap = new ConcurrentHashMap<>();
         this.buyRemindGroupEnabledMap = new ConcurrentHashMap<>();
         this.excludeAlchemyMap = new ConcurrentHashMap<>();
         this.excludeSellMap = new ConcurrentHashMap<>();
@@ -548,33 +562,27 @@ public class GroupManager {
         this.saveTasksToFile();
     }
 
+    public Map<String, UserRemindConfig> getUserRemindConfigs(Long botId) {
+        return this.userRemindConfigMap.computeIfAbsent(botId + "", k -> new ConcurrentHashMap<>());
+    }
+
+    public UserRemindConfig getUserRemindConfig(Long botId, Long userQq) {
+        Map<String, UserRemindConfig> userMap = this.userRemindConfigMap.get(botId + "");
+        return userMap == null ? null : userMap.get(userQq + "");
+    }
+
+    public void setUserRemindConfig(Long botId, Long userQq, UserRemindConfig config) {
+        getUserRemindConfigs(botId).put(userQq + "", config);
+        this.saveTasksToFile();
+    }
+
     public boolean isBuyRemindGroupEnabled(Long groupId) {
         Boolean enabled = this.buyRemindGroupEnabledMap.get(groupId + "");
-        if (enabled == null) {
-            return false;
-        }
-        return enabled;
+        return Boolean.TRUE.equals(enabled);
     }
 
     public void setBuyRemindGroupEnabled(Long groupId, boolean enabled) {
         this.buyRemindGroupEnabledMap.put(groupId + "", enabled);
-        this.saveTasksToFile();
-    }
-
-    public Set<String> getBuyRemindItems(Long botId) {
-        Set<String> items = this.buyRemindItemsMap.get(botId + "");
-        if (items == null) {
-            return Collections.emptySet();
-        }
-        return items;
-    }
-
-    public void setBuyRemindItems(Long botId, Set<String> items) {
-        Set<String> newItems = ConcurrentHashMap.newKeySet();
-        if (items != null) {
-            newItems.addAll(items);
-        }
-        this.buyRemindItemsMap.put(botId + "", newItems);
         this.saveTasksToFile();
     }
 
@@ -1107,6 +1115,8 @@ public class GroupManager {
     private static final Pattern MARKDOWN_MENTION_PATTERN = Pattern.compile(
             "\\[([^\\]]{1,25})\\]\\(mqqapi://markdown/mention\\?[^)]*?at_tinyid=(\\d{5,15})\\)");
 
+    private static final Pattern DISCIPLE_NAME_PATTERN = Pattern.compile("徒弟\\s*@?\\s*(.+?)\\s*(?=传功完毕|传功冷却中|获得)");
+
     /**
      * 解析markdown提及格式[@昵称](mqqapi://markdown/mention?at_type=1&at_tinyid=xxx)。
      * tinyid是腾讯内部ID不一定是真实QQ：先校验tinyid是否命中群成员，未命中时用昵称反查。
@@ -1245,8 +1255,23 @@ public class GroupManager {
             logger.warn("传功消息未解析到冷却时间，跳过：group={}, msg={}", group.getGroupId(), msg);
             return;
         }
-        logger.info("传功提醒注册：提取方式={}，qq={}，{}后提醒", extractWay, targetUserId, formatDelayText(delayMillis));
-        addChuangongRemind(String.valueOf(targetUserId), group, delayMillis, bot);
+        String discipleName = extractDiscipleName(msg);
+        logger.info("传功提醒注册：提取方式={}，qq={}，徒弟={}，{}后提醒", extractWay, targetUserId, discipleName, formatDelayText(delayMillis));
+        addChuangongRemind(String.valueOf(targetUserId), group, delayMillis, bot, discipleName);
+    }
+
+    /**
+     * 从传功消息中提取徒弟名，如"徒弟 华适四 传功冷却中"取"华适四"，兼容"@徒弟名"及"徒弟名获得/传功完毕"等格式。
+     */
+    private String extractDiscipleName(String msg) {
+        Matcher matcher = DISCIPLE_NAME_PATTERN.matcher(msg);
+        if (matcher.find()) {
+            String name = matcher.group(1).trim();
+            if (StringUtils.isNotBlank(name)) {
+                return name;
+            }
+        }
+        return null;
     }
 
     /**
@@ -1275,15 +1300,19 @@ public class GroupManager {
         return hours > 0 ? hours + "小时" + minutes + "分" : minutes + "分钟";
     }
 
-    private void addChuangongRemind(String qq, Group group, long delayMillis, Bot bot) {
+    private void addChuangongRemind(String qq, Group group, long delayMillis, Bot bot, String discipleName) {
         RemindTime remindTime = new RemindTime();
         remindTime.setQq(Long.parseLong(qq));
         remindTime.setExpireTime(System.currentTimeMillis() + delayMillis);
         remindTime.setText("传功");
+        remindTime.setDiscipleName(discipleName);
         remindTime.setGroupId(group.getGroupId());
         remindTime.setRemindQq(bot.getBotId());
-        this.cgmap.put(qq, remindTime);
-        group.sendMessage(new MessageChain().at(qq).text("收到传功结算提醒，将在" + formatDelayText(delayMillis) + "后提醒你再次传功"));
+        // 按师父QQ+徒弟名区分key，同一师父多个徒弟的提醒互不覆盖
+        String key = StringUtils.isNotBlank(discipleName) ? qq + "_" + discipleName : qq;
+        this.cgmap.put(key, remindTime);
+        String remindTarget = StringUtils.isNotBlank(discipleName) ? "再次为徒弟【" + discipleName + "】传功" : "再次传功";
+        group.sendMessage(new MessageChain().at(qq).text("收到传功结算提醒，将在" + formatDelayText(delayMillis) + "后提醒你" + remindTarget));
         this.saveTasksToFile();
     }
 
@@ -1724,8 +1753,12 @@ public class GroupManager {
                                         .at(remindTime.getQq() + "").text(MY_TEXT_LIST.get(new Random().nextInt(MY_TEXT_LIST.size()))));
                                 break;
                             case "传功":
+                                String cgText = CG_TEXT_LIST.get(new Random().nextInt(CG_TEXT_LIST.size()));
+                                if (StringUtils.isNotBlank(remindTime.getDiscipleName())) {
+                                    cgText = cgText.replaceFirst("【传功提醒】", "【传功提醒·徒弟" + remindTime.getDiscipleName() + "】");
+                                }
                                 Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
-                                        .at(remindTime.getQq() + "").text(CG_TEXT_LIST.get(new Random().nextInt(CG_TEXT_LIST.size()))));
+                                        .at(remindTime.getQq() + "").text(cgText));
                                 break;
                             case "灵田":
                                 Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())

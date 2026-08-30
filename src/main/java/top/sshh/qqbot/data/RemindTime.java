@@ -9,6 +9,15 @@ public class RemindTime implements Serializable {
     private String text;
     private Long groupId;
     private Long remindQq;
+    private String discipleName;
+
+    public String getDiscipleName() {
+        return discipleName;
+    }
+
+    public void setDiscipleName(String discipleName) {
+        this.discipleName = discipleName;
+    }
 
     public Long getRemindQq() {
         return remindQq;
