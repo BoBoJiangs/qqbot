@@ -550,10 +550,26 @@ public class RemoteVerifyCode {
     private String getEmojiAnswer(String title, RecognitionResult recognitionResult) {
         String answer;
         int idx = 0;
-        Matcher matcher1 = Pattern.compile("(\\d+|[一二三四五六七八九])").matcher(title);
+        // 只取"第N个"里的数字。题目在 markdown 渲染下带有版本号/图片尺寸等无关数字
+        // （如 %3A2、1100px），不能匹配整段文本里第一个出现的数字
+        Matcher matcher1 = Pattern.compile("第(\\d+|[一二三四五六七八九十]+)个").matcher(title);
         if (matcher1.find()) {
-            String matched = matcher1.group();
-            idx = Integer.parseInt(matched) - 1;
+            String matched = matcher1.group(1);
+            if (matched.matches("\\d+")) {
+                idx = Integer.parseInt(matched) - 1;
+            } else if (matched.contains("十")) {
+                String[] parts = matched.split("十");
+                int value = 10;
+                if (parts.length > 0 && !parts[0].isEmpty()) {
+                    value = CHINESE_NUMBERS.getOrDefault(parts[0], 1) * 10;
+                }
+                if (parts.length > 1 && !parts[1].isEmpty()) {
+                    value += CHINESE_NUMBERS.getOrDefault(parts[1], 0);
+                }
+                idx = value - 1;
+            } else {
+                idx = CHINESE_NUMBERS.getOrDefault(matched, 1) - 1;
+            }
         }
         logger.info("列表大小: " + recognitionResult.emojiList.size());
         if (idx >= recognitionResult.emojiList.size()) {
