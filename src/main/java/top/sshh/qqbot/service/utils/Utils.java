@@ -113,12 +113,26 @@ public class Utils {
 //            getRemindGroup(bot,xxGroupId).sendMessage(new MessageChain().text(cleanMessage(message)));
 //        }
 //    }
+    /**
+     * 转发文本清洗：剥离 markdown 链接壳（[@宣藩九](mqqapi://...) -> @宣藩九）、
+     * 删除 [](%7B...%7D) 版本标记行和空行，让转发到控制群的内容可读
+     */
+    public static String cleanForwardText(String text) {
+        if (text == null) {
+            return null;
+        }
+        String s = stripMarkdownLink(text);
+        s = s.replaceAll("(?m)^[ \\t]*\\n", "");
+        return s.trim();
+    }
+
     public static void forwardMessage(Bot bot,long xxGroupId,  MessageChain messageChain){
         if(bot.getBotConfig().isEnableForwardMessage() && xxGroupId>0){
             // SnowLuma 卡片消息链为 at+markdown+inline_keyboard，末段是键盘 JSON 段；
             // 从文本段里取正文（MarkdownMessage.getText() 即卡片文本），NapCat 下行为不变
             List<TextMessage> texts = messageChain.getMessageByType(TextMessage.class);
             String message = texts.isEmpty() ? null : texts.get(texts.size()-1).getText();
+            message = cleanForwardText(message);
             if(StringUtils.isNotBlank(message)){
                 getRemindGroup(bot,xxGroupId).sendMessage(new MessageChain().text(message));
             }
