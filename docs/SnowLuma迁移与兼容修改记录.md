@@ -177,3 +177,18 @@ sudo docker exec snowluma node -e "fetch('http://127.0.0.1:3000/<action>',{metho
 - 所有 QQ 窗口在同一 noVNC 桌面里，分别扫码即可
 - 临时手动多开（不挂卷，重建容器后登录态丢失）：
   `docker exec -u snowluma -e DISPLAY=:1 -e HOME=/app/qq-acct2 -d snowluma sh -lc 'qq --no-sandbox ${SNOWLUMA_QQ_FLAGS}'`
+
+### 实测内存账本（2026-08-31，2核3.5G 服务器）
+
+| 组件 | 占用 |
+|------|------|
+| snowluma（双开：华适四 + 宣藩九，含网关/noVNC 桌面） | 1.22 GB |
+| java-bot（Spring Boot） | 374 MB |
+| NapCat（花晟九） | 119 MB |
+| 系统本身 | ~400 MB |
+| 剩余可用 | ~1.5 GB |
+
+- SnowLuma 每 QQ 进程实际 400-500MB；瓶颈在**内存**不在 CPU（挂机 bot 的 CPU 占用很低）
+- **3 个号稳定**（含花晟九迁入 SnowLuma 三开：snowluma 约 1.7G，删 NapCat 省回 119M，净增约 330M）
+- **第 4 个号不推荐**：可用内存只剩 ~500M，QQ 进程随聊天图片缓存波动易触发 OOM
+- 5 个及以上需升级服务器内存到 6-8G（腾讯云控制台升配，重启后容器和卷自动恢复）
