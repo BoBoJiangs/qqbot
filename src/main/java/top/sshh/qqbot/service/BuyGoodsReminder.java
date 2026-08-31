@@ -83,10 +83,11 @@ public class BuyGoodsReminder {
     public GroupManager groupManager;
 
     /**
-     * 本群提醒总开关，仅群主/群管理员或机器人控制者可操作。
-     * IGNORE_ITSELF：处理群友消息、忽略机器人自己发的，ONLY_ITSELF 语义是"只处理机器人自己发出的消息"，用错会导致其他用户无法触发。
+     * 本群提醒总开关：群主/群管理员、机器人控制者或机器人自身可操作。
+     * NOT_IGNORE：机器人自己发出的群级开关命令也需要处理；机器人自身消息不要求再次@自己，
+     * 也不再重复校验群管理员/控制QQ身份。
      */
-    @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.IGNORE_ITSELF)
+    @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.NOT_IGNORE)
     public void 开关本群购买提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         message = message.trim();
         boolean enable;
@@ -97,11 +98,13 @@ public class BuyGoodsReminder {
         } else {
             return;
         }
-        // 必须@机器人：多机器人同群时只有被@的那个响应，避免全体同时执行
-        if (member == null || !isAtBot(bot, messageChain, message)) {
+        boolean isSelfMessage = member != null && member.getUserId() == bot.getBotId();
+        // 群友消息必须@机器人；机器人自己发出的群级开关命令允许直接触发。
+        if (member == null || (!isSelfMessage && !isAtBot(bot, messageChain, message))) {
             return;
         }
-        if (!isRemindManager(bot, member)) {
+        // 机器人自身发送的命令视为可信控制消息，不要求发送者具备群管理员/控制QQ身份。
+        if (!isSelfMessage && !isRemindManager(bot, member)) {
             return;
         }
         groupManager.setBuyRemindGroupEnabled(group.getGroupId(), enable);
@@ -121,6 +124,11 @@ public class BuyGoodsReminder {
             return;
         }
         message = message.trim();
+        // 购买提醒消息末尾会@机器人并带有“发送【查看提醒帮助】”提示，
+        // 这是机器人间的提醒内容，不应被当成用户命令再次触发。
+        if (isGeneratedPurchaseReminder(message)) {
+            return;
+        }
         if (!message.contains("设置提醒物品") && !message.contains("查看提醒帮助")
                 && !message.contains("查看提醒示例") && !message.contains("查询我的提醒")
                 && !message.contains("查看我的提醒") && !message.contains("关闭购买提醒")
@@ -145,6 +153,15 @@ public class BuyGoodsReminder {
         } else if (message.contains("开启购买提醒")) {
             开关购买提醒(bot, group, member, messageId, true);
         }
+    }
+
+    /**
+     * 判断是否为本功能生成的购买提醒消息，避免消息底部的自助提示触发被@机器人的命令入口。
+     */
+    private boolean isGeneratedPurchaseReminder(String message) {
+        return StringUtils.isNotBlank(message)
+                && message.contains("发送【查看提醒帮助】")
+                && message.contains("也可以订制你的专属提醒");
     }
 
     @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.NOT_IGNORE)

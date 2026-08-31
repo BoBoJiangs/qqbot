@@ -27,6 +27,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Utils {
+    private static final Pattern CAPTCHA_PROMPT_PATTERN =
+            Pattern.compile("请点击[^\\r\\n\\]]*?按钮");
+
 //    public static boolean isAtSelf(Bot bot, Group group) {
 //
 //        return  group.getGroupId() == bot.getBotConfig().getGroupId();
@@ -208,6 +211,26 @@ public class Utils {
         }
 
         return resultText; // 如果没有找到"请点击"，返回原字符串
+    }
+
+    /**
+     * 提取验证码卡片中的题目，去掉 SnowLuma Markdown 卡片的版本标记、@链接、图片链接和尾部括号。
+     * 例如只保留：请点击图中第2个表情对应的按钮
+     */
+    public static String extractCaptchaPrompt(String text) {
+        if (StringUtils.isBlank(text)) {
+            return text;
+        }
+        String normalized = text.replace("\\(", "(")
+                .replace("\\)", ")")
+                .replace("\\[", "[")
+                .replace("\\]", "]");
+        Matcher matcher = CAPTCHA_PROMPT_PATTERN.matcher(normalized);
+        String prompt = null;
+        while (matcher.find()) {
+            prompt = matcher.group().trim();
+        }
+        return StringUtils.isNotBlank(prompt) ? prompt : cleanForwardText(normalized);
     }
 
     /**

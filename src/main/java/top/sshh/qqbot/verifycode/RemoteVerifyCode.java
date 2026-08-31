@@ -607,7 +607,10 @@ public class RemoteVerifyCode {
             }
             stringBuilder.append("正确答案：" + recognitionResult.answer);
             stringBuilder.append("\n");
-            stringBuilder.append(buttons.getImageText());
+            String captchaPrompt = Utils.extractCaptchaPrompt(buttons.getImageText());
+            if (StringUtils.isNotBlank(captchaPrompt)) {
+                stringBuilder.append(captchaPrompt);
+            }
             MessageChain messageChain1 = new MessageChain();
             messageChain1.text("\n").image(buttons.getImageUrl()).text(stringBuilder.toString());
             // bot.sendPrivateMessage(bot.getBotId(), messageChain1);
@@ -629,13 +632,13 @@ public class RemoteVerifyCode {
             for (int i = messageChain.size() - 1; i >= 0; i--) {
                 Message seg = messageChain.get(i);
                 if (seg != null && seg.toString().contains("请点击")) {
-                    buttons.setImageText(seg.toString());
+                    buttons.setImageText(Utils.extractCaptchaPrompt(seg.toString()));
                     break;
                 }
             }
         }
         if (StringUtils.isBlank(buttons.getImageText())) {
-            buttons.setImageText(message);
+            buttons.setImageText(Utils.extractCaptchaPrompt(message));
         }
     }
 
