@@ -96,16 +96,7 @@ public class RemoteVerifyCode {
             // 此时从消息里的 inline_keyboard 段自行解析
             buttons = Utils.parseButtonsFromMessage(bot, message, messageId);
         }
-        logger.info("[验证码调试] group={}, buttons={}, msgLen={}, 含请点击={}, 含表情={}, isSelfGroup={}, autoVerifyModel={}",
-                group.getGroupId(),
-                buttons == null ? "null" : "按钮数" + buttons.getButtonList().size(),
-                message == null ? 0 : message.length(),
-                message != null && message.contains("请点击"),
-                message != null && message.contains("表情"),
-                isSelfGroup, botConfig.getAutoVerifyModel());
         if (message.contains("请点击") && message.contains("表情")) {
-            logger.info("[验证码调试] 验证码消息原文前400字符: {}",
-                    message == null ? "null" : message.substring(0, Math.min(400, message.length())));
             if (botConfig.isEnableSavePic() && buttons != null && !buttons.getButtonList().isEmpty()
                     && buttons.getButtonList().size() > 5) {
                 getImageInfo(message, buttons, messageChain);
@@ -177,15 +168,11 @@ public class RemoteVerifyCode {
             for (Button button : buttonList) {
                 String trimmed = button.getLabel().trim();
                 boolean isEmoji = this.isEmoji(trimmed);
-                System.out.println("检查: '" + trimmed + "' -> 是表情? " + isEmoji);
                 if (isEmoji) {
                     if (!existingEmojis.contains(trimmed)) {
-                        System.out.println("发现新表情: " + trimmed);
                         writer.write(trimmed + "\n");
                         writer.flush();
                         existingEmojis.add(trimmed);
-                    } else {
-                        System.out.println("表情已存在: " + trimmed);
                     }
                 }
             }
@@ -342,8 +329,6 @@ public class RemoteVerifyCode {
     }
 
     public RecognitionResult recognizeVerifyCode(String imageUrl, String title, Bot bot) {
-        System.out.println("开始识别验证码: " + imageUrl);
-
         String answer = "";
         String resultText = "";
         RecognitionResult recognitionResult = new RecognitionResult();
@@ -571,7 +556,6 @@ public class RemoteVerifyCode {
                 idx = CHINESE_NUMBERS.getOrDefault(matched, 1) - 1;
             }
         }
-        logger.info("列表大小: " + recognitionResult.emojiList.size());
         if (idx >= recognitionResult.emojiList.size()) {
             idx = recognitionResult.emojiList.size() - 1;
         }
@@ -849,7 +833,6 @@ public class RemoteVerifyCode {
                     response.append(responseLine.trim());
                 }
             }
-            logger.info("API响应: {}", response);
             try {
                 RecognitionResult result = JSON.parseObject(response.toString(), RecognitionResult.class);
                 if (result != null && result.getEmojiList() == null) {

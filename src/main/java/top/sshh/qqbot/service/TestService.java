@@ -1434,7 +1434,7 @@ public class TestService {
         if (this.isStartAutoTalent && isAtSelf && message.contains("保留24h，超时则无法选择")) {
             List<TextMessage> messageList = messageChain.getMessageByType(TextMessage.class);
             String text = ((TextMessage) messageList.get(messageList.size() - 1)).getText();
-            if (this.checkStats(text)) {
+            if (this.checkStats(Utils.stripMarkdownLink(text))) {
                 this.isStartAutoTalent = false;
             } else {
                 group.sendMessage((new MessageChain()).at("3889001741").text("确认天赋保留左边"));

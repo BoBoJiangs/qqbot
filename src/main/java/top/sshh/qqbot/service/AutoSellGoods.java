@@ -275,7 +275,8 @@ public class AutoSellGoods {
             if (line.contains("极品") || line.contains("无上") || line.contains("辅修")) {
                 continue;
             }
-            line = line.trim();
+            // SnowLuma 下装备名为 markdown 链接 [上品法器xxx](mqqapi://...)，剥离链接恢复原始格式
+            line = Utils.stripMarkdownLink(line.trim());
             String name = "";
             if (!line.endsWith("功法") && !line.endsWith("神通")) {
                 if (line.startsWith("上品") || line.startsWith("下品") || line.startsWith("极品")
@@ -326,11 +327,13 @@ public class AutoSellGoods {
             String line = (String) var2.next();
             line = line.trim();
             if (line.contains("名字：")) {
-                currentHerb = line.replaceAll("名字：", "");
+                // SnowLuma 下药名为 markdown 链接 [名字](mqqapi://...)，剥离链接保留药名
+                currentHerb = Utils.stripMarkdownLink(line.replaceAll("名字：", ""));
             } else if (currentHerb != null && line.contains("拥有数量:")) {
-                int count = Integer.parseInt(line.split("拥有数量:|炼金")[1]);
-
-                herbsCountLimit10(bot, count, currentHerb);
+                int count = Utils.parseHerbCount(line);
+                if (count >= 0) {
+                    herbsCountLimit10(bot, count, currentHerb);
+                }
                 currentHerb = null;
             }
         }
@@ -345,7 +348,7 @@ public class AutoSellGoods {
             String line = (String) var2.next();
             line = line.trim();
             if (line.contains("名字：")) {
-                currentPill = line.replaceAll("名字：", "");
+                currentPill = Utils.stripMarkdownLink(line.replaceAll("名字：", ""));
             } else if (currentPill != null && line.contains("拥有数量:")) {
                 // 使用正则表达式提取数字
                 Pattern pattern = Pattern.compile("拥有数量:(\\d+)");

@@ -10,6 +10,7 @@ import com.zhuangxv.bot.core.Buttons;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
+import com.zhuangxv.bot.message.support.TextMessage;
 import org.apache.commons.lang3.StringUtils;
 
 import javax.imageio.ImageIO;
@@ -22,6 +23,8 @@ import java.nio.file.Path;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Utils {
 //    public static boolean isAtSelf(Bot bot, Group group) {
@@ -112,7 +115,10 @@ public class Utils {
 //    }
     public static void forwardMessage(Bot bot,long xxGroupId,  MessageChain messageChain){
         if(bot.getBotConfig().isEnableForwardMessage() && xxGroupId>0){
-            String message = String.valueOf(messageChain.get(messageChain.size()-1));
+            // SnowLuma 卡片消息链为 at+markdown+inline_keyboard，末段是键盘 JSON 段；
+            // 从文本段里取正文（MarkdownMessage.getText() 即卡片文本），NapCat 下行为不变
+            List<TextMessage> texts = messageChain.getMessageByType(TextMessage.class);
+            String message = texts.isEmpty() ? null : texts.get(texts.size()-1).getText();
             if(StringUtils.isNotBlank(message)){
                 getRemindGroup(bot,xxGroupId).sendMessage(new MessageChain().text(message));
             }
@@ -322,5 +328,29 @@ public class Utils {
             }
         }
         return null;
+    }
+
+    /**
+     * 剥离 markdown 链接语法，保留链接文本：[地龙干](mqqapi://...) -> 地龙干
+     * SnowLuma 下游戏卡片消息为 markdown 段，名字/翻页等文本嵌在链接里
+     */
+    public static String stripMarkdownLink(String s) {
+        if (s == null) {
+            return null;
+        }
+        return s.replaceAll("\\[([^\\]]*)\\]\\([^)]*\\)", "$1").trim();
+    }
+
+    /**
+     * 从药材背包行提取数量，兼容 markdown 渲染：
+     * "拥有数量:44---[炼金](mqqapi://...)" 与纯文本 "拥有数量:44" 均可
+     * 解析不到返回 -1
+     */
+    public static int parseHerbCount(String line) {
+        if (line == null) {
+            return -1;
+        }
+        Matcher matcher = Pattern.compile("拥有数量:\\s*(\\d+)").matcher(line);
+        return matcher.find() ? Integer.parseInt(matcher.group(1)) : -1;
     }
 }

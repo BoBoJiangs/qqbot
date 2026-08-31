@@ -239,15 +239,18 @@ public class AutoBuyHerbs {
         for (String line : medicinalList) {
             line = line.trim();
             if (line.contains("名字：")) {
-                currentHerb = line.replaceAll("名字：", "");
+                // SnowLuma 下药名为 markdown 链接 [名字](mqqapi://...)，剥离链接保留药名
+                currentHerb = Utils.stripMarkdownLink(line.replaceAll("名字：", ""));
             } else if (currentHerb != null && line.contains("拥有数量:")) {
-                try{
-                    int count = Integer.parseInt(line.split("拥有数量:|炼金")[1]);
-                    ProductPrice productPrice = new ProductPrice();
-                    productPrice.setName(currentHerb);
-                    productPrice.setHerbCount(count);
-                    herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).put(currentHerb, productPrice);
-                }catch (Exception ignore){}
+                try {
+                    int count = Utils.parseHerbCount(line);
+                    if (count >= 0) {
+                        ProductPrice productPrice = new ProductPrice();
+                        productPrice.setName(currentHerb);
+                        productPrice.setHerbCount(count);
+                        herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).put(currentHerb, productPrice);
+                    }
+                } catch (Exception ignore) {}
                 currentHerb = null;
             }
         }

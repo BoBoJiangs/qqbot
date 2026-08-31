@@ -473,11 +473,14 @@ public class AutoAlchemyTask {
         for (String line : medicinalList) {
             line = line.trim();
             if (line.contains("名字：")) {
-                currentHerb = line.replaceAll("名字：", "");
+                // SnowLuma 下药名为 markdown 链接 [名字](mqqapi://...)，剥离链接保留药名
+                currentHerb = Utils.stripMarkdownLink(line.replaceAll("名字：", ""));
             } else if (currentHerb != null && line.contains("拥有数量:")) {
                 try {
-                    int count = Integer.parseInt(line.split("拥有数量:|炼金")[1]);
-                    updateMedicine(currentHerb, count, botId);
+                    int count = Utils.parseHerbCount(line);
+                    if (count >= 0) {
+                        updateMedicine(currentHerb, count, botId);
+                    }
                 } catch (Exception e) {
                     // 忽略解析错误，继续
                 }

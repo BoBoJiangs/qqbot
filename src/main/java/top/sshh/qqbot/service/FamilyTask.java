@@ -305,7 +305,8 @@ public class FamilyTask {
         BotConfig botConfig = bot.getBotConfig();
         if (Utils.isAtSelf(bot,group, msg,xxGroupId)) {
             if (msg.contains("气血") && msg.contains("真元") && msg.contains("道号") && (botConfig.getChallengeMode() == 11 || botConfig.getChallengeMode() == 21)) {
-                String[] lines = msg.split("\\n");
+                // SnowLuma 下消息为 markdown 卡片，剥离链接避免道号等字段携带 mqqapi 语法
+                String[] lines = Utils.stripMarkdownLink(msg).split("\\n");
                 String daoHao = "";
                 double currentHP = (double)0.0F;
                 double maxHP = (double)0.0F;
