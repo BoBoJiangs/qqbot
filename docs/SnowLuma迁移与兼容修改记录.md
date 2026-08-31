@@ -11,13 +11,13 @@
 SnowLuma 同样提供 OneBot v11 协议（WebSocket/HTTP），java 端连接配置基本不变，
 但 SnowLuma 的事件结构与 NapCat 的私有扩展存在差异，由此产生了一系列兼容性修改（见第四节）。
 
-当前多协议并行运行：
+当前全部运行于 SnowLuma（2026-08-31 三开）：
 
 | QQ 号 | 昵称 | 协议端 | 端口 | 状态 |
 |-------|------|--------|------|------|
-| 3988941800 | 华适四 | SnowLuma 容器（主进程） | 8084 | ✅ 已迁移 |
-| 1319279034 | 宣藩九 | SnowLuma 容器（qq-extra-1 多开） | 8083 | ✅ 已迁移（2026-08-31） |
-| 3860863656 | 花晟九 | NapCat 容器 `3860863656-8082-6102` | 8086 | 未迁移，正常在线 |
+| 3988941800 | 华适四 | SnowLuma 容器（主进程） | 8084 | ✅ |
+| 1319279034 | 宣藩九 | SnowLuma 容器（qq-extra-1） | 8083 | ✅ 已迁移（2026-08-31） |
+| 3860863656 | 花晟九 | SnowLuma 容器（qq-extra-2） | 8086 | ✅ 已迁移（2026-08-31） |
 | 3821805584 | - | NapCat 容器（已停止） | 8080 | 停用中 |
 
 ---
@@ -27,14 +27,16 @@ SnowLuma 同样提供 OneBot v11 协议（WebSocket/HTTP），java 端连接配�
 - 服务器：`ubuntu@42.194.185.3`（腾讯云，Ubuntu 24.04，2核3.5G），本机已配 SSH 免密公钥
 - Docker 容器：
   - `snowluma`：官方镜像 `motricseven7/snowluma:latest`，端口映射
-    `6081(noVNC) / 5099(WebUI) / 3000-3001(OneBot HTTP，3000=华适四/3001=宣藩九) / 8084(华适四 ws) / 8083(宣藩九 ws)`
+    `6081(noVNC) / 5099(WebUI) / 3000-3001(OneBot HTTP，3000=华适四/3001=宣藩九) / 8084(华适四 ws) / 8083(宣藩九 ws) / 8086(花晟九 ws)`
     启动参数必须保留：`--shm-size=2g --cap-add=SYS_PTRACE --security-opt seccomp=unconfined`
     数据卷（删了丢登录态）：`qq-gateway-data`、`qq-client-config`、`qq-client-data`、
-    `qq-client-account-2`（宣藩九独立 HOME，对应环境变量 `SNOWLUMA_EXTRA_QQ_HOMES=/app/qq-acct2`）
-    OneBot 配置：`/app/data/config/onebot_<uin>.json`（宣藩九 8083 的 token 为 `1024*1024*1024`，与 java 配置一致）
+    `qq-client-account-2`（宣藩九）、`qq-client-account-3`（花晟九），
+    环境变量 `SNOWLUMA_EXTRA_QQ_HOMES=/app/qq-acct2,/app/qq-acct3`
+    OneBot 配置：`/app/data/config/onebot_<uin>.json`（宣藩九 8083 / 花晟九 8086 的 token 均为 `1024*1024*1024`，与 java 配置一致；
+    花晟九的 httpServers 为空数组，避免 3000/3001 端口冲突）
   - `java-bot`：eclipse-temurin:17-jdk，**host 网络模式**，挂载 `/home/user/JavaBot -> /app`
-  - 旧 NapCat 容器：`3860863656-8082-6102`（在用）、`3988941800-8084`（已停，待删）、
-    `3821805584-8080`（已停）、`1319279034-8083`（已停，该账号已迁 SnowLuma，容器可删）
+  - 旧 NapCat 容器：`3860863656-8082-6102`（已停，该账号已迁 SnowLuma，容器可删）、
+    `3988941800-8084`（已停，可删）、`3821805584-8080`（已停）、`1319279034-8083`（已停，可删）
 - ⚠️ 宿主机上曾手动装过一份 SnowLuma（systemd 服务 `snowluma`），已停用并 disable，
   可删除：`/etc/systemd/system/snowluma.service` 与 `/home/SnowLuma/`
 
@@ -133,11 +135,8 @@ bot-core 客户端空闲时不发心跳，导致连接反复掉线、断连窗�
    需实际触发一次验证码/灵石确认弹窗确认能点上。
 2. **识别接口准确率**：shitu 识别偶尔漏识别图中表情（如题目要"第6个"、只识别出 5 个），
    此时序号被钳位到最后一项可能点错。属于外部识别服务准确率，如频繁可考虑换服务或识别结果不全时重试。
-3. **花晟九迁移**：3860863656 迁移方案已定未执行——再增开一个 extra HOME
-   （`SNOWLUMA_EXTRA_QQ_HOMES=/app/qq-acct2,/app/qq-acct3` + 独立卷 `qq-client-account-3:/app/qq-acct3`
-   + `-p 8086:8086`，shm 已是 2g），扫码后配置 ws 服务端 0.0.0.0:8086
-   （token 与 java 配置一致即可，java 端不用改）。注意服务器内存 3.5G，
-   snowluma 双开已占 1.3G，三开前评估内存。
+3. **花晟九迁移**：✅ 已完成（2026-08-31，qq-acct3 + 8086，流程与宣藩九相同）。
+   迁移要点：先停旧 NapCat 容器（同账号单点登录），扫码前预写 `onebot_<uin>.json` 可免去 WebUI 手动配置。
 4. **停用账号**：8080(3821805584) NapCat 容器已停，确认不要后可
    `docker rm` 并注释掉 java 配置里对应的 bot 条目（否则日志持续刷重试失败）。
    1319279034 已于 2026-08-31 迁入 SnowLuma（8083），旧 NapCat 容器 `1319279034-8083` 可删。
