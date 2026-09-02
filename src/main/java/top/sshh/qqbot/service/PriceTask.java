@@ -44,12 +44,15 @@ import java.util.regex.Pattern;
 @Component
 public class PriceTask {
     private static final Logger logger = LoggerFactory.getLogger(PriceTask.class);
+    private static final long XSL_PRICE_QUERY_DEDUPE_WINDOW_MS = 10_000L;
     @Autowired
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
     public static String targetDir = "./";
     @Autowired
     private GroupManager groupManager;
+    /** 最近已处理的悬赏令价格查询消息，避免 NapCat 重复投递导致重复回复。 */
+    private final Map<String, Long> processedXslPriceMessageMap = new ConcurrentHashMap<>();
 
     public PriceTask() {
 
@@ -147,59 +150,6 @@ public class PriceTask {
                 messages.image("http://qqbot.2dc2fea0.erapp.run/price/image/" + name);
                 group.sendMessage(messages);
             } catch (Exception var9) {
-            }
-        }
-
-    }
-
-    @GroupMessageHandler(
-            isAt = true,
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
-    public void 查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, Integer messageId) {
-        if (bot.getBotConfig().isEnableXslPriceQuery()
-                && groupManager.isGroupXslPriceQueryEnabled(group.getGroupId())) {
-            if (!groupManager.isRemindGroup(bot, group)) {
-                return;
-            }
-            List<ReplyMessage> replyMessageList = messageChain.getMessageByType(ReplyMessage.class);
-            if (replyMessageList != null && !replyMessageList.isEmpty()) {
-                ReplyMessage replyMessage = (ReplyMessage) replyMessageList.get(0);
-                MessageChain replyMessageChain = replyMessage.getChain();
-                if (replyMessageChain != null) {
-                    List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
-                    if (textMessageList != null && !textMessageList.isEmpty()) {
-                        TextMessage textMessage = (TextMessage) textMessageList.get(textMessageList.size() - 1);
-                        String message = textMessage.getText();
-                        if (message.contains("道友的个人悬赏令")) {
-                            Pattern pattern = Pattern.compile("可能额外获得：(.*?)!");
-                            Matcher matcher = pattern.matcher(message);
-                            StringBuilder stringBuilder = new StringBuilder();
-                            int count = 0;
-
-                            while (matcher.find()) {
-                                String name = matcher.group(1).replaceAll("\\s", "");
-                                int colonIndex = name.indexOf(58);
-                                if (colonIndex >= 0) {
-                                    name = name.substring(colonIndex + 1).trim();
-                                }
-
-                                if (StringUtils.isNotBlank(name)) {
-                                    ++count;
-                                    ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(name.trim());
-                                    if (first != null) {
-                                        stringBuilder.append("\n悬赏令").append(count).append(" 奖励：").append(first.getName()).append(" 价格:").append(first.getPrice()).append("万").append("(炼金:").append(ProductLowPrice.getLowPrice(first.getName())).append("万)");
-                                    }
-                                }
-                            }
-
-                            if (stringBuilder.length() > 5) {
-                                stringBuilder.insert(0, "悬赏令价格查询：");
-                                group.sendMessage((new MessageChain()).reply(messageId).text(stringBuilder.toString()));
-                            }
-                        }
-                    }
-                }
             }
         }
 
@@ -476,11 +426,38 @@ public class PriceTask {
                     }
 
                     if (stringBuilder.length() > 5) {
+                        if (isDuplicateXslPriceMessage(bot, group, messageId)) {
+                            return;
+                        }
                         stringBuilder.insert(0, "悬赏令价格查询：");
                         group.sendMessage((new MessageChain()).text(stringBuilder.toString()));
+                        // 同一条消息链中可能包含多个 TextMessage，发送后立即结束本次处理。
+                        return;
                     }
                 }
             }
+        }
+    }
+
+    private boolean isDuplicateXslPriceMessage(Bot bot, Group group, Integer messageId) {
+        if (messageId == null || bot == null || group == null) {
+            return false;
+        }
+
+        long now = System.currentTimeMillis();
+        String key = bot.getBotId() + ":" + group.getGroupId() + ":" + messageId;
+        synchronized (processedXslPriceMessageMap) {
+            Long processedTime = processedXslPriceMessageMap.get(key);
+            if (processedTime != null && now - processedTime < XSL_PRICE_QUERY_DEDUPE_WINDOW_MS) {
+                return true;
+            }
+
+            processedXslPriceMessageMap.put(key, now);
+            if (processedXslPriceMessageMap.size() > 2000) {
+                processedXslPriceMessageMap.entrySet()
+                        .removeIf(entry -> now - entry.getValue() >= XSL_PRICE_QUERY_DEDUPE_WINDOW_MS);
+            }
+            return false;
         }
     }
 

@@ -29,6 +29,8 @@ import java.util.regex.Pattern;
 public class Utils {
     private static final Pattern CAPTCHA_PROMPT_PATTERN =
             Pattern.compile("请点击[^\\r\\n\\]]*?按钮");
+    private static final Pattern INLINE_KEYBOARD_JSON_PREFIX_PATTERN =
+            Pattern.compile("(?i)json\\s*\\[");
 
 //    public static boolean isAtSelf(Bot bot, Group group) {
 //
@@ -127,8 +129,79 @@ public class Utils {
             return null;
         }
         String s = stripMarkdownLink(text);
+        s = stripInlineKeyboardJson(s);
+        s = s.replaceAll("(?i)\\[图片\\]", "");
         s = s.replaceAll("(?m)^[ \\t]*\\n", "");
         return s.trim();
+    }
+
+    /** 删除 NapCat/SnowLuma 渲染文本中携带的 inline_keyboard JSON，只保留可读文字。 */
+    private static String stripInlineKeyboardJson(String text) {
+        String result = text;
+        int searchFrom = 0;
+        while (searchFrom < result.length()) {
+            Matcher prefixMatcher = INLINE_KEYBOARD_JSON_PREFIX_PATTERN.matcher(result);
+            if (!prefixMatcher.find(searchFrom)) {
+                break;
+            }
+
+            int prefixStart = prefixMatcher.start();
+            int objectStart = result.indexOf('{', prefixMatcher.end());
+            int marker = result.indexOf("inline_keyboard", prefixMatcher.end());
+            if (marker < 0) {
+                marker = result.indexOf("inline\\_keyboard", prefixMatcher.end());
+            }
+            if (objectStart < 0 || marker < objectStart) {
+                searchFrom = prefixMatcher.end();
+                continue;
+            }
+
+            int objectEnd = findJsonObjectEnd(result, objectStart);
+            if (objectEnd < 0 || marker > objectEnd) {
+                searchFrom = prefixMatcher.end();
+                continue;
+            }
+
+            int removeEnd = objectEnd + 1;
+            while (removeEnd < result.length() && Character.isWhitespace(result.charAt(removeEnd))) {
+                removeEnd++;
+            }
+            if (removeEnd < result.length() && result.charAt(removeEnd) == ']') {
+                removeEnd++;
+            }
+
+            result = result.substring(0, prefixStart) + result.substring(removeEnd);
+            searchFrom = prefixStart;
+        }
+        return result;
+    }
+
+    private static int findJsonObjectEnd(String text, int start) {
+        boolean inString = false;
+        boolean escaped = false;
+        int depth = 0;
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+            } else if (c == '"') {
+                inString = true;
+            } else if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) {
+                    return i;
+                }
+            }
+        }
+        return -1;
     }
 
     /**

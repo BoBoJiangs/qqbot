@@ -1806,17 +1806,27 @@ public class TestService {
                 boolean isSelfGroup = group.getGroupId() == bot.getBotConfig().getGroupId()
                         || this.xxGroupId == group.getGroupId();
                 if (isSelfGroup) {
-                    buttonBuilder.append(buttons.getImageText());
-                    buttonBuilder.append("\n");
-                    buttonBuilder.append("\n");
+                    // NapCat 的 imageText 可能包含 [图片]json[inline_keyboard...] 原始协议数据，
+                    // SnowLuma 的 imageText 结构也不一致；只保留可读的题目提示，图片统一单独发送。
+                    // 题目文本在不同协议端可能分别出现在 Buttons、message 或 Markdown 文本段中，
+                    // 合并提取后再发送，避免某一端只传了协议元数据导致提示丢失。
+                    String captchaSource = StringUtils.defaultString(buttons.getImageText()) + "\n"
+                            + StringUtils.defaultString(message) + "\n" + Utils.getMessageText(messageChain);
+                    String captchaPrompt = Utils.extractCaptchaPrompt(captchaSource);
+                    if (StringUtils.isNotBlank(captchaPrompt) && captchaPrompt.contains("请点击")) {
+                        buttonBuilder.append(captchaPrompt).append("\n\n");
+                    }
                     buttonBuilder.append("@我+点击序号+数字");
                     buttonBuilder.append("\n");
                     buttonBuilder.append("\n");
                     // buttonBuilder.append("【");
                     buttonBuilder.append(Utils.formatButtons(buttonList, 4));
                     MessageChain messageChain1 = new MessageChain();
-                    messageChain1.at(remindBot.getBotConfig().getMasterQQ() + "").text("\n")
-                            .image(buttons.getImageUrl()).text(buttonBuilder.toString());
+                    messageChain1.at(remindBot.getBotConfig().getMasterQQ() + "").text("\n");
+                    if (StringUtils.isNotBlank(buttons.getImageUrl())) {
+                        messageChain1.image(buttons.getImageUrl());
+                    }
+                    messageChain1.text(buttonBuilder.toString());
                     Utils.sendGroupMessage(bot, groupId, messageChain1);
                 }
 
@@ -1953,15 +1963,19 @@ public class TestService {
                 botButtonMap.put(bot.getBotId(), buttons);
                 buttons.setGroupId(group.getGroupId());
 
+                // 先提取图片地址再发送人工提示；SnowLuma 下图片可能不会被 Buttons 自动注入。
+                String regex = "https?://[^\\s\\)]+";
+                Pattern pattern = Pattern.compile(regex);
+                Matcher matcher = pattern.matcher(StringUtils.defaultString(message));
+                while (matcher.find()) {
+                    buttons.setImageUrl(matcher.group());
+                }
+
                 if (bot.getBotConfig().getAutoVerifyModel() == 0) {
                     showButtonMsg(bot, group, messageId, message, buttons, messageChain);
                 }
-                String regex = "https?://[^\\s\\)]+";
-                Pattern pattern = Pattern.compile(regex);
-                Matcher matcher = pattern.matcher(message);
-
-                while (matcher.find()) {
-                    buttons.setImageUrl(matcher.group());
+                // 保留原有 OCR 入参行为；人工提示已经在上面完成协议无关化处理。
+                if (messageChain != null && !messageChain.isEmpty()) {
                     buttons.setImageText(((Message) messageChain.get(messageChain.size() - 1)).toString());
                 }
                 if (StringUtils.isNotBlank(shituApiUrl)) {
@@ -3132,17 +3146,21 @@ public class TestService {
         String sourceMessage = StringUtils.defaultString(message);
         String messageChainText = Utils.getMessageText(messageChain);
         String matchMessage = sourceMessage + "\n" + messageChainText;
-        boolean isAtSelf = Utils.isAtSelf(bot, group, sourceMessage, xxGroupId);
+        // SnowLuma 可能把艾特放在 Markdown/TextMessage 中，不能只检查框架注入的 message 参数。
+        boolean isAtSelf = Utils.isAtSelf(bot, group, matchMessage, xxGroupId);
         boolean matchesForwardWords = forwardWords.stream().anyMatch(matchMessage::contains);
         boolean matchesSecretResult = KEYWORDS.stream().anyMatch(matchMessage::contains)
                 && !matchMessage.contains("时间：");
         boolean matchesRewardMessage = matchMessage.contains("奖励") && matchMessage.contains("灵石")
                 && botConfig.getAutoVerifyModel() == 0;
-        boolean blocked = matchMessage.contains("本次修炼增加") || matchMessage.contains("挖矿")
+        boolean matchesCaptchaMessage = matchMessage.contains("@我+点击序号+数字")
+                && (matchMessage.contains("inline_keyboard") || matchMessage.contains("[1]")
+                || matchMessage.contains("\\[1\\]"));
+        boolean blocked = !matchesCaptchaMessage && (matchMessage.contains("本次修炼增加") || matchMessage.contains("挖矿")
                 || matchMessage.contains("第三方") || matchMessage.contains("点击")
-                || matchMessage.contains("开始\ud83d\ude4f修炼") || matchMessage.contains("稻草人");
+                || matchMessage.contains("开始\ud83d\ude4f修炼") || matchMessage.contains("稻草人"));
         boolean shouldForward = botConfig.isEnableForwardMessage() && isAtSelf && botConfig.getForwardMode() == 1 && !blocked
-                && (matchesForwardWords || matchesSecretResult || matchesRewardMessage);
+                && (matchesForwardWords || matchesSecretResult || matchesRewardMessage || matchesCaptchaMessage);
 
         if (!botConfig.isEnableForwardMessage() || !isAtSelf || botConfig.getForwardMode() != 1 || blocked) {
             return;
