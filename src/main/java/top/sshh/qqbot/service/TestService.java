@@ -3060,17 +3060,31 @@ public class TestService {
         boolean blocked = matchMessage.contains("本次修炼增加") || matchMessage.contains("挖矿")
                 || matchMessage.contains("第三方") || matchMessage.contains("点击")
                 || matchMessage.contains("开始\ud83d\ude4f修炼") || matchMessage.contains("稻草人");
-        boolean shouldForward = isAtSelf && botConfig.getForwardMode() == 1 && !blocked
+        boolean shouldForward = botConfig.isEnableForwardMessage() && isAtSelf && botConfig.getForwardMode() == 1 && !blocked
                 && (matchesForwardWords || matchesSecretResult || matchesRewardMessage);
+        String action;
+        if (!botConfig.isEnableForwardMessage()) {
+            action = "DISABLED";
+        } else if (!isAtSelf) {
+            action = "NOT_AT_SELF";
+        } else if (botConfig.getForwardMode() != 1) {
+            action = "MODE_OFF";
+        } else if (blocked) {
+            action = "BLOCKED";
+        } else if (shouldForward) {
+            action = "FORWARD";
+        } else {
+            action = "NO_KEYWORD";
+        }
 
         log.info("消息转发检查: botId={}, sourceGroupId={}, messageId={}, enable={}, forwardMode={}, "
                         + "atSelf={}, blocked={}, forwardKeyword={}, secretKeyword={}, rewardKeyword={}, action={}",
                 bot.getBotId(), group == null ? 0L : group.getGroupId(), messageId,
                 botConfig.isEnableForwardMessage(), botConfig.getForwardMode(), isAtSelf, blocked,
                 matchesForwardWords, matchesSecretResult, matchesRewardMessage,
-                shouldForward ? "FORWARD" : "SKIP");
+                action);
 
-        if (!isAtSelf || botConfig.getForwardMode() != 1 || blocked) {
+        if (!botConfig.isEnableForwardMessage() || !isAtSelf || botConfig.getForwardMode() != 1 || blocked) {
             return;
         }
 

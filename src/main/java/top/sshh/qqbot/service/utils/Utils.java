@@ -155,7 +155,16 @@ public class Utils {
     }
 
     public static void forwardMessage(Bot bot,long xxGroupId,  MessageChain messageChain){
-        if (bot == null || !bot.getBotConfig().isEnableForwardMessage() || xxGroupId <= 0) {
+        if (bot == null) {
+            log.warn("消息转发跳过：机器人实例为空，targetGroupId={}", xxGroupId);
+            return;
+        }
+        if (!bot.getBotConfig().isEnableForwardMessage()) {
+            log.info("消息转发跳过：消息转发总开关未开启，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId);
+            return;
+        }
+        if (xxGroupId <= 0) {
+            log.warn("消息转发跳过：目标群号无效，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId);
             return;
         }
         try {
