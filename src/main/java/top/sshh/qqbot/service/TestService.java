@@ -91,7 +91,7 @@ public class TestService {
             "从腐朽道袍中滑落");
     private static final List<String> commandWords = Arrays.asList("悬赏令", "秘境", "宗门任务", "宗门丹药", "灵田", "灵石");
     private static final List<String> forwardWords = Arrays.asList("稍等一会", "宗门系统繁忙", "宗门闭关室", "当前灵石", "探索需要花费时间",
-            "探索耗时", "道友成功领取到丹药", "道友已经领取过了", "不需要验证", "验证码已过期", "道友今天已经很努力了");
+            "探索耗时", "道友成功领取到丹药", "道友已经领取过了", "不需要验证", "验证码已过期", "道友今天已经很努力了", "主修功法");
     @Autowired
     public DanCalculator danCalculator;
     private List<Bot> familyBotList = new ArrayList<>();
@@ -3049,32 +3049,40 @@ public class TestService {
     public void 转发小小消息到控制群(Bot bot, Group group, Member member, MessageChain messageChain, String message,
             Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        if (!Utils.isAtSelf(bot, group, message, xxGroupId)
-                || botConfig.getForwardMode() != 1) {
+        String sourceMessage = StringUtils.defaultString(message);
+        String matchMessage = sourceMessage + "\n" + Utils.getMessageText(messageChain);
+        boolean isAtSelf = Utils.isAtSelf(bot, group, sourceMessage, xxGroupId);
+        boolean matchesForwardWords = forwardWords.stream().anyMatch(matchMessage::contains);
+        boolean matchesSecretResult = KEYWORDS.stream().anyMatch(matchMessage::contains)
+                && !matchMessage.contains("时间：");
+        boolean matchesRewardMessage = matchMessage.contains("奖励") && matchMessage.contains("灵石")
+                && botConfig.getAutoVerifyModel() == 0;
+        boolean blocked = matchMessage.contains("本次修炼增加") || matchMessage.contains("挖矿")
+                || matchMessage.contains("第三方") || matchMessage.contains("点击")
+                || matchMessage.contains("开始\ud83d\ude4f修炼") || matchMessage.contains("稻草人");
+        boolean shouldForward = isAtSelf && botConfig.getForwardMode() == 1 && !blocked
+                && (matchesForwardWords || matchesSecretResult || matchesRewardMessage);
+
+        log.info("消息转发检查: botId={}, sourceGroupId={}, messageId={}, enable={}, forwardMode={}, "
+                        + "atSelf={}, blocked={}, forwardKeyword={}, secretKeyword={}, rewardKeyword={}, action={}",
+                bot.getBotId(), group == null ? 0L : group.getGroupId(), messageId,
+                botConfig.isEnableForwardMessage(), botConfig.getForwardMode(), isAtSelf, blocked,
+                matchesForwardWords, matchesSecretResult, matchesRewardMessage,
+                shouldForward ? "FORWARD" : "SKIP");
+
+        if (!isAtSelf || botConfig.getForwardMode() != 1 || blocked) {
             return;
         }
 
         // SnowLuma 的正文在 MarkdownMessage 中，优先把消息链文本拼入匹配内容，
         // 避免 String 注入结果因卡片/未知元素差异导致关键词漏检。
-        String matchMessage = StringUtils.defaultString(message) + "\n" + Utils.getMessageText(messageChain);
-        boolean blocked = matchMessage.contains("本次修炼增加") || matchMessage.contains("挖矿")
-                || matchMessage.contains("第三方") || matchMessage.contains("点击")
-                || matchMessage.contains("开始\ud83d\ude4f修炼") || matchMessage.contains("稻草人");
-        if (!blocked) {
-            boolean matchesForwardWords = forwardWords.stream().anyMatch(matchMessage::contains);
-            boolean matchesSecretResult = KEYWORDS.stream().anyMatch(matchMessage::contains)
-                    && !matchMessage.contains("时间：");
-            boolean matchesRewardMessage = matchMessage.contains("奖励") && matchMessage.contains("灵石")
-                    && botConfig.getAutoVerifyModel() == 0;
-            if (matchesForwardWords || matchesSecretResult || matchesRewardMessage) {
-                // 两组关键词同时命中时也只发送一次，避免控制群重复收到同一消息。
-                Utils.forwardMessage(bot, this.xxGroupId, messageChain);
-            }
+        if (shouldForward) {
+            // 两组关键词同时命中时也只发送一次，避免控制群重复收到同一消息。
+            Utils.forwardMessage(bot, this.xxGroupId, messageChain);
+        }
 
-            if (matchMessage.contains("道友成功领取到丹药") || matchMessage.contains("道友已经领取过了")) {
-                this.groupManager.setDanYaoFinished(bot);
-            }
-
+        if (matchMessage.contains("道友成功领取到丹药") || matchMessage.contains("道友已经领取过了")) {
+            this.groupManager.setDanYaoFinished(bot);
         }
 
     }

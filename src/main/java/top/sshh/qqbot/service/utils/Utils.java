@@ -170,7 +170,13 @@ public class Utils {
                 log.warn("消息转发跳过：目标群不存在或未加入，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId);
                 return;
             }
-            targetGroup.sendMessage(new MessageChain().text(message));
+            int sentMessageId = targetGroup.sendMessage(new MessageChain().text(message));
+            String preview = message.replaceAll("\\s+", " ");
+            if (preview.length() > 80) {
+                preview = preview.substring(0, 80) + "...";
+            }
+            log.info("消息转发已发送: botId={}, targetGroupId={}, sentMessageId={}, content={}",
+                    bot.getBotId(), xxGroupId, sentMessageId, preview);
         } catch (Exception e) {
             // 转发失败不能中断同一条事件的其他业务处理。
             log.error("消息转发失败，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId, e);
