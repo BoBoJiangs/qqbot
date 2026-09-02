@@ -12,8 +12,6 @@ import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.TextMessage;
 import org.apache.commons.lang3.StringUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -29,8 +27,6 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Utils {
-    private static final Logger log = LoggerFactory.getLogger(Utils.class);
-    private static final long FORWARD_DIAGNOSTIC_BOT_ID = 3988941800L;
     private static final Pattern CAPTCHA_PROMPT_PATTERN =
             Pattern.compile("请点击[^\\r\\n\\]]*?按钮");
 
@@ -156,52 +152,22 @@ public class Utils {
     }
 
     public static void forwardMessage(Bot bot,long xxGroupId,  MessageChain messageChain){
-        if (bot == null) {
-            return;
-        }
-        boolean diagnosticBot = bot.getBotId() == FORWARD_DIAGNOSTIC_BOT_ID;
-        if (!bot.getBotConfig().isEnableForwardMessage()) {
-            if (diagnosticBot) {
-                log.info("消息转发跳过：消息转发总开关未开启，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId);
-            }
-            return;
-        }
-        if (xxGroupId <= 0) {
-            if (diagnosticBot) {
-                log.warn("消息转发跳过：目标群号无效，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId);
-            }
+        if (bot == null || !bot.getBotConfig().isEnableForwardMessage() || xxGroupId <= 0) {
             return;
         }
         try {
             // 不再只取最后一个文本段，兼容 SnowLuma 的 Markdown 卡片和多文本段消息。
             String message = cleanForwardText(getMessageText(messageChain));
             if (StringUtils.isBlank(message)) {
-                if (diagnosticBot) {
-                    log.warn("消息转发跳过：消息链中没有可转发文本，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId);
-                }
                 return;
             }
             Group targetGroup = getRemindGroup(bot, xxGroupId);
             if (targetGroup == null) {
-                if (diagnosticBot) {
-                    log.warn("消息转发跳过：目标群不存在或未加入，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId);
-                }
                 return;
             }
-            int sentMessageId = targetGroup.sendMessage(new MessageChain().text(message));
-            String preview = message.replaceAll("\\s+", " ");
-            if (preview.length() > 80) {
-                preview = preview.substring(0, 80) + "...";
-            }
-            if (diagnosticBot) {
-                log.info("消息转发已发送: botId={}, targetGroupId={}, sentMessageId={}, content={}",
-                        bot.getBotId(), xxGroupId, sentMessageId, preview);
-            }
+            targetGroup.sendMessage(new MessageChain().text(message));
         } catch (Exception e) {
             // 转发失败不能中断同一条事件的其他业务处理。
-            if (diagnosticBot) {
-                log.error("消息转发失败，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId, e);
-            }
         }
     }
 

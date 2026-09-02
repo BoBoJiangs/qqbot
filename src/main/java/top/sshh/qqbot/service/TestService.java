@@ -62,7 +62,7 @@ import top.sshh.qqbot.service.utils.Utils;
 @Component
 public class TestService {
     private static final Logger log = LoggerFactory.getLogger(TestService.class);
-    private static final long FORWARD_DIAGNOSTIC_BOT_ID = 3988941800L;
+    private static final long BUTTON_CLICK_INTERVAL_MS = 2000L;
     private static final List<String> DEFAULT_XSL_PRIORITY_ITEMS = Collections.unmodifiableList(Arrays.asList(
             "五指拳心剑", "真龙九变", "坐忘论"
     ));
@@ -93,7 +93,6 @@ public class TestService {
     private static final List<String> commandWords = Arrays.asList("悬赏令", "秘境", "宗门任务", "宗门丹药", "灵田", "灵石");
     private static final List<String> forwardWords = Arrays.asList("稍等一会", "宗门系统繁忙", "宗门闭关室", "当前灵石", "探索需要花费时间",
             "探索耗时", "道友成功领取到丹药", "道友已经领取过了", "不需要验证", "验证码已过期", "道友今天已经很努力了", "主修功法");
-    private static final List<String> forwardBlockedWords = Arrays.asList("本次修炼增加", "挖矿", "第三方", "点击", "开始\ud83d\ude4f修炼", "稻草人");
     @Autowired
     public DanCalculator danCalculator;
     private List<Bot> familyBotList = new ArrayList<>();
@@ -1555,69 +1554,142 @@ public class TestService {
     }
 
     private void clickButton(Bot bot, Group group, Member member, MessageChain messageChain, String message) {
-        if (message.contains("点击")) {
-            try {
-                if (!message.contains("点击文本") && !message.contains("点击按钮")) {
-                    if (message.contains("点击序号")) {
-                        String position = message.substring("点击序号".length()).trim();
-                        if (!StringUtils.isNumeric(position)) {
-                            return;
-                        }
+        ButtonClickCommand command = parseButtonClickCommand(message);
+        if (command == null) {
+            return;
+        }
 
-                        Buttons buttons = (Buttons) this.botButtonMap.get(bot.getBotId());
-                        if (buttons != null && !buttons.getButtonList().isEmpty()
-                                && Integer.parseInt(position) <= buttons.getButtonList().size()) {
-                            Button button = (Button) buttons.getButtonList().get(Integer.parseInt(position) - 1);
-                            bot.clickKeyboardButton(buttons.getGroupId(), buttons.getBotAppid(), button.getId(),
-                                    button.getData(), buttons.getMsgSeq());
-                            return;
-                        }
-                    } else if (message.contains("点击")) {
-                        String text = message.substring("点击".length()).trim();
-                        if (GuessIdiom.getEmoji(text) != null) {
-                            text = GuessIdiom.getEmoji(text);
-                        }
+        Buttons buttons = this.botButtonMap.get(bot.getBotId());
+        if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
+            group.sendMessage((new MessageChain()).text("未找到对应按钮信息"));
+            return;
+        }
 
-                        if (StringUtils.isNotBlank(text)) {
-                            Buttons buttons = (Buttons) this.botButtonMap.get(bot.getBotId());
-                            if (buttons != null && !buttons.getButtonList().isEmpty()) {
-                                for (Button button : buttons.getButtonList()) {
-                                    if (text.equals(button.getLabel())) {
-                                        bot.clickKeyboardButton(buttons.getGroupId(), buttons.getBotAppid(),
-                                                button.getId(), button.getData(), buttons.getMsgSeq());
-                                        return;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } else {
-                    String textx = message.substring("点击文本".length()).trim();
-                    if (GuessIdiom.getEmoji(textx) != null) {
-                        textx = GuessIdiom.getEmoji(textx);
-                    }
-
-                    if (StringUtils.isNotBlank(textx)) {
-                        Buttons buttons = (Buttons) this.botButtonMap.get(bot.getBotId());
-                        if (buttons != null && !buttons.getButtonList().isEmpty()) {
-                            for (Button buttonx : buttons.getButtonList()) {
-                                if (textx.equals(buttonx.getLabel())) {
-                                    bot.clickKeyboardButton(buttons.getGroupId(), buttons.getBotAppid(),
-                                            buttonx.getId(), buttonx.getData(), buttons.getMsgSeq());
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                group.sendMessage((new MessageChain()).text("未找到对应按钮信息"));
-            } catch (Exception var11) {
-                group.sendMessage((new MessageChain()).text("点击失败，格式错误"));
-                var11.printStackTrace();
+        List<Button> buttonsToClick = new ArrayList<>();
+        List<String> notFound = new ArrayList<>();
+        for (String argument : command.arguments) {
+            Button button = command.byIndex
+                    ? findButtonByIndex(buttons.getButtonList(), argument)
+                    : findButtonByText(buttons.getButtonList(), argument);
+            if (button == null) {
+                notFound.add(argument);
+            } else {
+                buttonsToClick.add(button);
             }
         }
 
+        if (buttonsToClick.isEmpty()) {
+            group.sendMessage((new MessageChain()).text("未找到对应按钮信息"));
+            return;
+        }
+        if (!notFound.isEmpty()) {
+            group.sendMessage((new MessageChain()).text("未找到按钮：" + String.join("、", notFound)));
+        }
+
+        final long clickGroupId = buttons.getGroupId() > 0L ? buttons.getGroupId() : group.getGroupId();
+        customPool.submit(() -> {
+            for (int i = 0; i < buttonsToClick.size(); i++) {
+                if (i > 0) {
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(BUTTON_CLICK_INTERVAL_MS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+
+                Button button = buttonsToClick.get(i);
+                try {
+                    bot.clickKeyboardButton(clickGroupId, buttons.getBotAppid(), button.getId(), button.getData(),
+                            buttons.getMsgSeq());
+                } catch (Exception e) {
+                    log.warn("点击按钮失败: botId={}, label={}", bot.getBotId(), button.getLabel(), e);
+                    return;
+                }
+            }
+        });
+    }
+
+    private Button findButtonByIndex(List<Button> buttonList, String argument) {
+        if (!StringUtils.isNumeric(argument)) {
+            return null;
+        }
+        try {
+            int index = Integer.parseInt(argument) - 1;
+            return index >= 0 && index < buttonList.size() ? buttonList.get(index) : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private Button findButtonByText(List<Button> buttonList, String argument) {
+        String expected = normalizeButtonText(argument);
+        for (Button button : buttonList) {
+            if (StringUtils.equals(expected, normalizeButtonText(button.getLabel()))) {
+                return button;
+            }
+        }
+        return null;
+    }
+
+    private String normalizeButtonText(String text) {
+        String normalized = StringUtils.defaultString(text).trim();
+        String emoji = GuessIdiom.getEmoji(normalized);
+        return StringUtils.isNotBlank(emoji) ? emoji : normalized;
+    }
+
+    /**
+     * 解析“点击按钮序号1 2 3”和“点击按钮文字修炼 闭关 探索秘境”。
+     * 同时保留旧的“点击序号/点击文本/点击”格式，避免已有用法失效。
+     */
+    private ButtonClickCommand parseButtonClickCommand(String message) {
+        String command = StringUtils.defaultString(message).trim();
+        String prefix;
+        boolean byIndex;
+        if (command.startsWith("点击按钮序号")) {
+            prefix = "点击按钮序号";
+            byIndex = true;
+        } else if (command.startsWith("点击按钮文字")) {
+            prefix = "点击按钮文字";
+            byIndex = false;
+        } else if (command.startsWith("点击序号")) {
+            prefix = "点击序号";
+            byIndex = true;
+        } else if (command.startsWith("点击文本")) {
+            prefix = "点击文本";
+            byIndex = false;
+        } else if (command.startsWith("点击按钮")) {
+            prefix = "点击按钮";
+            byIndex = false;
+        } else if (command.startsWith("点击")) {
+            prefix = "点击";
+            byIndex = false;
+        } else {
+            return null;
+        }
+
+        String argumentText = command.substring(prefix.length()).trim();
+        if (StringUtils.isBlank(argumentText)) {
+            return null;
+        }
+        String[] argumentArray = argumentText.split("[\\s,，、]+");
+        List<String> arguments = new ArrayList<>();
+        for (String argument : argumentArray) {
+            if (StringUtils.isNotBlank(argument)) {
+                arguments.add(argument.trim());
+            }
+        }
+        return arguments.isEmpty() ? null : new ButtonClickCommand(byIndex, arguments);
+    }
+
+    private static class ButtonClickCommand {
+        private final boolean byIndex;
+        private final List<String> arguments;
+
+        private ButtonClickCommand(boolean byIndex, List<String> arguments) {
+            this.byIndex = byIndex;
+            this.arguments = arguments;
+        }
     }
 
     @GroupMessageHandler(senderIds = { 3889001741L })
@@ -1676,7 +1748,13 @@ public class TestService {
             // SnowLuma 等协议端注入不出按钮，从消息里的 inline_keyboard 段兜底解析
             buttons = Utils.parseButtonsFromMessage(bot, message, messageId);
         }
-        if (buttons != null && !buttons.getButtonList().isEmpty() && message.contains("请确认是否")
+        if (buttons != null && buttons.getButtonList() != null && !buttons.getButtonList().isEmpty()) {
+            // 保存小小发来的最后一组按钮，供主号通过“@子号 点击按钮...”控制点击。
+            buttons.setGroupId(group.getGroupId());
+            botButtonMap.put(bot.getBotId(), buttons);
+        }
+        if (buttons != null && buttons.getButtonList() != null && !buttons.getButtonList().isEmpty()
+                && message.contains("请确认是否")
                 && message.contains("灵石")) {
             String pattern = "at_tinyid=(\\d+)";
             Pattern regex = Pattern.compile(pattern);
@@ -3060,42 +3138,11 @@ public class TestService {
                 && !matchMessage.contains("时间：");
         boolean matchesRewardMessage = matchMessage.contains("奖励") && matchMessage.contains("灵石")
                 && botConfig.getAutoVerifyModel() == 0;
-        String blockedWord = forwardBlockedWords.stream()
-                .filter(matchMessage::contains)
-                .findFirst()
-                .orElse("");
-        boolean blocked = StringUtils.isNotBlank(blockedWord);
+        boolean blocked = matchMessage.contains("本次修炼增加") || matchMessage.contains("挖矿")
+                || matchMessage.contains("第三方") || matchMessage.contains("点击")
+                || matchMessage.contains("开始\ud83d\ude4f修炼") || matchMessage.contains("稻草人");
         boolean shouldForward = botConfig.isEnableForwardMessage() && isAtSelf && botConfig.getForwardMode() == 1 && !blocked
                 && (matchesForwardWords || matchesSecretResult || matchesRewardMessage);
-        boolean diagnosticBot = bot.getBotId() == FORWARD_DIAGNOSTIC_BOT_ID;
-        String action;
-        if (!botConfig.isEnableForwardMessage()) {
-            action = "DISABLED";
-        } else if (!isAtSelf) {
-            action = "NOT_AT_SELF";
-        } else if (botConfig.getForwardMode() != 1) {
-            action = "MODE_OFF";
-        } else if (blocked) {
-            action = "BLOCKED";
-        } else if (shouldForward) {
-            action = "FORWARD";
-        } else {
-            action = "NO_KEYWORD";
-        }
-
-        if (diagnosticBot) {
-            log.info("消息转发检查: botId={}, sourceGroupId={}, messageId={}, enable={}, forwardMode={}, "
-                            + "atSelf={}, blocked={}, blockedWord={}, forwardKeyword={}, secretKeyword={}, "
-                            + "rewardKeyword={}, action={}",
-                    bot.getBotId(), group == null ? 0L : group.getGroupId(), messageId,
-                    botConfig.isEnableForwardMessage(), botConfig.getForwardMode(), isAtSelf, blocked,
-                    StringUtils.defaultIfBlank(blockedWord, "无"), matchesForwardWords, matchesSecretResult,
-                    matchesRewardMessage, action);
-            if (blocked) {
-                log.info("消息转发命中屏蔽词: botId={}, messageId={}, blockedWord={}, rawMessage={}, messageChainText={}",
-                        bot.getBotId(), messageId, blockedWord, sourceMessage, messageChainText);
-            }
-        }
 
         if (!botConfig.isEnableForwardMessage() || !isAtSelf || botConfig.getForwardMode() != 1 || blocked) {
             return;
