@@ -281,6 +281,17 @@ public class TestService {
                 saveBotConfig(bot);
             }
 
+            if ("启用消息转发".equals(message) || "开启消息转发".equals(message)) {
+                botConfig.setEnableForwardMessage(true);
+                group.sendMessage((new MessageChain()).reply(messageId).text("已启用消息转发，设置已保存"));
+                saveBotConfig(bot);
+            }
+            if ("关闭消息转发".equals(message)) {
+                botConfig.setEnableForwardMessage(false);
+                group.sendMessage((new MessageChain()).reply(messageId).text("已关闭消息转发，设置已保存"));
+                saveBotConfig(bot);
+            }
+
             if ("一键启用本群查询功能".equals(message)) {
                 this.groupManager.setGroupXslPriceQueryEnabled(group.getGroupId(), true);
                 botConfig.setEnableXslPriceQuery(true);
@@ -824,6 +835,7 @@ public class TestService {
             persist.setEnableCheckPrice(botConfig.isEnableCheckPrice());
             persist.setEnableGuessTheIdiom(botConfig.isEnableGuessTheIdiom());
             persist.setEnableAutomaticReply(botConfig.isEnableAutomaticReply());
+            persist.setEnableForwardMessage(botConfig.isEnableForwardMessage());
             persist.setBotNumber(botConfig.getBotNumber());
             persist.setEnableAutoTask(botConfig.isEnableAutoTask());
             persist.setAutoVerifyModel(botConfig.getAutoVerifyModel());
@@ -868,6 +880,7 @@ public class TestService {
             botConfig.setEnableCheckPrice(persist.isEnableCheckPrice());
             botConfig.setEnableGuessTheIdiom(persist.isEnableGuessTheIdiom());
             botConfig.setEnableAutomaticReply(persist.isEnableAutomaticReply());
+            botConfig.setEnableForwardMessage(persist.isEnableForwardMessage());
             botConfig.setBotNumber(persist.getBotNumber());
             botConfig.setAiCheng(persist.getAiCheng());
             botConfig.setEnableAutoTask(persist.isEnableAutoTask());
@@ -1200,6 +1213,7 @@ public class TestService {
             case "提醒帮助":
                 sb.append("〓提醒菜单〓\n");
                 sb.append("启用/关闭结算提醒\n");
+                sb.append("启用/关闭消息转发\n");
                 sb.append("启用/关闭本群结算提醒\n");
                 sb.append("启用/关闭价格查询\n");
                 sb.append("启用/关闭猜成语查询\n");
@@ -1344,6 +1358,7 @@ public class TestService {
                         (botConfig.getAutoVerifyModel() == 0 ? "手动"
                                 : botConfig.getAutoVerifyModel() == 1 ? "半自动" : "自动")
                         + "\n");
+                sb.append(Constant.padRight("消息转发", 11) + ": " + (botConfig.isEnableForwardMessage() ? "启用" : "关闭") + "\n");
                 sb.append("－－－－－其它设置－－－－－\n");
                 if (StringUtils.isNotBlank(botConfig.getControlQQ())) {
                     sb.append(Constant.padRight("主号", 3) + ": " + botConfig.getControlQQ() + "\n");
@@ -3034,31 +3049,32 @@ public class TestService {
     public void 转发小小消息到控制群(Bot bot, Group group, Member member, MessageChain messageChain, String message,
             Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        if (Utils.isAtSelf(bot, group, message, xxGroupId) && !message.contains("本次修炼增加") && !message.contains("挖矿")
-                && !message.contains("第三方") && !message.contains("点击") && !message.contains("开始\ud83d\ude4f修炼")
-                && !message.contains("稻草人") && botConfig.getForwardMode() == 1) {
-            Stream<String> stream = forwardWords.stream();
-            Objects.requireNonNull(message);
-            if (stream.anyMatch(message::contains)) {
-                // Utils.forwardMessage(bot, this.xxGroupId, message);
+        if (!Utils.isAtSelf(bot, group, message, xxGroupId)
+                || botConfig.getForwardMode() != 1) {
+            return;
+        }
+
+        // SnowLuma 的正文在 MarkdownMessage 中，优先把消息链文本拼入匹配内容，
+        // 避免 String 注入结果因卡片/未知元素差异导致关键词漏检。
+        String matchMessage = StringUtils.defaultString(message) + "\n" + Utils.getMessageText(messageChain);
+        boolean blocked = matchMessage.contains("本次修炼增加") || matchMessage.contains("挖矿")
+                || matchMessage.contains("第三方") || matchMessage.contains("点击")
+                || matchMessage.contains("开始\ud83d\ude4f修炼") || matchMessage.contains("稻草人");
+        if (!blocked) {
+            boolean matchesForwardWords = forwardWords.stream().anyMatch(matchMessage::contains);
+            boolean matchesSecretResult = KEYWORDS.stream().anyMatch(matchMessage::contains)
+                    && !matchMessage.contains("时间：");
+            boolean matchesRewardMessage = matchMessage.contains("奖励") && matchMessage.contains("灵石")
+                    && botConfig.getAutoVerifyModel() == 0;
+            if (matchesForwardWords || matchesSecretResult || matchesRewardMessage) {
+                // 两组关键词同时命中时也只发送一次，避免控制群重复收到同一消息。
                 Utils.forwardMessage(bot, this.xxGroupId, messageChain);
             }
 
-            stream = KEYWORDS.stream();
-            Objects.requireNonNull(message);
-            if (stream.anyMatch(message::contains) && !message.contains("时间：")) {
-                // Utils.forwardMessage(bot, this.xxGroupId, message);
-                Utils.forwardMessage(bot, this.xxGroupId, messageChain);
-            }
-
-            if (message.contains("道友成功领取到丹药") || message.contains("道友已经领取过了")) {
+            if (matchMessage.contains("道友成功领取到丹药") || matchMessage.contains("道友已经领取过了")) {
                 this.groupManager.setDanYaoFinished(bot);
             }
 
-            if (message.contains("奖励") && message.contains("灵石") && botConfig.getAutoVerifyModel() == 0) {
-                // Utils.forwardMessage(bot, this.xxGroupId, message);
-                Utils.forwardMessage(bot, this.xxGroupId, messageChain);
-            }
         }
 
     }

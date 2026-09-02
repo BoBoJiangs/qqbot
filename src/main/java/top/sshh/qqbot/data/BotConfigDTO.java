@@ -35,6 +35,7 @@ public class BotConfigDTO {
     
     // 群管理配置
     private boolean enableAutomaticReply = false;  // 群消息自动回复
+    private boolean enableForwardMessage = false;  // 转发符合条件的消息到控制群
     private boolean enableAutoTask = true;  // 定时自动任务
     
     // 验证配置
@@ -197,6 +198,14 @@ public class BotConfigDTO {
     
     public void setEnableAutomaticReply(boolean enableAutomaticReply) {
         this.enableAutomaticReply = enableAutomaticReply;
+    }
+
+    public boolean isEnableForwardMessage() {
+        return enableForwardMessage;
+    }
+
+    public void setEnableForwardMessage(boolean enableForwardMessage) {
+        this.enableForwardMessage = enableForwardMessage;
     }
     
     public boolean isEnableAutoTask() {
@@ -417,6 +426,7 @@ public class BotConfigDTO {
         persist.setEnableCheckPrice(this.enableCheckPrice);
         persist.setEnableGuessTheIdiom(this.enableGuessTheIdiom);
         persist.setEnableAutomaticReply(this.enableAutomaticReply);
+        persist.setEnableForwardMessage(this.enableForwardMessage);
         persist.setEnableAutoTask(this.enableAutoTask);
         persist.setAutoVerifyModel(this.autoVerifyModel);
         persist.setControlQQ(this.controlQQ);
@@ -448,6 +458,7 @@ public class BotConfigDTO {
             dto.setEnableCheckPrice(persist.isEnableCheckPrice());
             dto.setEnableGuessTheIdiom(persist.isEnableGuessTheIdiom());
             dto.setEnableAutomaticReply(persist.isEnableAutomaticReply());
+            dto.setEnableForwardMessage(persist.isEnableForwardMessage());
             dto.setEnableAutoTask(persist.isEnableAutoTask());
             dto.setAutoVerifyModel(persist.getAutoVerifyModel());
             dto.setControlQQ(persist.getControlQQ());

@@ -263,6 +263,7 @@ public class BotConfigManager {
         config.setEnableCheckPrice(botConfig.isEnableCheckPrice());
         config.setEnableGuessTheIdiom(botConfig.isEnableGuessTheIdiom());
         config.setEnableAutomaticReply(botConfig.isEnableAutomaticReply());
+        config.setEnableForwardMessage(botConfig.isEnableForwardMessage());
         config.setEnableAutoTask(botConfig.isEnableAutoTask());
         config.setAutoVerifyModel(botConfig.getAutoVerifyModel());
         config.setControlQQ(botConfig.getControlQQ());
@@ -293,6 +294,7 @@ public class BotConfigManager {
         botConfig.setEnableCheckPrice(persist.isEnableCheckPrice());
         botConfig.setEnableGuessTheIdiom(persist.isEnableGuessTheIdiom());
         botConfig.setEnableAutomaticReply(persist.isEnableAutomaticReply());
+        botConfig.setEnableForwardMessage(persist.isEnableForwardMessage());
         botConfig.setBotNumber(persist.getBotNumber());
         botConfig.setEnableAutoTask(persist.isEnableAutoTask());
         botConfig.setAutoVerifyModel(persist.getAutoVerifyModel());
@@ -318,6 +320,7 @@ public class BotConfigManager {
         config.setXslPriceLimit(1000);
         config.setBotNumber(0);
         config.setEnableAutomaticReply(false);
+        config.setEnableForwardMessage(false);
         config.setEnableAutoTask(true);
         config.setAutoVerifyModel(0);
         config.setEnableSectMission(true);
@@ -379,6 +382,7 @@ public class BotConfigManager {
             runtime.put("isStartAutoLingG", botConfig.isStartAutoLingG());
             runtime.put("isEnableAutoCqMj", botConfig.isEnableAutoCqMj());
             runtime.put("isEnableCheckMarket", botConfig.isEnableCheckMarket());
+            runtime.put("isEnableForwardMessage", botConfig.isEnableForwardMessage());
         } catch (Exception e) {
             log.error("获取运行时配置时出错: {}", e.getMessage(), e);
             runtime.put("error", "获取运行时配置失败: " + e.getMessage());

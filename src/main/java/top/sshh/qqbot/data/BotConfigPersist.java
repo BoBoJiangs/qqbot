@@ -40,6 +40,8 @@ public class BotConfigPersist implements Serializable {
     private Long lingShiQQ;
     //群消息自动回复
     private boolean enableAutomaticReply = false;
+    //转发符合条件的消息到控制群
+    private boolean enableForwardMessage = false;
     //定时自动任务
     private boolean enableAutoTask = true;
     //自动验证模式 0：不验证 1：自动验证(失败停止验证) 2:自动验证（不停止验证）
@@ -231,6 +233,14 @@ public class BotConfigPersist implements Serializable {
 
     public void setEnableAutomaticReply(boolean enableAutomaticReply) {
         this.enableAutomaticReply = enableAutomaticReply;
+    }
+
+    public boolean isEnableForwardMessage() {
+        return enableForwardMessage;
+    }
+
+    public void setEnableForwardMessage(boolean enableForwardMessage) {
+        this.enableForwardMessage = enableForwardMessage;
     }
 
     public boolean isEnableAutoTask() {

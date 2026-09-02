@@ -417,6 +417,10 @@
                             <input type="checkbox" id="enableAutomaticReply">
                             <label for="enableAutomaticReply">启用群消息自动回复</label>
                         </div>
+                        <div class="form-group checkbox-group">
+                            <input type="checkbox" id="enableForwardMessage">
+                            <label for="enableForwardMessage">启用消息转发到控制群</label>
+                        </div>
                     </div>
                 </div>
 
@@ -694,6 +698,7 @@
             document.getElementById('autoVerifyModel').value = config.autoVerifyModel || 0;
             document.getElementById('enableAutoTask').checked = config.enableAutoTask || false;
             document.getElementById('enableAutomaticReply').checked = config.enableAutomaticReply || false;
+            document.getElementById('enableForwardMessage').checked = config.enableForwardMessage || false;
             
             document.getElementById('rewardMode').value = config.rewardMode || 5;
             document.getElementById('xslPriceLimit').value = config.xslPriceLimit || 1000;
@@ -771,6 +776,7 @@
                 autoVerifyModel: parseInt(document.getElementById('autoVerifyModel').value),
                 enableAutoTask: document.getElementById('enableAutoTask').checked,
                 enableAutomaticReply: document.getElementById('enableAutomaticReply').checked,
+                enableForwardMessage: document.getElementById('enableForwardMessage').checked,
                 rewardMode: parseInt(document.getElementById('rewardMode').value),
                 xslPriceLimit: parseInt(document.getElementById('xslPriceLimit').value) || 1000,
                 enableXslPriceQuery: document.getElementById('enableXslPriceQuery').checked,

@@ -12,6 +12,8 @@ import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.TextMessage;
 import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
@@ -27,6 +29,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class Utils {
+    private static final Logger log = LoggerFactory.getLogger(Utils.class);
     private static final Pattern CAPTCHA_PROMPT_PATTERN =
             Pattern.compile("请点击[^\\r\\n\\]]*?按钮");
 
@@ -35,13 +38,15 @@ public class Utils {
 //        return  group.getGroupId() == bot.getBotConfig().getGroupId();
 //    }
     public static boolean isAtSelf(Bot bot, Group group, String message,long xxGroupId) {
+        String safeMessage = StringUtils.defaultString(message);
         if(xxGroupId == 0){
-            return message.contains(""+bot.getBotId()) || message.contains("@"+bot.getBotName()) ;
+            return safeMessage.contains(""+bot.getBotId()) || safeMessage.contains("@"+bot.getBotName()) ;
         }
-        return group.getGroupId() == bot.getBotConfig().getGroupId() || message.contains(""+bot.getBotId()) ;
+        return group != null && (group.getGroupId() == bot.getBotConfig().getGroupId()
+                || safeMessage.contains(""+bot.getBotId())) ;
     }
     public static boolean isAtSelf(Bot bot, String message) {
-        return message.contains(""+bot.getBotId());
+        return StringUtils.defaultString(message).contains(""+bot.getBotId());
     }
     public static Group getRemindGroup(Bot bot,long xxGroupId) {
         long groupId = bot.getBotConfig().getGroupId();
@@ -129,17 +134,46 @@ public class Utils {
         return s.trim();
     }
 
-    public static void forwardMessage(Bot bot,long xxGroupId,  MessageChain messageChain){
-        if(bot.getBotConfig().isEnableForwardMessage() && xxGroupId>0){
-            // SnowLuma 卡片消息链为 at+markdown+inline_keyboard，末段是键盘 JSON 段；
-            // 从文本段里取正文（MarkdownMessage.getText() 即卡片文本），NapCat 下行为不变
-            List<TextMessage> texts = messageChain.getMessageByType(TextMessage.class);
-            String message = texts.isEmpty() ? null : texts.get(texts.size()-1).getText();
-            message = cleanForwardText(message);
-            if(StringUtils.isNotBlank(message)){
-                getRemindGroup(bot,xxGroupId).sendMessage(new MessageChain().text(message));
+    /**
+     * 提取消息链中的文本内容。SnowLuma 的卡片通常是
+     * at + markdown + inline_keyboard，其中正文位于 MarkdownMessage（TextMessage 子类）中。
+     */
+    public static String getMessageText(MessageChain messageChain) {
+        if (messageChain == null || messageChain.isEmpty()) {
+            return "";
+        }
+        StringBuilder text = new StringBuilder();
+        for (Message message : messageChain) {
+            if (message instanceof TextMessage && StringUtils.isNotBlank(((TextMessage) message).getText())) {
+                if (text.length() > 0) {
+                    text.append('\n');
+                }
+                text.append(((TextMessage) message).getText());
             }
+        }
+        return text.toString();
+    }
 
+    public static void forwardMessage(Bot bot,long xxGroupId,  MessageChain messageChain){
+        if (bot == null || !bot.getBotConfig().isEnableForwardMessage() || xxGroupId <= 0) {
+            return;
+        }
+        try {
+            // 不再只取最后一个文本段，兼容 SnowLuma 的 Markdown 卡片和多文本段消息。
+            String message = cleanForwardText(getMessageText(messageChain));
+            if (StringUtils.isBlank(message)) {
+                log.warn("消息转发跳过：消息链中没有可转发文本，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId);
+                return;
+            }
+            Group targetGroup = getRemindGroup(bot, xxGroupId);
+            if (targetGroup == null) {
+                log.warn("消息转发跳过：目标群不存在或未加入，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId);
+                return;
+            }
+            targetGroup.sendMessage(new MessageChain().text(message));
+        } catch (Exception e) {
+            // 转发失败不能中断同一条事件的其他业务处理。
+            log.error("消息转发失败，botId={}, targetGroupId={}", bot.getBotId(), xxGroupId, e);
         }
     }
 

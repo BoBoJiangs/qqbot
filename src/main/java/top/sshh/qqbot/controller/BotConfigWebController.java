@@ -108,6 +108,7 @@ public class BotConfigWebController {
             result.put("enableCheckPrice", dto.isEnableCheckPrice());
             result.put("enableGuessTheIdiom", dto.isEnableGuessTheIdiom());
             result.put("enableAutomaticReply", dto.isEnableAutomaticReply());
+            result.put("enableForwardMessage", dto.isEnableForwardMessage());
             result.put("enableAutoTask", dto.isEnableAutoTask());
             result.put("autoVerifyModel", dto.getAutoVerifyModel());
             result.put("controlQQ", dto.getControlQQ());
@@ -175,6 +176,7 @@ public class BotConfigWebController {
             persist.setEnableCheckPrice(getBoolean(configData, "enableCheckPrice", persist.isEnableCheckPrice()));
             persist.setEnableGuessTheIdiom(getBoolean(configData, "enableGuessTheIdiom", persist.isEnableGuessTheIdiom()));
             persist.setEnableAutomaticReply(getBoolean(configData, "enableAutomaticReply", persist.isEnableAutomaticReply()));
+            persist.setEnableForwardMessage(getBoolean(configData, "enableForwardMessage", persist.isEnableForwardMessage()));
             persist.setEnableAutoTask(getBoolean(configData, "enableAutoTask", persist.isEnableAutoTask()));
             persist.setAutoVerifyModel(getInt(configData, "autoVerifyModel", persist.getAutoVerifyModel()));
             persist.setControlQQ(getString(configData, "controlQQ", persist.getControlQQ()));

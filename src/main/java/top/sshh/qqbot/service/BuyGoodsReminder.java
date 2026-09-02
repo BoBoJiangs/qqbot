@@ -89,15 +89,11 @@ public class BuyGoodsReminder {
      */
     @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.NOT_IGNORE)
     public void 开关本群购买提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        message = message.trim();
-        boolean enable;
-        if (message.contains("开启本群购买提醒")) {
-            enable = true;
-        } else if (message.contains("关闭本群购买提醒")) {
-            enable = false;
-        } else {
+        String command = extractGroupToggleCommand(bot, message);
+        if (command == null) {
             return;
         }
+        boolean enable = "开启本群购买提醒".equals(command);
         boolean isSelfMessage = member != null && member.getUserId() == bot.getBotId();
         // 群友消息必须@机器人；机器人自己发出的群级开关命令允许直接触发。
         if (member == null || (!isSelfMessage && !isAtBot(bot, messageChain, message))) {
@@ -111,7 +107,34 @@ public class BuyGoodsReminder {
         String text = enable
                 ? "本群购买提醒已开启，群友可@我发送【查看提醒帮助】订制专属提醒"
                 : "本群购买提醒已关闭，专属提醒将不再发送，@我发送【开启本群购买提醒】可恢复";
-        group.sendMessage(new MessageChain().reply(messageId).text(text));
+        group.sendMessage(new MessageChain().text(text));
+    }
+
+    /**
+     * 只识别完整的本群提醒开关命令，避免帮助文本或操作结果中的命令示例被再次执行。
+     * 用户消息允许带机器人昵称/QQ前缀，机器人自身消息则必须是完整命令。
+     */
+    private String extractGroupToggleCommand(Bot bot, String message) {
+        if (StringUtils.isBlank(message)) {
+            return null;
+        }
+        String normalized = message.trim();
+        String[] prefixes = new String[]{
+                "@" + bot.getBotId(),
+                "@" + bot.getBotName(),
+                String.valueOf(bot.getBotId()),
+                bot.getBotName()
+        };
+        for (String prefix : prefixes) {
+            if (StringUtils.isNotBlank(prefix) && normalized.startsWith(prefix)) {
+                normalized = normalized.substring(prefix.length()).trim();
+                break;
+            }
+        }
+        if ("开启本群购买提醒".equals(normalized) || "关闭本群购买提醒".equals(normalized)) {
+            return normalized;
+        }
+        return null;
     }
 
     /**
@@ -136,16 +159,16 @@ public class BuyGoodsReminder {
             return;
         }
         if (!groupManager.isBuyRemindGroupEnabled(group.getGroupId())) {
-            group.sendMessage(new MessageChain().reply(messageId)
+            group.sendMessage(new MessageChain()
                     .text("本群专属提醒未开启，请联系管理员@我发送【开启本群购买提醒】开启后再使用"));
             return;
         }
         if (message.contains("设置提醒物品")) {
             设置提醒物品(bot, group, member, message, messageId);
         } else if (message.contains("查看提醒帮助")) {
-            group.sendMessage(new MessageChain().reply(messageId).text(HELP_TEXT));
+            group.sendMessage(new MessageChain().text(HELP_TEXT));
         } else if (message.contains("查看提醒示例")) {
-            group.sendMessage(new MessageChain().reply(messageId).text(EXAMPLE_TEXT));
+            group.sendMessage(new MessageChain().text(EXAMPLE_TEXT));
         } else if (message.contains("查询我的提醒") || message.contains("查看我的提醒")) {
             查询我的提醒(bot, group, member, messageId);
         } else if (message.contains("关闭购买提醒")) {
@@ -215,7 +238,7 @@ public class BuyGoodsReminder {
         }
 
         if (items.isEmpty()) {
-            group.sendMessage(new MessageChain().reply(messageId)
+            group.sendMessage(new MessageChain()
                     .text("未识别到提醒物品，@我 发送【查看提醒示例】查看设置格式"));
             return;
         }
@@ -241,7 +264,7 @@ public class BuyGoodsReminder {
                 config.setTimeRangeText(formatTimeRange(range[0], range[1]));
             }
         } catch (IllegalArgumentException e) {
-            group.sendMessage(new MessageChain().reply(messageId)
+            group.sendMessage(new MessageChain()
                     .text("提醒时段" + e.getMessage() + "，正确示例：提醒时段：09:00 - 21:00，或 提醒时段：全天"));
             return;
         }
@@ -255,13 +278,13 @@ public class BuyGoodsReminder {
         if (truncated) {
             reply.append("\n（物品最多").append(MAX_REMIND_ITEM_COUNT).append("个，超出部分未生效）");
         }
-        group.sendMessage(new MessageChain().reply(messageId).text(reply.toString()));
+        group.sendMessage(new MessageChain().text(reply.toString()));
     }
 
     private void 查询我的提醒(Bot bot, Group group, Member member, Integer messageId) {
         UserRemindConfig config = groupManager.getUserRemindConfig(bot.getBotId(), member.getUserId());
         if (config == null || config.getItems().isEmpty()) {
-            group.sendMessage(new MessageChain().reply(messageId)
+            group.sendMessage(new MessageChain()
                     .text("您还没有设置专属提醒，@我 发送【查看提醒示例】查看设置方法"));
             return;
         }
@@ -269,18 +292,18 @@ public class BuyGoodsReminder {
                 + "状态：" + (config.isEnabled() ? "已开启" : "已关闭") + "\n"
                 + "提醒时段：" + config.getTimeRangeText() + "\n"
                 + "提醒物品：\n" + StringUtils.join(config.getItems(), "\n");
-        group.sendMessage(new MessageChain().reply(messageId).text(text));
+        group.sendMessage(new MessageChain().text(text));
     }
 
     private void 开关购买提醒(Bot bot, Group group, Member member, Integer messageId, boolean enable) {
         UserRemindConfig config = groupManager.getUserRemindConfig(bot.getBotId(), member.getUserId());
         if (config == null || config.getItems().isEmpty()) {
-            group.sendMessage(new MessageChain().reply(messageId)
+            group.sendMessage(new MessageChain()
                     .text("您还没有设置专属提醒，@我 发送【查看提醒示例】查看设置方法"));
             return;
         }
         if (config.isEnabled() == enable) {
-            group.sendMessage(new MessageChain().reply(messageId)
+            group.sendMessage(new MessageChain()
                     .text("您的专属提醒已经是" + (enable ? "开启" : "关闭") + "状态，无需重复操作"));
             return;
         }
@@ -289,7 +312,7 @@ public class BuyGoodsReminder {
         String text = enable
                 ? "已开启专属提醒，坊市出现你订阅的物品时会艾特你"
                 : "已关闭专属提醒，坊市出现物品时不再艾特你，发送【开启购买提醒】可恢复";
-        group.sendMessage(new MessageChain().reply(messageId).text(text));
+        group.sendMessage(new MessageChain().text(text));
     }
 
     private void processMarketMessage(Bot bot, String message, String pageKey) {
