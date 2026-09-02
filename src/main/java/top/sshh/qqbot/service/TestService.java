@@ -62,6 +62,7 @@ import top.sshh.qqbot.service.utils.Utils;
 @Component
 public class TestService {
     private static final Logger log = LoggerFactory.getLogger(TestService.class);
+    private static final long FORWARD_DIAGNOSTIC_BOT_ID = 3988941800L;
     private static final List<String> DEFAULT_XSL_PRIORITY_ITEMS = Collections.unmodifiableList(Arrays.asList(
             "五指拳心剑", "真龙九变", "坐忘论"
     ));
@@ -92,6 +93,7 @@ public class TestService {
     private static final List<String> commandWords = Arrays.asList("悬赏令", "秘境", "宗门任务", "宗门丹药", "灵田", "灵石");
     private static final List<String> forwardWords = Arrays.asList("稍等一会", "宗门系统繁忙", "宗门闭关室", "当前灵石", "探索需要花费时间",
             "探索耗时", "道友成功领取到丹药", "道友已经领取过了", "不需要验证", "验证码已过期", "道友今天已经很努力了", "主修功法");
+    private static final List<String> forwardBlockedWords = Arrays.asList("本次修炼增加", "挖矿", "第三方", "点击", "开始\ud83d\ude4f修炼", "稻草人");
     @Autowired
     public DanCalculator danCalculator;
     private List<Bot> familyBotList = new ArrayList<>();
@@ -3050,18 +3052,22 @@ public class TestService {
             Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
         String sourceMessage = StringUtils.defaultString(message);
-        String matchMessage = sourceMessage + "\n" + Utils.getMessageText(messageChain);
+        String messageChainText = Utils.getMessageText(messageChain);
+        String matchMessage = sourceMessage + "\n" + messageChainText;
         boolean isAtSelf = Utils.isAtSelf(bot, group, sourceMessage, xxGroupId);
         boolean matchesForwardWords = forwardWords.stream().anyMatch(matchMessage::contains);
         boolean matchesSecretResult = KEYWORDS.stream().anyMatch(matchMessage::contains)
                 && !matchMessage.contains("时间：");
         boolean matchesRewardMessage = matchMessage.contains("奖励") && matchMessage.contains("灵石")
                 && botConfig.getAutoVerifyModel() == 0;
-        boolean blocked = matchMessage.contains("本次修炼增加") || matchMessage.contains("挖矿")
-                || matchMessage.contains("第三方") || matchMessage.contains("点击")
-                || matchMessage.contains("开始\ud83d\ude4f修炼") || matchMessage.contains("稻草人");
+        String blockedWord = forwardBlockedWords.stream()
+                .filter(matchMessage::contains)
+                .findFirst()
+                .orElse("");
+        boolean blocked = StringUtils.isNotBlank(blockedWord);
         boolean shouldForward = botConfig.isEnableForwardMessage() && isAtSelf && botConfig.getForwardMode() == 1 && !blocked
                 && (matchesForwardWords || matchesSecretResult || matchesRewardMessage);
+        boolean diagnosticBot = bot.getBotId() == FORWARD_DIAGNOSTIC_BOT_ID;
         String action;
         if (!botConfig.isEnableForwardMessage()) {
             action = "DISABLED";
@@ -3077,12 +3083,19 @@ public class TestService {
             action = "NO_KEYWORD";
         }
 
-        log.info("消息转发检查: botId={}, sourceGroupId={}, messageId={}, enable={}, forwardMode={}, "
-                        + "atSelf={}, blocked={}, forwardKeyword={}, secretKeyword={}, rewardKeyword={}, action={}",
-                bot.getBotId(), group == null ? 0L : group.getGroupId(), messageId,
-                botConfig.isEnableForwardMessage(), botConfig.getForwardMode(), isAtSelf, blocked,
-                matchesForwardWords, matchesSecretResult, matchesRewardMessage,
-                action);
+        if (diagnosticBot) {
+            log.info("消息转发检查: botId={}, sourceGroupId={}, messageId={}, enable={}, forwardMode={}, "
+                            + "atSelf={}, blocked={}, blockedWord={}, forwardKeyword={}, secretKeyword={}, "
+                            + "rewardKeyword={}, action={}",
+                    bot.getBotId(), group == null ? 0L : group.getGroupId(), messageId,
+                    botConfig.isEnableForwardMessage(), botConfig.getForwardMode(), isAtSelf, blocked,
+                    StringUtils.defaultIfBlank(blockedWord, "无"), matchesForwardWords, matchesSecretResult,
+                    matchesRewardMessage, action);
+            if (blocked) {
+                log.info("消息转发命中屏蔽词: botId={}, messageId={}, blockedWord={}, rawMessage={}, messageChainText={}",
+                        bot.getBotId(), messageId, blockedWord, sourceMessage, messageChainText);
+            }
+        }
 
         if (!botConfig.isEnableForwardMessage() || !isAtSelf || botConfig.getForwardMode() != 1 || blocked) {
             return;
