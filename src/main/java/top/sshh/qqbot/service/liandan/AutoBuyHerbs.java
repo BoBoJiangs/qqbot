@@ -111,7 +111,7 @@ public class AutoBuyHerbs {
                         resetPram(bot, botConfig);
                         botConfig.setStop(true);
                         botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
-                        group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
                         botConfig.setAutoBuyHerbsMode(1);
                         botConfig.setStartAuto(false);
                     }
@@ -125,7 +125,7 @@ public class AutoBuyHerbs {
                     if (botConfig.getCultivationMode() == 1) {
                         botConfig.setStartScheduled(false);
                     }
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
                     break;
                 case "停止采购药材":
                     resetPram(bot, botConfig);
@@ -140,7 +140,7 @@ public class AutoBuyHerbs {
                     pageMap.put(botId, 1);
                    
                     botConfig.setAutoBuyHerbsMode(0);
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包"));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
                     break;
 
                 default:
@@ -213,7 +213,7 @@ public class AutoBuyHerbs {
                 if (hasNextPage) {
                     int nextPage = pageMap.getOrDefault(botId, 1) + 1;
                     pageMap.put(botId, nextPage);
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包" + nextPage));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包" + nextPage));
                 } else {
                     if (isSmartAdjustMode) {
                         botConfig.setStop(false);
@@ -953,7 +953,7 @@ public class AutoBuyHerbs {
 
             try {
                 if (botConfig.getAutoBuyHerbsMode()!=0) {
-                    group.sendMessage((new MessageChain()).at("3889001741").text("坊市购买 " + productPrice.getCode()));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("坊市购买 " + productPrice.getCode()));
                 }
                 break;
             } catch (Exception var6) {

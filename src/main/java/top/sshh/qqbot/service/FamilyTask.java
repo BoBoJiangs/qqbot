@@ -164,11 +164,11 @@ public class FamilyTask {
                     case 0:
                         return;
                     case 1:
-                        group.sendMessage((new MessageChain()).at("3889001741").text("宗门任务接取"));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门任务接取"));
                         return;
                     case 2:
                         if (botConfig.getLastRefreshTime() + 65000L < System.currentTimeMillis()) {
-                            group.sendMessage((new MessageChain()).at("3889001741").text("宗门任务刷新"));
+                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门任务刷新"));
                         }
 
                         return;
@@ -178,9 +178,9 @@ public class FamilyTask {
                         }
 
                         if (botConfig.getCultivationMode() == 2) {
-                            group.sendMessage((new MessageChain()).at("3889001741").text("出关"));
+                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("出关"));
                         } else if (botConfig.getCultivationMode() == 3) {
-                            group.sendMessage((new MessageChain()).at("3889001741").text("宗门出关"));
+                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门出关"));
                         }
 
                         try {
@@ -188,7 +188,7 @@ public class FamilyTask {
                         } catch (InterruptedException var7) {
                         }
 
-                        group.sendMessage((new MessageChain()).at("3889001741").text("宗门任务完成"));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门任务完成"));
                         botConfig.setFamilyTaskStatus(1);
 
                         try {
@@ -197,9 +197,9 @@ public class FamilyTask {
                         }
 
                         if (botConfig.getCultivationMode() == 2) {
-                            group.sendMessage((new MessageChain()).at("3889001741").text("闭关"));
+                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("闭关"));
                         } else if (botConfig.getCultivationMode() == 3) {
-                            group.sendMessage((new MessageChain()).at("3889001741").text("宗门闭关"));
+                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门闭关"));
                         }
 
                         return;
@@ -213,7 +213,7 @@ public class FamilyTask {
                         botConfig.setFamilyTaskStatus(3);
                         return;
                     case 5:
-                        group.sendMessage((new MessageChain()).at("3889001741").text("宗门任务完成"));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门任务完成"));
                         botConfig.setFamilyTaskStatus(1);
                         return;
                 }
@@ -229,27 +229,34 @@ public class FamilyTask {
     )
     public void 宗门任务状态管理(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         BotConfig botConfig = bot.getBotConfig();
-        boolean isAtSelf = isAtSelf(bot,group, message,xxGroupId);
+        // NapCat 通常把正文直接注入 message，SnowLuma 的 Markdown 正文可能只在 messageChain 中。
+        // 合并后仅用于状态匹配，原有 NapCat 文本行为保持不变。
+        String taskMessage = StringUtils.defaultString(message);
+        String messageChainText = Utils.getMessageText(messageChain);
+        if (StringUtils.isNotBlank(messageChainText)) {
+            taskMessage = taskMessage + "\n" + messageChainText;
+        }
+        boolean isAtSelf = isAtSelf(bot,group, taskMessage,xxGroupId);
         if (isAtSelf) {
-            if (message.contains("道友目前还没有宗门任务")) {
+            if (taskMessage.contains("道友目前还没有宗门任务")) {
                 botConfig.setFamilyTaskStatus(1);
             }
 
-            if (message.contains("今日无法再获取宗门任务")) {
+            if (taskMessage.contains("今日无法再获取宗门任务")) {
                 botConfig.setFamilyTaskStatus(0);
                 TestService.proccessCultivation(group);
                 groupManager.setZonMenTaskFinished(bot);
 //                bot.getGroup(xxGroupId).sendMessage(new MessageChain().text("今日宗门任务"))
             }
 
-            if (message.contains("道友大战一番") && message.contains("获得修为") && message.contains("宗门建设度增加")) {
+            if (taskMessage.contains("道友大战一番") && taskMessage.contains("获得修为") && taskMessage.contains("宗门建设度增加")) {
                 botConfig.setFamilyTaskStatus(1);
             }
-            if (message.contains("恭喜道友完成宗门任务")) {
+            if (taskMessage.contains("恭喜道友完成宗门任务")) {
                 botConfig.setFamilyTaskStatus(1);
             }
 
-            if (message.contains("出门做任务") && message.contains("不扣你任务次数")) {
+            if (taskMessage.contains("出门做任务") && taskMessage.contains("不扣你任务次数")) {
                 if (botConfig.getCultivationMode() == 0) {
                     botConfig.setFamilyTaskStatus(0);
                 }else{
@@ -259,37 +266,37 @@ public class FamilyTask {
 
             }
 
-            if (message.contains("时间还没到") && message.contains("歇会歇会")) {
+            if (taskMessage.contains("时间还没到") && taskMessage.contains("歇会歇会")) {
                 botConfig.setLastRefreshTime(System.currentTimeMillis() + 60000L);
             }
 
 
             if (botConfig.getSectMode() == 1) {
-                if (message.contains("邪修抢夺灵石") || message.contains("私自架设小型窝点") || message.contains("宗门密令") ||
-                        message.contains("除魔令")) {
+                if (taskMessage.contains("邪修抢夺灵石") || taskMessage.contains("私自架设小型窝点") || taskMessage.contains("宗门密令") ||
+                        taskMessage.contains("除魔令")) {
                     botConfig.setLastRefreshTime(System.currentTimeMillis());
                     botConfig.setFamilyTaskStatus(3);
                 }
 
-                if (message.contains("被追打催债") ||
-                        message.contains("坊市通告") ||
-                        message.contains("九转仙丹") ||
-                        message.contains("仗义疏财")
-                        || message.contains("为宗门购买一些") || message.contains("请道友下山购买")) {
+                if (taskMessage.contains("被追打催债") ||
+                        taskMessage.contains("坊市通告") ||
+                        taskMessage.contains("九转仙丹") ||
+                        taskMessage.contains("仗义疏财")
+                        || taskMessage.contains("为宗门购买一些") || taskMessage.contains("请道友下山购买")) {
                     botConfig.setFamilyTaskStatus(2);
                     botConfig.setLastRefreshTime(System.currentTimeMillis());
                 }
             }
 
-            if (botConfig.getSectMode() == 2 && (message.contains("邪修抢夺灵石") ||
-                    message.contains("私自架设小型窝点") || message.contains("被追打催债")
-                    || message.contains("请道友下山购买") ||
-                    message.contains("为宗门购买一些") ||
-                    message.contains("宗门密令") ||
-                    message.contains("除魔令") ||
-                    message.contains("坊市通告") ||
-                    message.contains("九转仙丹") ||
-                    message.contains("仗义疏财"))) {
+            if (botConfig.getSectMode() == 2 && (taskMessage.contains("邪修抢夺灵石") ||
+                    taskMessage.contains("私自架设小型窝点") || taskMessage.contains("被追打催债")
+                    || taskMessage.contains("请道友下山购买") ||
+                    taskMessage.contains("为宗门购买一些") ||
+                    taskMessage.contains("宗门密令") ||
+                    taskMessage.contains("除魔令") ||
+                    taskMessage.contains("坊市通告") ||
+                    taskMessage.contains("九转仙丹") ||
+                    taskMessage.contains("仗义疏财"))) {
                 botConfig.setLastRefreshTime(System.currentTimeMillis());
                 botConfig.setFamilyTaskStatus(5);
             }
@@ -345,7 +352,7 @@ public class FamilyTask {
                 if (hpPercentage > 0.8 && zhenYuan > (double)300.0F) {
                     try {
                         Thread.sleep(2000L);
-                        group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
@@ -363,7 +370,7 @@ public class FamilyTask {
                 if (msg.contains("第2层")) {
                     try {
                         Thread.sleep(2000L);
-                        group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔强行挑战"));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 挑战九层妖塔强行挑战"));
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
@@ -375,16 +382,16 @@ public class FamilyTask {
                         }
                         try {
                             Thread.sleep(2000L);
-                            group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
                         } catch (InterruptedException e) {
                             throw new RuntimeException(e);
                         }
 
                     } else {
                         if (botConfig.getCultivationMode() == 2) {
-                            group.sendMessage((new MessageChain()).at("3889001741").text(" 闭关"));
+                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 闭关"));
                         } else if (botConfig.getCultivationMode() == 3) {
-                            group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门闭关"));
+                            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 宗门闭关"));
                         }
 
                         if (botConfig.getChallengeMode() == 12) {
@@ -400,7 +407,7 @@ public class FamilyTask {
                 } else {
                     try {
                         Thread.sleep(2000L);
-                        group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
                     } catch (InterruptedException e) {
                         throw new RuntimeException(e);
                     }
@@ -410,21 +417,21 @@ public class FamilyTask {
             if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22) && msg.contains("大能对你提交的答案很满意，让你顺利的通过了")) {
                 try {
                     Thread.sleep(2000L);
-                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
             }
 
             if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22) && msg.contains("道友的上一条指令还没执行完，稍等一会！")) {
-                scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔")), 1L, TimeUnit.MINUTES);
+                scheduler.schedule(() -> Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 挑战九层妖塔")), 1L, TimeUnit.MINUTES);
             }
 
             if ((botConfig.getChallengeMode() == 13 || botConfig.getChallengeMode() == 23) && (msg.contains("闭关结束") || msg.contains("闭关结算") || msg.contains("出关捷报"))) {
                 if (botConfig.getCultivationMode() == 2) {
-                    group.sendMessage((new MessageChain()).at("3889001741").text(" 闭关"));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 闭关"));
                 } else if (botConfig.getCultivationMode() == 3) {
-                    group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门闭关"));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 宗门闭关"));
                     botConfig.setCommand(" 宗门闭关");
                 }
 
@@ -435,7 +442,7 @@ public class FamilyTask {
 
                 try {
                     Thread.sleep(2000L);
-                    group.sendMessage((new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 挑战九层妖塔"));
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
                 }
@@ -449,12 +456,12 @@ public class FamilyTask {
             if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22 || botConfig.getChallengeMode() == 13 || botConfig.getChallengeMode() == 23) && msg.contains("宗门系统繁忙，请稍后再试。")) {
                 long delaySeconds = ThreadLocalRandom.current().nextLong(5L, 60L);
                 String text = botConfig.getCommand();
-                scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(text)), delaySeconds, TimeUnit.SECONDS);
+                scheduler.schedule(() -> Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(text)), delaySeconds, TimeUnit.SECONDS);
             }
 
             if ((botConfig.getChallengeMode() == 1 || botConfig.getChallengeMode() == 2) && msg.contains("宗门系统繁忙，请稍后再试。")) {
                 long delaySeconds = ThreadLocalRandom.current().nextLong(5L, 60L);
-                scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门闭关")), delaySeconds, TimeUnit.SECONDS);
+                scheduler.schedule(() -> Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 宗门闭关")), delaySeconds, TimeUnit.SECONDS);
             }
             if ((botConfig.getChallengeMode() == 1 || botConfig.getChallengeMode() == 2) && msg.contains("登上第九层")) {
                 if(xxGroupId>0){
@@ -474,16 +481,16 @@ public class FamilyTask {
     private static void xiuXi(Bot bot, Group group) {
         BotConfig botConfig = bot.getBotConfig();
         if (botConfig.getCultivationMode() == 2) {
-            group.sendMessage((new MessageChain()).at("3889001741").text(" 闭关"));
+            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 闭关"));
             if (botConfig.getChallengeMode() == 11) {
                 botConfig.setChallengeMode(13);
             } else {
                 botConfig.setChallengeMode(23);
             }
 
-            scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(" 出关")), 6L, TimeUnit.MINUTES);
+            scheduler.schedule(() -> Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 出关")), 6L, TimeUnit.MINUTES);
         } else if (botConfig.getCultivationMode() == 3) {
-            group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门闭关"));
+            Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 宗门闭关"));
             botConfig.setCommand(" 宗门闭关");
             if (botConfig.getChallengeMode() == 11) {
                 botConfig.setChallengeMode(13);
@@ -491,7 +498,7 @@ public class FamilyTask {
                 botConfig.setChallengeMode(23);
             }
 
-            scheduler.schedule(() -> group.sendMessage((new MessageChain()).at("3889001741").text(" 宗门出关")), 6L, TimeUnit.MINUTES);
+            scheduler.schedule(() -> Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 宗门出关")), 6L, TimeUnit.MINUTES);
             botConfig.setCommand(" 宗门出关");
         }
 
@@ -526,10 +533,10 @@ public class FamilyTask {
 //                bot.getBotConfig().setLastExecuteTime(9223372036854175807L);
                 remindMap.put(bot.getBotId(), 9223372036854175807L);
             } else if (message.contains("本次修炼到达上限")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("直接突破"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("直接突破"));
             } else if (message.contains("道友成功收获药材")||(message.contains("道友本次采集成果") && message.contains("收获药材"))) {
                 remindMap.put(bot.getBotId(), 9223372036854175807L);
-                group.sendMessage((new MessageChain()).at("3889001741").text("灵田结算"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("灵田结算"));
             }
         }
 
@@ -586,7 +593,7 @@ public class FamilyTask {
                 boolean isAtSelf = isAtSelf(bot,group,message,xxGroupId);
                 if (isAtSelf && message.contains("逆天之行") && message.contains("新的灵根为")) {
                     if (!message.contains("异世界之力") && !message.contains("机械核心")) {
-                        group.sendMessage((new MessageChain()).at("3889001741").text("重入仙途"));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("重入仙途"));
                     } else {
                         botConfig.setStartAutoLingG(false);
                     }
@@ -609,34 +616,34 @@ public class FamilyTask {
         boolean isAtSelf = isAtSelf(bot,group,message,xxGroupId);
         if (isAtSelf && botConfig.isEnableAutoCqMj()) {
             if (message.contains("可选择的路径") && message.contains("继续前进")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("继续前进"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("继续前进"));
             }else if (message.contains("可选择的路径") && message.contains("路径1")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("选择路径1"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("选择路径1"));
             }else if (message.contains("基础剑诀")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("释放功法基础剑诀"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("释放功法基础剑诀"));
             }else if (message.contains("学习功法或选择奖励")) {
                 for (String gongFa : gongFaList) {
                     if (message.contains(gongFa)) {
-                        group.sendMessage((new MessageChain()).at("3889001741").text("战利品选择" + gongFa));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("战利品选择" + gongFa));
                         break; // 使用 break 真正跳出循环
                     }
                 }
             }else if (message.contains("进入了事件房间") && message.contains("强行破阵")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("事件选择 强行破阵"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("事件选择 强行破阵"));
             }else if (message.contains("可选择的路径") && message.contains("走右边")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("走右边"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("走右边"));
             }else if (message.contains("进入了事件房间") && message.contains("离开")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("事件选择 离开"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("事件选择 离开"));
             }else if (message.contains("离开商店")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("离开商店"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("离开商店"));
             }else if (message.contains("打开宝箱")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("打开宝箱"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("打开宝箱"));
             }else if (message.contains("休息") && message.contains("灵气充沛")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("休息"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("休息"));
             }else if (message.contains("进入了事件房间") && message.contains("反对")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("事件选择 反对"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("事件选择 反对"));
             }else if (message.contains("你已经在苍穹秘境")) {
-                group.sendMessage((new MessageChain()).at("3889001741").text("查看苍穹秘境地图"));
+                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("查看苍穹秘境地图"));
             }else if (message.contains("存活层数") && message.contains("陨落")) {
                 botConfig.setEnableAutoCqMj(false);
             }
@@ -703,7 +710,7 @@ public class FamilyTask {
         for(Bot bot : BotFactory.getBots().values()) {
             BotConfig config = bot.getBotConfig();
             if (config.getChallengeMode() == 1 || config.getChallengeMode() == 2) {
-                bot.sendGroupMessage(config.getGroupId(), (new MessageChain()).at("3889001741").text(" 我的状态"));
+                Utils.sendGroupMessage(bot, config.getGroupId(), (new MessageChain()).at("3889001741").text(" 我的状态"));
                 if (config.getChallengeMode() == 1) {
                     config.setChallengeMode(11);
                 } else {

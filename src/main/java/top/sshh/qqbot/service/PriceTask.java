@@ -303,8 +303,14 @@ public class PriceTask {
     public void 查悬赏令价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (bot.getBotConfig().isEnableXslPriceQuery()
                 && groupManager.isGroupXslPriceQueryEnabled(group.getGroupId())) {
-            boolean isPersonal = message.contains("道友的个人悬赏令");
-            boolean isNewVersion = message.contains("天机悬赏令") && !message.contains("今日悬赏令刷新次数已用尽");
+            // NapCat 通常把正文放在 message 参数中，SnowLuma 的卡片正文则可能只在
+            // messageChain 的 Markdown/TextMessage 中，统一合并后再判断悬赏令类型。
+            String eventText = StringUtils.defaultString(message) + "\n"
+                    + Utils.getMessageText(messageChain);
+            eventText = Utils.stripMarkdownLink(eventText);
+            boolean isPersonal = eventText.contains("道友的个人悬赏令");
+            boolean isNewVersion = eventText.contains("天机悬赏令")
+                    && !eventText.contains("今日悬赏令刷新次数已用尽");
 
             if (!isPersonal && !isNewVersion) {
                 return;
@@ -316,15 +322,15 @@ public class PriceTask {
             ));
 
             for (TextMessage textMessage : messageChain.getMessageByType(TextMessage.class)) {
-                message = textMessage.getText();
-                if ((isPersonal && message.contains("道友的个人悬赏令")) ||
-                        (isNewVersion && message.contains("天机悬赏令"))) {
+                String text = Utils.stripMarkdownLink(StringUtils.defaultString(textMessage.getText()));
+                if ((isPersonal && text.contains("道友的个人悬赏令")) ||
+                        (isNewVersion && text.contains("天机悬赏令"))) {
 
                     Pattern pattern = isPersonal ?
                             Pattern.compile("完成几率(\\d+),基础报酬(\\d+)修为.*?可能额外获得：[^:]+:(.*?)!") :
                             Pattern.compile("成功率：(\\d+)%.*?基础奖励(\\d+)修为.*?额外机缘：[^「]+「([^」]+)」", Pattern.DOTALL);
 
-                    Matcher matcher = pattern.matcher(message);
+                    Matcher matcher = pattern.matcher(text);
                     StringBuilder stringBuilder = new StringBuilder();
                     int count = 0;
                     int maxPriceIndex = 0;
@@ -523,14 +529,36 @@ public class PriceTask {
     // 处理回复消息
     private void processReplyMessage(MessageChain messageChain, String message, PriceCalculationResult result) {
         ReplyMessage replyMessage = messageChain.getMessageByType(ReplyMessage.class).get(0);
-        MessageChain replyMessageChain = replyMessage.getChain();
+        String replyText = extractReplyText(replyMessage);
+        if (StringUtils.isNotBlank(replyText)) {
+            processTextMessage(replyText, message, result);
+        }
+    }
 
+    /**
+     * 提取引用消息文本。SnowLuma 有时将引用内容放在 Markdown/TextMessage 中，
+     * 也有可能只填充 ReplyMessage.text，因此两种格式都兼容。
+     */
+    private String extractReplyText(ReplyMessage replyMessage) {
+        MessageChain replyMessageChain = replyMessage.getChain();
         if (replyMessageChain != null) {
             List<TextMessage> textMessageList = replyMessageChain.getMessageByType(TextMessage.class);
             if (textMessageList != null && !textMessageList.isEmpty()) {
-                processTextMessage(textMessageList.get(textMessageList.size() - 1).getText(), message, result);
+                StringBuilder text = new StringBuilder();
+                for (TextMessage textMessage : textMessageList) {
+                    if (StringUtils.isNotBlank(textMessage.getText())) {
+                        if (text.length() > 0) {
+                            text.append('\n');
+                        }
+                        text.append(textMessage.getText());
+                    }
+                }
+                if (text.length() > 0) {
+                    return text.toString();
+                }
             }
         }
+        return replyMessage.getText();
     }
 
     // 处理文本消息内容
@@ -538,11 +566,11 @@ public class PriceTask {
         String[] lines = text.split("\n");
 
         for (int i = 0; i < lines.length - 1; i++) {
-            String line = lines[i];
+            String line = Utils.stripMarkdownLink(lines[i].trim());
             if (isItemLine(line)) {
                 String name = extractItemName(line);
                 if (StringUtils.isNotBlank(name)) {
-                    int quantity = extractQuantity(lines[i + 1]);
+                    int quantity = extractQuantity(Utils.stripMarkdownLink(lines[i + 1].trim()));
                     processItem(name, quantity, originalMessage, result);
                 }
             }
@@ -553,6 +581,7 @@ public class PriceTask {
 
     // 判断是否是物品行
     private boolean isItemLine(String line) {
+        line = Utils.stripMarkdownLink(StringUtils.defaultString(line).trim());
         return line.startsWith("名字：") || line.startsWith("上品") || line.startsWith("下品")
                 || line.startsWith("极品") || line.startsWith("无上仙器")
                 || line.endsWith("功法") || line.endsWith("神通");
@@ -560,6 +589,7 @@ public class PriceTask {
 
     // 提取物品名称
     private String extractItemName(String line) {
+        line = Utils.stripMarkdownLink(StringUtils.defaultString(line).trim());
         String name = "";
         if (line.startsWith("名字：")) {
             name = line.substring(3).trim();
@@ -783,7 +813,7 @@ public class PriceTask {
                     String emoji = message.substring(message.indexOf("题目：") + 3).trim();
                     String idiom = GuessIdiom.getIdiom(emoji);
                     if (StringUtils.isNotBlank(idiom)) {
-                        group.sendMessage((new MessageChain()).at("3889001741").text("猜成语" + idiom));
+                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("猜成语" + idiom));
                     }
                 }
             }
@@ -803,7 +833,7 @@ public class PriceTask {
                 }
 
                 if (message.contains("" + bot.getBotId())) {
-                    group.sendMessage((new MessageChain()).at("3889001741").text("灯谜答案" + idiom));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("灯谜答案" + idiom));
                 }
             }
         }

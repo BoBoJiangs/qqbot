@@ -1420,7 +1420,7 @@ public class GroupManager {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 自动悬赏令提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
-        if (!msg.contains("悬赏令计时更新") && bot.getBotConfig().isEnableAutomaticReply() && msg.contains("悬赏令接取成功")) {
+        if (!msg.contains("悬赏令计时更新") && bot.getBotConfig().isEnableAutomaticReply() && (msg.contains("悬赏令接取成功") || msg.contains("悬赏令进行中"))) {
             long userId = member.getUserId();
             Long mentionedUserId = extractMentionedUserId(msg, bot);
             if (mentionedUserId != null) {

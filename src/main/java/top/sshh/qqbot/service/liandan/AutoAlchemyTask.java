@@ -409,7 +409,7 @@ public class AutoAlchemyTask {
                 for (String remedy : alchemyList) {
                     try {
                         if (g != null) {
-                            g.sendMessage((new MessageChain()).at("3889001741").text(remedy));
+                            Utils.sendGroupMessage(g.getBot(), g.getGroupId(), (new MessageChain()).at("3889001741").text(remedy));
                         }
                         break;
                     } catch (Exception e) {
@@ -456,7 +456,7 @@ public class AutoAlchemyTask {
                 if (hasNextPage) {
                     int nextPage = getPage(botId) + 1;
                     setPage(botId, nextPage);
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包" + nextPage));
+                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包" + nextPage));
                 } else {
                     group.sendMessage((new MessageChain()).text("药材背包已刷新，开始匹配丹方..."));
                     parseHerbList(botId);

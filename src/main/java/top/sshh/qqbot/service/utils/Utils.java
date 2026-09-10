@@ -73,8 +73,8 @@ public class Utils {
         if (group == null) {
             return false;
         }
-        group.sendMessage(messageChain);
-        return true;
+        // 艾特小小的自动任务统一进入编号队列；普通群消息保持原有同步发送行为。
+        return XiaoXiaoCommandScheduler.send(bot, groupId, messageChain);
     }
 
     // 计算手续费率
@@ -224,13 +224,33 @@ public class Utils {
         return text.toString();
     }
 
+    /**
+     * 获取用于转发的正文。
+     *
+     * <p>NapCat 有时会在消息链中同时放入原始文本和解析后的文本，全部拼接
+     * 会导致转发出现两份正文。SnowLuma 的卡片正文通常位于最后一个文本段，</p>
+     * 所以转发时取最后一个非空文本段；消息匹配仍使用 getMessageText() 的完整文本。
+     */
+    public static String getForwardMessageText(MessageChain messageChain) {
+        if (messageChain == null || messageChain.isEmpty()) {
+            return "";
+        }
+        String lastText = "";
+        for (Message message : messageChain) {
+            if (message instanceof TextMessage && StringUtils.isNotBlank(((TextMessage) message).getText())) {
+                lastText = ((TextMessage) message).getText();
+            }
+        }
+        return lastText;
+    }
+
     public static void forwardMessage(Bot bot,long xxGroupId,  MessageChain messageChain){
         if (bot == null || !bot.getBotConfig().isEnableForwardMessage() || xxGroupId <= 0) {
             return;
         }
         try {
-            // 不再只取最后一个文本段，兼容 SnowLuma 的 Markdown 卡片和多文本段消息。
-            String message = cleanForwardText(getMessageText(messageChain));
+            // 转发取最后一个正文段，避免 NapCat 同时携带原始文本和解析文本时重复。
+            String message = cleanForwardText(getForwardMessageText(messageChain));
             if (StringUtils.isBlank(message)) {
                 return;
             }

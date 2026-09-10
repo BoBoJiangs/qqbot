@@ -175,7 +175,7 @@ public class AutoSellGoods {
 
                 if (hasNextPage) {
                     botConfig.setPage(botConfig.getPage() + 1);
-                    group.sendMessage((new MessageChain()).at("3889001741").text("药材背包" + botConfig.getPage()));
+                    Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包" + botConfig.getPage()));
                 } else {
 
                     buyHerbs(this.herbPackMap.get(bot.getBotId()), group, botConfig);
@@ -213,7 +213,7 @@ public class AutoSellGoods {
 
                 if (hasNextPage) {
                     botConfig.setPage(botConfig.getPage() + 1);
-                    group.sendMessage((new MessageChain()).at("3889001741").text("我的背包" + botConfig.getPage()));
+                    Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741").text("我的背包" + botConfig.getPage()));
                 } else {
                     alchemyEquip(this.equipPackMap.get(bot.getBotId()), group, botConfig);
 
@@ -251,7 +251,7 @@ public class AutoSellGoods {
 
                 if (hasNextPage) {
                     botConfig.setPage(botConfig.getPage() + 1);
-                    group.sendMessage((new MessageChain()).at("3889001741").text("丹药背包" + botConfig.getPage()));
+                    Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741").text("丹药背包" + botConfig.getPage()));
                 } else {
                     if (this.pillPackMap.get(bot.getBotId()) != null) {
                         alchemyPill(this.pillPackMap.get(bot.getBotId()), group, botConfig);
@@ -418,7 +418,7 @@ public class AutoSellGoods {
                 if (first != null) {
                     if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(productPrice.getName())
                             * 1.1) {
-                        group.sendMessage((new MessageChain()).at("3889001741")
+                        Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741")
                                 .text("炼金 " + first.getName() + " " + productPrice.getHerbCount()));
                         group.sendMessage((new MessageChain()).text("物品：" + first.getName() + "市场价：" + first.getPrice()
                                 + "万，炼金：" + ProductLowPrice.getLowPrice(first.getName()) + "万，直接炼金处理。"));
@@ -428,7 +428,7 @@ public class AutoSellGoods {
                         this.buyHerbs(autoBuyList, group, botConfig);
 
                     } else {
-                        group.sendMessage((new MessageChain()).at("3889001741")
+                        Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741")
                                 .text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000 + " "
                                         + productPrice.getHerbCount()));
                     }
@@ -451,7 +451,7 @@ public class AutoSellGoods {
                 if (StringUtils.isEmpty(botConfig.getCommand())) {
                     break;
                 }
-                group.sendMessage((new MessageChain()).at("3889001741")
+                Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741")
                         .text("炼金 " + productPrice.getName() + " " + productPrice.getHerbCount()));
                 break;
             } catch (Exception var6) {
@@ -471,7 +471,7 @@ public class AutoSellGoods {
                 if (StringUtils.isEmpty(botConfig.getCommand())) {
                     break;
                 }
-                group.sendMessage((new MessageChain()).at("3889001741")
+                Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741")
                         .text("炼金 " + productPrice.getName() + " " + productPrice.getHerbCount()));
                 break;
             } catch (Exception var6) {
