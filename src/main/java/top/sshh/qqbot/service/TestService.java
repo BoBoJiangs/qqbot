@@ -3006,6 +3006,7 @@ public class TestService {
 
                         Utils.sendGroupMessage(bot, groupId,
                                 (new MessageChain()).at("3889001741").text("悬赏令接取" + receIndex));
+                        return;
                     }
                 }
             }
