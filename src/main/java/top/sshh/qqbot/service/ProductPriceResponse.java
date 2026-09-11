@@ -16,6 +16,8 @@ public interface ProductPriceResponse extends CrudRepository<ProductPrice, Long>
 
     ProductPrice getFirstByNameOrderByTimeDesc(String name);
 
+    ProductPrice findFirstByNameOrderByTimeDescIdDesc(String name);
+
     boolean existsByName(String name);
 
     boolean existsByCodeAndTimeIsBeforeOrderByTimeDesc(String code, LocalDateTime from);

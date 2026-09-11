@@ -68,8 +68,27 @@ public class DanRecipeQueryService {
         ensureLoaded();
         Dan dan = cache.danByName.get(danName);
         if (dan == null) return Collections.emptyList();
-        List<RecipeSkeleton> skeletons = getOrBuildSkeletons(dan);
-        return skeletons.stream().map(RecipeSkeleton::signature).collect(Collectors.toList());
+        List<DanRecipeBlueprint> skeletons = getOrBuildSkeletons(dan);
+        return skeletons.stream().map(DanRecipeBlueprint::signature).collect(Collectors.toList());
+    }
+
+    /**
+     * 返回当前动态规则生成的全部丹方蓝图，供包内的背包匹配功能复用。
+     */
+    List<DanRecipeBlueprint> getAllRecipeBlueprints() throws IOException {
+        ensureLoaded();
+        List<DanRecipeBlueprint> result = new ArrayList<>();
+        cache.danByName.values().stream()
+                .sorted(Comparator.comparing(d -> d.name))
+                .forEach(dan -> result.addAll(getOrBuildSkeletons(dan)));
+        result.sort(Comparator.comparing(DanRecipeBlueprint::signature));
+        return Collections.unmodifiableList(result);
+    }
+
+    /** 返回固定炼金值快照；未配置的丹药不会出现在结果中。 */
+    Map<String, Integer> getDanAlchemyValues() throws IOException {
+        ensureLoaded();
+        return Collections.unmodifiableMap(new LinkedHashMap<>(cache.danAlchemyValues));
     }
 
     String generateRecipeTextForTest(String danName, int danNum, int limit) throws IOException {
@@ -218,24 +237,24 @@ public class DanRecipeQueryService {
         if (dan == null) return Collections.emptyList();
         int realLimit = Math.max(1, limit);
 
-        List<RecipeSkeleton> skeletons = getOrBuildSkeletons(dan);
+        List<DanRecipeBlueprint> skeletons = getOrBuildSkeletons(dan);
         if (skeletons.isEmpty()) return Collections.emptyList();
 
         int revenue = resolveDanRevenue(dan.name, mode, danNum);
 
         PriorityQueue<RecipeCandidate> heap = new PriorityQueue<>(realLimit, RECIPE_RANKING.reversed());
-        for (RecipeSkeleton s : skeletons) {
-            int mainUnitPrice = herbPriceCache.getPrice(s.mainName).orElseGet(() -> resolveMarketPrice(s.mainName));
-            int leadUnitPrice = herbPriceCache.getPrice(s.leadName).orElseGet(() -> resolveMarketPrice(s.leadName));
-            int assistUnitPrice = herbPriceCache.getPrice(s.assistName).orElseGet(() -> resolveMarketPrice(s.assistName));
+        for (DanRecipeBlueprint s : skeletons) {
+            int mainUnitPrice = herbPriceCache.getPrice(s.getMainName()).orElseGet(() -> resolveMarketPrice(s.getMainName()));
+            int leadUnitPrice = herbPriceCache.getPrice(s.getLeadName()).orElseGet(() -> resolveMarketPrice(s.getLeadName()));
+            int assistUnitPrice = herbPriceCache.getPrice(s.getAssistName()).orElseGet(() -> resolveMarketPrice(s.getAssistName()));
 
-            int cost = s.mainCount * mainUnitPrice + s.leadCount * leadUnitPrice + s.assistCount * assistUnitPrice;
+            int cost = s.getMainCount() * mainUnitPrice + s.getLeadCount() * leadUnitPrice + s.getAssistCount() * assistUnitPrice;
             int profit = revenue - cost;
 
             RecipeCandidate candidate = new RecipeCandidate(dan.name,
-                    s.mainName, s.mainCount, mainUnitPrice,
-                    s.leadName, s.leadCount, leadUnitPrice,
-                    s.assistName, s.assistCount, assistUnitPrice,
+                    s.getMainName(), s.getMainCount(), mainUnitPrice,
+                    s.getLeadName(), s.getLeadCount(), leadUnitPrice,
+                    s.getAssistName(), s.getAssistCount(), assistUnitPrice,
                     cost, revenue, profit);
 
             if (heap.size() < realLimit) {
@@ -251,58 +270,36 @@ public class DanRecipeQueryService {
         return result;
     }
 
-    private List<RecipeCandidate> generateCandidates(Dan dan, BotHerbPriceCache herbPriceCache, int danNum) {
-        if (dan == null || dan.requirements == null || dan.requirements.isEmpty()) return Collections.emptyList();
-
-        List<Map.Entry<String, Integer>> reqList = new ArrayList<>(dan.requirements.entrySet());
-        if (reqList.size() != 2) {
-            logger.warn("暂不支持需求属性数量!=2的丹药: {} requirements={}", dan.name, dan.requirements);
-            return Collections.emptyList();
-        }
-
-        Map.Entry<String, Integer> r1 = reqList.get(0);
-        Map.Entry<String, Integer> r2 = reqList.get(1);
-
-        List<RecipeCandidate> result = new ArrayList<>();
-        result.addAll(generateCandidatesForAssignment(dan, herbPriceCache, danNum, r1.getKey(), r1.getValue(), r2.getKey(), r2.getValue()));
-        result.addAll(generateCandidatesForAssignment(dan, herbPriceCache, danNum, r2.getKey(), r2.getValue(), r1.getKey(), r1.getValue()));
-
-        return result.stream()
-                .collect(Collectors.toMap(RecipeCandidate::signature, c -> c, (a, b) -> a.getProfit() >= b.getProfit() ? a : b))
-                .values()
-                .stream()
-                .collect(Collectors.toList());
-    }
-
-    private List<RecipeSkeleton> getOrBuildSkeletons(Dan dan) {
+    private List<DanRecipeBlueprint> getOrBuildSkeletons(Dan dan) {
         SkeletonCacheEntry current = skeletonCacheMap.get(dan.name);
         if (current != null && Objects.equals(current.cacheKey, cache.cacheKey)) {
             return current.skeletons;
         }
 
-        List<RecipeSkeleton> skeletons = buildSkeletons(dan);
+        List<DanRecipeBlueprint> skeletons = buildSkeletons(dan);
         skeletonCacheMap.put(dan.name, new SkeletonCacheEntry(cache.cacheKey, skeletons));
         return skeletons;
     }
 
-    private List<RecipeSkeleton> buildSkeletons(Dan dan) {
+    private List<DanRecipeBlueprint> buildSkeletons(Dan dan) {
         if (dan == null || dan.requirements == null || dan.requirements.size() != 2) return Collections.emptyList();
         List<Map.Entry<String, Integer>> reqList = new ArrayList<>(dan.requirements.entrySet());
         Map.Entry<String, Integer> r1 = reqList.get(0);
         Map.Entry<String, Integer> r2 = reqList.get(1);
 
-        List<RecipeSkeleton> all = new ArrayList<>();
+        List<DanRecipeBlueprint> all = new ArrayList<>();
         all.addAll(buildSkeletonsForAssignment(dan, r1.getKey(), r1.getValue(), r2.getKey(), r2.getValue()));
         all.addAll(buildSkeletonsForAssignment(dan, r2.getKey(), r2.getValue(), r1.getKey(), r1.getValue()));
 
         return all.stream()
-                .collect(Collectors.toMap(RecipeSkeleton::signature, s -> s, (a, b) -> a.totalCount <= b.totalCount ? a : b))
+                .collect(Collectors.toMap(DanRecipeBlueprint::signature, s -> s,
+                        (a, b) -> a.getTotalCount() <= b.getTotalCount() ? a : b))
                 .values()
                 .stream()
                 .collect(Collectors.toList());
     }
 
-    private List<RecipeSkeleton> buildSkeletonsForAssignment(
+    private List<DanRecipeBlueprint> buildSkeletonsForAssignment(
             Dan dan,
             String mainNeedType,
             int mainNeedValue,
@@ -318,7 +315,7 @@ public class DanRecipeQueryService {
         int nextMainThreshold = cache.nextDanThresholdForMain(mainNeedType, mainNeedValue, assistNeedType, assistNeedValue);
         long maxMainProvided = nextMainThreshold == Integer.MAX_VALUE ? Long.MAX_VALUE : (long) nextMainThreshold * 2L;
 
-        List<RecipeSkeleton> list = new ArrayList<>();
+        List<DanRecipeBlueprint> list = new ArrayList<>();
         for (Herb main : mains) {
             if (main.mainAttr2Value <= 0) continue;
             int mainCount = (int) Math.ceil((double) mainNeedValue / (double) main.mainAttr2Value);
@@ -352,7 +349,7 @@ public class DanRecipeQueryService {
                     int assistProvided = assistCount * assist.assistAttrValue;
                     if (assistProvided >= nextAssistThreshold) continue;
 
-                    list.add(new RecipeSkeleton(
+                    list.add(new DanRecipeBlueprint(
                             dan.name,
                             main.name, mainCount,
                             lead.name, leadCount,
@@ -361,74 +358,6 @@ public class DanRecipeQueryService {
                 }
             }
         }
-        return list;
-    }
-
-    private List<RecipeCandidate> generateCandidatesForAssignment(
-            Dan dan,
-            BotHerbPriceCache herbPriceCache,
-            int danNum,
-            String mainNeedType,
-            int mainNeedValue,
-            String assistNeedType,
-            int assistNeedValue
-    ) {
-        if (mainNeedValue <= 0 || assistNeedValue <= 0) return Collections.emptyList();
-        List<Herb> mains = cache.mainsByAttr2Type.getOrDefault(mainNeedType, Collections.emptyList());
-        List<Herb> assists = cache.assistsByAssistAttrType.getOrDefault(assistNeedType, Collections.emptyList());
-        if (mains.isEmpty() || assists.isEmpty()) return Collections.emptyList();
-
-        int nextAssistThreshold = cache.nextDanThresholdForAssist(mainNeedType, mainNeedValue, assistNeedType, assistNeedValue);
-        int nextMainThreshold = cache.nextDanThresholdForMain(mainNeedType, mainNeedValue, assistNeedType, assistNeedValue);
-        long maxMainProvided = nextMainThreshold == Integer.MAX_VALUE ? Long.MAX_VALUE : (long) nextMainThreshold * 2L;
-
-        List<RecipeCandidate> list = new ArrayList<>();
-        for (Herb main : mains) {
-            if (main.mainAttr2Value <= 0) continue;
-            int mainCount = (int) Math.ceil((double) mainNeedValue / (double) main.mainAttr2Value);
-            if (mainCount <= 0) continue;
-            long mainProvided = (long) mainCount * (long) main.mainAttr2Value;
-            if (mainProvided > maxMainProvided) continue;
-
-            LeadRequirement leadReq = leadRequirementForMain(main);
-            List<Herb> leads = cache.leadsByLeadAttrType.getOrDefault(leadReq.leadAttrType, Collections.emptyList());
-            if ("性平".equals(leadReq.leadAttrType) && !cache.pingLeadNames.isEmpty()) {
-                leads = leads.stream().filter(h -> cache.pingLeadNames.contains(h.name)).collect(Collectors.toList());
-            }
-            if (leads.isEmpty()) continue;
-
-            for (Herb lead : leads) {
-                if (lead.leadAttrValue <= 0) continue;
-                if (Objects.equals(main.name, lead.name)) continue;
-                int leadCount = computeLeadCount(main, mainCount, lead);
-                if (leadCount <= 0) continue;
-                if (mainCount + leadCount >= 100) continue;
-
-                for (Herb assist : assists) {
-                    if (assist.assistAttrValue <= 0) continue;
-                    if (Objects.equals(main.name, assist.name) || Objects.equals(lead.name, assist.name)) continue;
-                    if (assist.assistAttrValue / assistNeedValue >= 2) continue;
-
-                    int assistCount = (int) Math.ceil((double) assistNeedValue / (double) assist.assistAttrValue);
-                    if (assistCount <= 0) continue;
-                    if (mainCount + leadCount + assistCount >= 100) continue;
-                    int assistProvided = assistCount * assist.assistAttrValue;
-                    if (assistProvided >= nextAssistThreshold) continue;
-
-                    int mainUnitPrice = herbPriceCache.getPrice(main.name).orElseGet(() -> resolveMarketPrice(main.name));
-                    int leadUnitPrice = herbPriceCache.getPrice(lead.name).orElseGet(() -> resolveMarketPrice(lead.name));
-                    int assistUnitPrice = herbPriceCache.getPrice(assist.name).orElseGet(() -> resolveMarketPrice(assist.name));
-
-                    int cost = mainCount * mainUnitPrice + leadCount * leadUnitPrice + assistCount * assistUnitPrice;
-                    PriceMode mode = resolvePriceMode(dan.name, QueryMode.AUTO);
-                    int revenue = resolveDanRevenue(dan.name, mode, danNum);
-                    int profit = revenue - cost;
-
-                    list.add(new RecipeCandidate(dan.name, main.name, mainCount, mainUnitPrice, lead.name, leadCount, leadUnitPrice, assist.name, assistCount, assistUnitPrice, cost, revenue, profit));
-                }
-            }
-        }
-
         return list;
     }
 
@@ -616,49 +545,11 @@ public class DanRecipeQueryService {
         }
     }
 
-    private static final class RecipeSkeleton {
-        private final String danName;
-        private final String mainName;
-        private final int mainCount;
-        private final String leadName;
-        private final int leadCount;
-        private final String assistName;
-        private final int assistCount;
-        private final int totalCount;
-
-        private RecipeSkeleton(
-                String danName,
-                String mainName,
-                int mainCount,
-                String leadName,
-                int leadCount,
-                String assistName,
-                int assistCount
-        ) {
-            this.danName = danName;
-            this.mainName = mainName;
-            this.mainCount = mainCount;
-            this.leadName = leadName;
-            this.leadCount = leadCount;
-            this.assistName = assistName;
-            this.assistCount = assistCount;
-            this.totalCount = mainCount + leadCount + assistCount;
-        }
-
-        String signature() {
-            return String.join("|",
-                    danName,
-                    mainName, String.valueOf(mainCount),
-                    leadName, String.valueOf(leadCount),
-                    assistName, String.valueOf(assistCount));
-        }
-    }
-
     private static final class SkeletonCacheEntry {
         private final String cacheKey;
-        private final List<RecipeSkeleton> skeletons;
+        private final List<DanRecipeBlueprint> skeletons;
 
-        private SkeletonCacheEntry(String cacheKey, List<RecipeSkeleton> skeletons) {
+        private SkeletonCacheEntry(String cacheKey, List<DanRecipeBlueprint> skeletons) {
             this.cacheKey = cacheKey;
             this.skeletons = skeletons;
         }

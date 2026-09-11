@@ -483,6 +483,10 @@ public class PriceTask {
             ignoreItself = IgnoreItselfEnum.NOT_IGNORE
     )
     public void 查上架价格(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        // 背包丹方匹配有独立处理器；这里必须先排除，避免“炼金/坊市”关键词导致重复回复。
+        if (isBackpackMatchCommand(message)) {
+            return;
+        }
         if (!bot.getBotConfig().isEnableCheckPrice() || !containsAnyKeywords(message)) {
             return;
         }
@@ -518,6 +522,11 @@ public class PriceTask {
     private boolean containsAnyKeywords(String message) {
         String[] keywords = {"价格", "上架", "查询", "坊市", "炼金"};
         return Arrays.stream(keywords).anyMatch(message::contains);
+    }
+
+    private boolean isBackpackMatchCommand(String message) {
+        return StringUtils.contains(message, "匹配炼金丹")
+                || StringUtils.contains(message, "匹配坊市丹");
     }
 
     // 检查是否有回复消息

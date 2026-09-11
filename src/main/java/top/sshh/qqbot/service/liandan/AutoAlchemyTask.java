@@ -7,7 +7,7 @@ import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.message.MessageChain;
-import top.sshh.qqbot.service.utils.Utils;
+import com.zhuangxv.bot.message.support.AtMessage;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 import org.apache.commons.lang3.StringUtils;
@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.MessageNumber;
 import top.sshh.qqbot.service.GroupManager;
+import top.sshh.qqbot.service.utils.Utils;
 
 import java.io.*;
 import java.util.*;
@@ -71,6 +72,12 @@ public class AutoAlchemyTask {
 
     @Autowired
     private DanRecipeQueryService danRecipeQueryService;
+
+    @Autowired
+    private HerbBackpackMatchService herbBackpackMatchService;
+
+    @Autowired
+    private GroupRecipeMatchConfigService groupRecipeMatchConfigService;
 
     @Autowired
     public GroupManager groupManager;
@@ -218,6 +225,11 @@ public class AutoAlchemyTask {
             });
         }
 
+        if (findBackpackMatchCommandIndex(message) == 0) {
+            String command = extractBackpackMatchCommand(message, messageChain);
+            submitBackpackMatchIfEnabled(command, messageChain, group, bot, member, messageId);
+        }
+
         if (message.startsWith("更新炼丹配置")) {
             Pattern pattern = Pattern.compile("是否是炼金丹药：(是|否).*?炼金丹期望收益：(-?\\d+).*?坊市丹期望收益：(\\d+).*?丹药数量：(\\d+).*?坊市丹名称：([^\\n]+).*?炼丹QQ号码：(\\d+).*?开启全自动炼丹：(是|否).*?背包药材数量限制：(\\d+).*?降低采购药材价格：(-?\\d+)(?:.*?间隔随机延迟：(\\d+))?", Pattern.DOTALL);
             Matcher matcher = pattern.matcher(message);
@@ -311,6 +323,144 @@ public class AutoAlchemyTask {
         }
     }
 
+    @GroupMessageHandler(
+            isAt = true,
+            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
+    )
+    public void 匹配背包丹方(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
+        String command = extractBackpackMatchCommand(message, messageChain);
+        if (command != null) {
+            submitBackpackMatchIfEnabled(command, messageChain, group, bot, member, messageId);
+        }
+    }
+
+    /** 群主、群管理员、机器人控制者可开关本群功能；机器人自身命令用于多机器人控制。 */
+    @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.NOT_IGNORE)
+    public void 开关本群丹方匹配(
+            Bot bot,
+            Group group,
+            Member member,
+            MessageChain messageChain,
+            String message,
+            Integer messageId
+    ) {
+        String command = extractGroupRecipeMatchToggle(bot, message, messageChain);
+        if (command == null || member == null) {
+            return;
+        }
+
+        boolean selfMessage = member.getUserId() == bot.getBotId();
+        if (!selfMessage && !isAtBot(bot, messageChain, message)) {
+            return;
+        }
+        if (!selfMessage && !canManageGroupRecipeMatch(bot, member)) {
+            sendReply(group, messageId, "只有群主、群管理员或机器人控制者可以修改本群丹方匹配开关。");
+            return;
+        }
+
+        boolean enabled = command.startsWith("启用") || command.startsWith("开启");
+        boolean saved = groupRecipeMatchConfigService.setEnabled(
+                bot.getBotId(), group.getGroupId(), enabled);
+        if (!saved) {
+            sendReply(group, messageId, "本群丹方匹配开关保存失败，请检查配置目录后重试。");
+            return;
+        }
+        sendReply(group, messageId,
+                enabled ? "已启用本群丹方匹配，设置已保存。" : "已关闭本群丹方匹配，设置已保存。");
+    }
+
+    private void submitBackpackMatchIfEnabled(
+            String command,
+            MessageChain messageChain,
+            Group group,
+            Bot bot,
+            Member member,
+            Integer messageId
+    ) {
+        if (!groupRecipeMatchConfigService.isEnabled(bot.getBotId(), group.getGroupId())) {
+            sendReply(group, messageId,
+                    "本群丹方匹配未启用，请由群主、群管理员或机器人控制者@我发送“启用本群丹方匹配”。");
+            return;
+        }
+        herbBackpackMatchService.submitMatch(command, messageChain, group, bot, member);
+    }
+
+    /**
+     * 消息字符串由整个 MessageChain 拼接而来，@机器人可能位于命令前面或后面。
+     * 先按消息链中的 AtMessage 精确移除 @ 段，再截取命令，避免后置 @ 被当作成丹数。
+     */
+    String extractBackpackMatchCommand(String message, MessageChain messageChain) {
+        String normalized = removeAtMentions(message, messageChain);
+        int commandIndex = findBackpackMatchCommandIndex(normalized);
+        return commandIndex < 0 ? null : normalized.substring(commandIndex).trim();
+    }
+
+    private String removeAtMentions(String message, MessageChain messageChain) {
+        String normalized = StringUtils.defaultString(message);
+        if (messageChain != null) {
+            for (AtMessage atMessage : messageChain.getMessageByType(AtMessage.class)) {
+                if (StringUtils.isBlank(atMessage.getQq())) continue;
+                normalized = normalized.replaceAll(
+                        Pattern.quote("@" + atMessage.getQq()) + "(?=\\s|$)", " ");
+            }
+        }
+        return normalized;
+    }
+
+    private String extractGroupRecipeMatchToggle(Bot bot, String message, MessageChain messageChain) {
+        String normalized = removeAtMentions(message, messageChain)
+                .replace("@" + bot.getBotId(), " ")
+                .replace("@" + StringUtils.defaultString(bot.getBotName()), " ")
+                .trim();
+        if ("启用本群丹方匹配".equals(normalized)
+                || "开启本群丹方匹配".equals(normalized)
+                || "关闭本群丹方匹配".equals(normalized)) {
+            return normalized;
+        }
+        return null;
+    }
+
+    private boolean isAtBot(Bot bot, MessageChain messageChain, String message) {
+        if (messageChain != null) {
+            List<AtMessage> atMessages = messageChain.getMessageByType(AtMessage.class);
+            if (atMessages != null && !atMessages.isEmpty()) {
+                return atMessages.stream().anyMatch(at -> String.valueOf(bot.getBotId()).equals(at.getQq()));
+            }
+        }
+        return StringUtils.contains(message, "@" + bot.getBotId())
+                || StringUtils.contains(message, "@" + bot.getBotName());
+    }
+
+    private boolean canManageGroupRecipeMatch(Bot bot, Member member) {
+        String role = member.getRole();
+        if ("owner".equalsIgnoreCase(role) || "admin".equalsIgnoreCase(role)) {
+            return true;
+        }
+        String controlQQ = bot.getBotConfig().getControlQQ();
+        if (StringUtils.isNotBlank(controlQQ)) {
+            return Arrays.stream(controlQQ.split("&"))
+                    .map(String::trim)
+                    .anyMatch(value -> value.equals(String.valueOf(member.getUserId())));
+        }
+        return bot.getBotConfig().getMasterQQ() == member.getUserId();
+    }
+
+    private void sendReply(Group group, Integer messageId, String text) {
+        MessageChain response = new MessageChain();
+        if (messageId != null) {
+            response.reply(messageId);
+        }
+        group.sendMessage(response.text(text));
+    }
+
+    private int findBackpackMatchCommandIndex(String message) {
+        if (message == null) return -1;
+        int alchemyIndex = message.indexOf("匹配炼金丹");
+        int marketIndex = message.indexOf("匹配坊市丹");
+        return alchemyIndex < 0 ? marketIndex
+                : marketIndex < 0 ? alchemyIndex : Math.min(alchemyIndex, marketIndex);
+    }
+
     private String showReplyMessage(String message, Config config) {
         StringBuilder sb = new StringBuilder();
         if (message.equals("炼丹命令")) {
@@ -335,6 +485,9 @@ public class AutoAlchemyTask {
             sb.append("取消刷新指定药材坊市\n");
             sb.append("批量修改性平价格 ××\n");
             sb.append("分析背包药材\n");
+            sb.append("管理员@机器人：启用/关闭本群丹方匹配（默认关闭）\n");
+            sb.append("引用药材消息/合并转发：匹配炼金丹 [成丹数]\n");
+            sb.append("引用药材消息/合并转发：匹配坊市丹 [成丹数]\n");
             return sb.toString();
         } else {
             if (message.equals("炼丹设置")) {
