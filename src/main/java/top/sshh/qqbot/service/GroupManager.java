@@ -1036,9 +1036,7 @@ public class GroupManager {
 
 
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 秘境结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         message = processReplyMessage(messageChain);
         if (bot.getBotConfig().isEnableAutomaticReply() ) {
@@ -1055,9 +1053,7 @@ public class GroupManager {
 
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 自动秘境提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
         if (!msg.contains("秘境之灵") && bot.getBotConfig().isEnableAutomaticReply()) {
             // 秘域消息由专用处理器处理，避免继续落入通用秘境提醒。
@@ -1088,9 +1084,7 @@ public class GroupManager {
         }
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 秘域结算提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
         if (!bot.getBotConfig().isEnableAutomaticReply() || !isRemindGroup(bot, group)) {
             return;
@@ -1217,9 +1211,7 @@ public class GroupManager {
         return null;
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 传功结算提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
         if (!bot.getBotConfig().isEnableAutomaticReply() || !isRemindGroup(bot, group)) {
             return;
@@ -1378,9 +1370,7 @@ public class GroupManager {
 
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         message = processReplyMessage(messageChain);
         if (bot.getBotConfig().isEnableAutomaticReply()
@@ -1396,9 +1386,7 @@ public class GroupManager {
 
 
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 新版悬赏令结算提醒(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
         message = processReplyMessage(messageChain);
         if (bot.getBotConfig().isEnableAutomaticReply()
@@ -1429,9 +1417,7 @@ public class GroupManager {
 
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 自动悬赏令提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
         if (!msg.contains("悬赏令计时更新") && bot.getBotConfig().isEnableAutomaticReply() && (msg.contains("悬赏令接取成功") || msg.contains("悬赏令进行中"))) {
             long userId = member.getUserId();
@@ -1592,9 +1578,7 @@ public class GroupManager {
         }
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 灵田领取提醒(Bot bot, Group group, Member member, MessageChain messageChain, String msg, Integer messageId) throws InterruptedException {
         msg = processReplyMessage(messageChain);
         if (bot.getBotConfig().isEnableAutomaticReply()) {
@@ -1611,9 +1595,7 @@ public class GroupManager {
 
     }
 
-    @GroupMessageHandler(
-            ignoreItself = IgnoreItselfEnum.NOT_IGNORE
-    )
+    @GroupMessageHandler(senderIds = { 3889001741L })
     public void 灵田自动提醒服务(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
         if (!msg.contains("洞天之灵")  && bot.getBotConfig().isEnableAutomaticReply()) {
             long userId = member.getUserId();
