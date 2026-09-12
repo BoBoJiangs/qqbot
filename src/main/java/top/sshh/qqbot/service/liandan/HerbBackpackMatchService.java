@@ -28,7 +28,9 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -102,6 +104,16 @@ public class HerbBackpackMatchService {
             },
             new ThreadPoolExecutor.AbortPolicy());
 
+    /**
+     * 匹配流程（展开合并转发）会产生大量临时字符串，处理完成后延迟触发一次 GC，
+     * 立即回收并促使 G1 把内存还给系统；配合 -XX:+ExplicitGCInvokesConcurrent 走并发回收，停顿很小。
+     */
+    private static final ScheduledExecutorService POST_MATCH_GC = Executors.newSingleThreadScheduledExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "herb-backpack-match-gc");
+        thread.setDaemon(true);
+        return thread;
+    });
+
     /** 提交实际群聊匹配任务；请求者信息在进入异步线程前完成快照。 */
     public void submitMatch(String message, MessageChain messageChain, Group group, Bot bot, Member member) {
         MatchRequester requester = MatchRequester.from(member);
@@ -157,6 +169,8 @@ public class HerbBackpackMatchService {
         } catch (Exception e) {
             logger.error("药材背包匹配失败: {}", e.getMessage(), e);
             group.sendMessage(new MessageChain().text("药材背包匹配失败：" + e.getMessage()));
+        } finally {
+            POST_MATCH_GC.schedule(() -> System.gc(), 3, TimeUnit.SECONDS);
         }
     }
 

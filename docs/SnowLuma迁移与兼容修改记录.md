@@ -163,7 +163,7 @@ ssh ubuntu@42.194.185.3 'sudo docker stop java-bot && sudo mv /tmp/bot.jar.new /
 sudo docker run -d --name java-bot --restart always --network host \
   -v /home/user/JavaBot:/app \
   eclipse-temurin:17-jdk \
-  sh -c "cd /app && java -Xms128m -Xmx512m -XX:G1PeriodicGCInterval=120000 -XX:+ExitOnOutOfMemoryError -jar bot.jar"
+  sh -c "cd /app && java -Xms128m -Xmx512m -XX:G1PeriodicGCInterval=120000 -XX:+ExplicitGCInvokesConcurrent -XX:+ExitOnOutOfMemoryError -jar bot.jar"
 
 # SnowLuma 容器运维
 sudo docker restart snowluma          # 重启（登录态在卷里，可能需重扫码，建议QQ窗口勾选自动登录）
