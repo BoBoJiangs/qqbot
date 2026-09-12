@@ -33,6 +33,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Collections;
 import java.util.Comparator;
@@ -59,7 +60,7 @@ public class HerbBackpackMatchService {
     private static final String USAGE = "用法：引用药材消息或包含多页药材的合并转发后，发送“匹配炼金丹 [成丹数]”或“匹配坊市丹 [成丹数]”；成丹数必须为正整数。";
     private static final int MAX_FORWARD_DEPTH = 5;
     private static final int MAX_FORWARD_NODES = 500;
-    private static final int MATCH_POOL_SIZE = 6;
+    private static final int MATCH_POOL_SIZE = 4;
     private static final int MATCH_QUEUE_CAPACITY = 100;
     private static final AtomicInteger MATCH_THREAD_NUMBER = new AtomicInteger();
 
@@ -113,6 +114,12 @@ public class HerbBackpackMatchService {
         thread.setDaemon(true);
         return thread;
     });
+
+    /**
+     * 多人同时匹配时，各自的 finally 都会尝试调度 GC；用此标记在同一窗口内合并为一次，
+     * 避免连续触发多次并发回收周期。
+     */
+    private static final AtomicBoolean POST_MATCH_GC_PENDING = new AtomicBoolean();
 
     /** 提交实际群聊匹配任务；请求者信息在进入异步线程前完成快照。 */
     public void submitMatch(String message, MessageChain messageChain, Group group, Bot bot, Member member) {
@@ -170,7 +177,12 @@ public class HerbBackpackMatchService {
             logger.error("药材背包匹配失败: {}", e.getMessage(), e);
             group.sendMessage(new MessageChain().text("药材背包匹配失败：" + e.getMessage()));
         } finally {
-            POST_MATCH_GC.schedule(() -> System.gc(), 3, TimeUnit.SECONDS);
+            if (POST_MATCH_GC_PENDING.compareAndSet(false, true)) {
+                POST_MATCH_GC.schedule(() -> {
+                    POST_MATCH_GC_PENDING.set(false);
+                    System.gc();
+                }, 3, TimeUnit.SECONDS);
+            }
         }
     }
 

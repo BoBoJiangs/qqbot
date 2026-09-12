@@ -107,6 +107,7 @@ SnowLuma WebUI「节点配置」里为 3988941800 配置了 OneBot ws 服务端�
 | `识别大号接收码` | 接收码提取改用 UUID 正则（`[0-9a-f]{8}-...`），失败才回退旧的 split 逻辑 |
 | `艾特小号执行` | 消息链无文本段时（纯卡片消息）直接 return，修复 `get(0)` 数组越界崩溃 |
 | `自动点击按钮` | 接入按钮兜底解析（确认赠送灵石弹窗的自动点确认） |
+| `HerbBackpackMatchService` | 匹配完成后 3 秒合并触发一次 GC（多人同时匹配只回收一次）；并发解析线程池上限 4，防止多人同时匹配叠加临时对象撑爆堆 |
 | `验证码判断` | 接入按钮兜底解析（验证码暂停任务 + botButtonMap 记录） |
 
 ### 5. `WsKeepAliveTask.java`（新增）
@@ -163,7 +164,7 @@ ssh ubuntu@42.194.185.3 'sudo docker stop java-bot && sudo mv /tmp/bot.jar.new /
 sudo docker run -d --name java-bot --restart always --network host \
   -v /home/user/JavaBot:/app \
   eclipse-temurin:17-jdk \
-  sh -c "cd /app && java -Xms128m -Xmx512m -XX:G1PeriodicGCInterval=120000 -XX:+ExplicitGCInvokesConcurrent -XX:+ExitOnOutOfMemoryError -jar bot.jar"
+  sh -c "cd /app && java -Xms128m -Xmx640m -XX:G1PeriodicGCInterval=120000 -XX:+ExplicitGCInvokesConcurrent -XX:+ExitOnOutOfMemoryError -jar bot.jar"
 
 # SnowLuma 容器运维
 sudo docker restart snowluma          # 重启（登录态在卷里，可能需重扫码，建议QQ窗口勾选自动登录）
