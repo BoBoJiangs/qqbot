@@ -154,6 +154,14 @@ bot-core 客户端空闲时不发心跳，导致连接反复掉线、断连窗�
 scp target/bot.jar ubuntu@42.194.185.3:/tmp/bot.jar.new
 ssh ubuntu@42.194.185.3 'sudo docker stop java-bot && sudo mv /tmp/bot.jar.new /home/user/JavaBot/bot.jar && sudo docker start java-bot'
 
+# ⚠️ java-bot 容器必须带 JVM 内存参数重建（2026-09-12 起）
+# 裸 java -jar 会让堆膨胀到 ~1GB（默认上限≈系统1/4），加了上限后 1023MB → 344MB
+# 若误删容器，按此重建（host 网络 + 挂载 + 堆上限 + OOM自动重启）：
+sudo docker run -d --name java-bot --restart always --network host \
+  -v /home/user/JavaBot:/app \
+  eclipse-temurin:17-jdk \
+  sh -c "cd /app && java -Xms128m -Xmx512m -XX:+ExitOnOutOfMemoryError -jar bot.jar"
+
 # SnowLuma 容器运维
 sudo docker restart snowluma          # 重启（登录态在卷里，可能需重扫码，建议QQ窗口勾选自动登录）
 sudo docker logs -f snowluma          # 看日志
