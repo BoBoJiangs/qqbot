@@ -156,11 +156,14 @@ ssh ubuntu@42.194.185.3 'sudo docker stop java-bot && sudo mv /tmp/bot.jar.new /
 
 # ⚠️ java-bot 容器必须带 JVM 内存参数重建（2026-09-12 起）
 # 裸 java -jar 会让堆膨胀到 ~1GB（默认上限≈系统1/4），加了上限后 1023MB → 344MB
+# G1PeriodicGCInterval：空闲时每2分钟自动GC并把内存还给系统
+# （执行背包匹配等功能时堆会临时冲高属正常——解析转发消息的临时字符串，
+#   活数据基线约190MB，Full GC 后即回落，无泄漏）
 # 若误删容器，按此重建（host 网络 + 挂载 + 堆上限 + OOM自动重启）：
 sudo docker run -d --name java-bot --restart always --network host \
   -v /home/user/JavaBot:/app \
   eclipse-temurin:17-jdk \
-  sh -c "cd /app && java -Xms128m -Xmx512m -XX:+ExitOnOutOfMemoryError -jar bot.jar"
+  sh -c "cd /app && java -Xms128m -Xmx512m -XX:G1PeriodicGCInterval=120000 -XX:+ExitOnOutOfMemoryError -jar bot.jar"
 
 # SnowLuma 容器运维
 sudo docker restart snowluma          # 重启（登录态在卷里，可能需重扫码，建议QQ窗口勾选自动登录）
