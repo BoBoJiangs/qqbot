@@ -52,6 +52,8 @@ public class GroupManager {
     Map<String, RemindTime> mjXslmap = new ConcurrentHashMap();
     Map<String, RemindTime> cgmap = new ConcurrentHashMap();
     Map<String, RemindTime> ltmap = new ConcurrentHashMap();
+    /** 防止同一条群消息被多个秘境/秘域处理器重复注册提醒。 */
+    private final Map<String, Long> explorationReminderMessageIds = new ConcurrentHashMap<>();
 
     public static final ForkJoinPool customPool = new ForkJoinPool(20);
     private static final List<String> MJ_TEXT_LIST = Arrays.asList(" 【秘境结算提醒】秘境试炼已结束！此番奇遇定让您感悟大道，快查看收获，或许有突破境界的机缘！",
@@ -1044,9 +1046,10 @@ public class GroupManager {
             if (isRemindGroup(bot, group)) {
                 Long targetUserId = extractMentionedUserId(message, bot);
                 if (targetUserId == null) {
-                    targetUserId = resolveRecentTaskUserId(group, "秘境", member.getUserId());
+                    String type = isMiYuMessage(message) ? "秘域" : "秘境";
+                    targetUserId = resolveRecentTaskUserId(group, type, member.getUserId());
                 }
-                sendMjTimeInfo(message,group,bot,targetUserId);
+                sendMjTimeInfo(message,group,bot,targetUserId,messageId);
             }
         }
 
@@ -1057,6 +1060,10 @@ public class GroupManager {
     )
     public void 自动秘境提醒(Bot bot, Group group, Member member, MessageChain chain, String msg, Integer msgId) {
         if (!msg.contains("秘境之灵") && bot.getBotConfig().isEnableAutomaticReply()) {
+            // 秘域消息由专用处理器处理，避免继续落入通用秘境提醒。
+            if (isMiYuMessage(msg)) {
+                return;
+            }
             Long userId = member.getUserId();
             Long mentionedUserId = extractMentionedUserId(msg, bot);
             if (mentionedUserId != null) {
@@ -1077,7 +1084,7 @@ public class GroupManager {
                 return;
             }
 
-            sendMjTimeInfo(msg,group,bot,userId);
+            sendMjTimeInfo(msg,group,bot,userId,msgId);
         }
     }
 
@@ -1088,12 +1095,9 @@ public class GroupManager {
         if (!bot.getBotConfig().isEnableAutomaticReply() || !isRemindGroup(bot, group)) {
             return;
         }
-        boolean isMiYuMessage = (msg.contains("道友已入") && msg.contains("秘域结算"))
-                || (msg.contains("秘域探索仍在进行") && msg.contains("分钟"));
-        if (!isMiYuMessage) {
+        if (!isMiYuMessage(msg)) {
             return;
         }
-        logger.info("收到秘域消息，原始内容：group={}, msg={}", group.getGroupId(), msg);
         Long targetUserId = extractMentionedUserId(msg, bot);
         String extractWay = "文本@QQ提取";
         if (targetUserId == null) {
@@ -1109,7 +1113,7 @@ public class GroupManager {
             return;
         }
         logger.info("秘域提醒注册：提取方式={}，qq={}", extractWay, targetUserId);
-        this.extractInfo(msg, "秘域", group, bot, targetUserId);
+        this.extractInfo(msg, "秘域", group, bot, targetUserId, msgId);
     }
 
     private static final Pattern MARKDOWN_MENTION_PATTERN = Pattern.compile(
@@ -1328,19 +1332,28 @@ public class GroupManager {
         return null;
     }
 
-    private void sendMjTimeInfo(String message, Group group, Bot bot,Long userId) {
+    private boolean isMiYuMessage(String message) {
+        return message != null && message.contains("秘域结算");
+    }
+
+    private void sendMjTimeInfo(String message, Group group, Bot bot,Long userId, Integer messageId) {
+        // “秘域结算”是秘域专属标记；其他消息按秘境处理。
+        if (isMiYuMessage(message)) {
+            this.extractInfo(message, "秘域", group, bot, userId, messageId);
+            return;
+        }
         if (message.contains("秘境通告") && message.contains("探索时长")) {
-            this.extractInfo(message, "秘境", group, bot,userId);
+            this.extractInfo(message, "秘境", group, bot,userId,messageId);
         }else if (message.contains("妖域") && message.contains("道友已") && message.contains("分钟")) {
-            this.extractInfo(message, "秘境", group, bot,userId);
+            this.extractInfo(message, "秘境", group, bot,userId,messageId);
         } else if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
-            this.extractInfo(message, "秘境", group, bot,userId);
+            this.extractInfo(message, "秘境", group, bot,userId,messageId);
         } else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
-            this.extractInfo(message, "秘境", group, bot,userId);
+            this.extractInfo(message, "秘境", group, bot,userId,messageId);
         } else if (message.contains("秘境") && message.contains("道友已") && message.contains("分钟")) {
-            this.handleNewsExploration(message, group, bot,userId);
+            this.handleNewsExploration(message, group, bot,userId,messageId);
         } else if (message.contains("秘境") && message.contains("时轮压缩") && message.contains("分钟")) {
-            this.handleNewsExploration(message, group, bot,userId);
+            this.handleNewsExploration(message, group, bot,userId,messageId);
         }
     }
 
@@ -1353,14 +1366,14 @@ public class GroupManager {
         return isGroupQQ;
     }
 
-    private void handleNewsExploration(String msg, Group group, Bot bot,Long userId) {
+    private void handleNewsExploration(String msg, Group group, Bot bot,Long userId, Integer messageId) {
 
         Pattern pattern = Pattern.compile("⏳\\s*[^:]*：\\s*(\\d+\\.?\\d*)\\s*(分钟|小时)");
         Matcher matcher = pattern.matcher(msg);
         double minutes = 0.0;
         String qq = String.valueOf(userId);
         if (matcher.find()) {
-            addMjXslMap(qq, "秘境", group, matcher.group(1), bot);
+            addMjXslMap(qq, "秘境", group, matcher.group(1), bot, messageId);
         }
 
     }
@@ -1482,6 +1495,10 @@ public class GroupManager {
     }
 
     public void extractInfo(String input, String type, Group group, Bot bot,Long userId) {
+        extractInfo(input, type, group, bot, userId, null);
+    }
+
+    private void extractInfo(String input, String type, Group group, Bot bot,Long userId, Integer messageId) {
         String qqPattern = "@(\\d+)";
         String timePattern = "(\\d+(?:\\.\\d+)?)[ \\t]*(?:[（(][ \\t]*原[ \\t]*\\d+(?:\\.\\d+)?[ \\t]*[）)])?[ \\t]*(?:分钟|分钟后)";
         Pattern qqRegex = Pattern.compile(qqPattern);
@@ -1499,19 +1516,30 @@ public class GroupManager {
         } else {
             logger.warn("未找到{}时间，message={}", type, input);
         }
-        addMjXslMap(qq, type, group, time, bot);
+        addMjXslMap(qq, type, group, time, bot, messageId);
 
     }
 
     private void addMjXslMap(String qq, String type, Group group, String time, Bot bot) {
+        addMjXslMap(qq, type, group, time, bot, null);
+    }
+
+    private void addMjXslMap(String qq, String type, Group group, String time, Bot bot, Integer messageId) {
         if (!this.isGroupSettlementReminderEnabled(group.getGroupId())) {
             logger.info("群结算提醒未启用，跳过{}提醒：group={}", type, group.getGroupId());
             return;
         }
         if (StringUtils.isNotBlank(qq) && StringUtils.isNotBlank(time)) {
-            RemindTime remindTime = new RemindTime();
-            remindTime.setQq(Long.parseLong(qq));
+            long qqNumber = Long.parseLong(qq);
             long expireTime = (long) (Math.ceil(Double.parseDouble(time)) * 60.0 * 1000.0 + (double) System.currentTimeMillis());
+            if (("秘境".equals(type) || "秘域".equals(type))
+                    && isDuplicateExplorationMessage(group, messageId)) {
+                logger.info("同一条群消息已注册过秘境/秘域提醒，跳过重复回执：group={}, messageId={}, type={}, qq={}",
+                        group.getGroupId(), messageId, type, qq);
+                return;
+            }
+            RemindTime remindTime = new RemindTime();
+            remindTime.setQq(qqNumber);
             remindTime.setExpireTime(expireTime);
             remindTime.setText(type);
             remindTime.setGroupId(group.getGroupId());
@@ -1524,6 +1552,31 @@ public class GroupManager {
                 removeTaskRecordIfOwned(group.getGroupId() + "_次元秘境", qq, type, group.getGroupId());
             }
         }
+    }
+
+    private boolean isDuplicateExplorationMessage(Group group, Integer messageId) {
+        if (messageId == null || messageId <= 0) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        String key = group.getGroupId() + "_" + messageId;
+        while (true) {
+            Long previous = this.explorationReminderMessageIds.putIfAbsent(key, now);
+            if (previous == null) {
+                break;
+            }
+            if (now - previous < 10 * 60 * 1000L) {
+                return true;
+            }
+            if (this.explorationReminderMessageIds.replace(key, previous, now)) {
+                break;
+            }
+        }
+        if (this.explorationReminderMessageIds.size() > 2048) {
+            long cutoff = now - 10 * 60 * 1000L;
+            this.explorationReminderMessageIds.entrySet().removeIf(entry -> entry.getValue() < cutoff);
+        }
+        return false;
     }
 
     private void removeTaskRecordIfOwned(String taskKey, String qq, String type, Long groupId) {

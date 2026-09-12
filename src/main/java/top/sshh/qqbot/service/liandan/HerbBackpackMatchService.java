@@ -52,6 +52,8 @@ public class HerbBackpackMatchService {
     private static final int DEFAULT_DAN_COUNT = 6;
     private static final String FORWARD_NAME = "药材背包匹配助手";
     private static final String FURNACE = "丹炉寒铁铸心炉";
+    private static final String PRICE_REFRESH_NOTE =
+            "注：匹配结果会随药材和坊市丹药价格实时变动，为确保价格准确请刷新坊市后重试！";
     private static final String USAGE = "用法：引用药材消息或包含多页药材的合并转发后，发送“匹配炼金丹 [成丹数]”或“匹配坊市丹 [成丹数]”；成丹数必须为正整数。";
     private static final int MAX_FORWARD_DEPTH = 5;
     private static final int MAX_FORWARD_NODES = 500;
@@ -62,6 +64,8 @@ public class HerbBackpackMatchService {
     private static final Pattern COMMAND_PATTERN = Pattern.compile("^匹配(炼金丹|坊市丹)(?:\\s+(\\S+))?\\s*$");
     private static final Pattern NAME_PATTERN = Pattern.compile("名字\\s*[:：]\\s*(.+)");
     private static final Pattern COUNT_PATTERN = Pattern.compile("拥有数量\\s*[:：]\\s*(\\d+)");
+    private static final Pattern INLINE_HERB_COUNT_PATTERN =
+            Pattern.compile("^(.+?)\\s*[-－—]\\s*数量\\s*[:：]\\s*(\\d+)(?:\\D.*)?$");
 
     private static final Comparator<PricedRecipe> RECIPE_ORDER = Comparator
             .comparingLong(PricedRecipe::getUnitProfit).reversed()
@@ -390,6 +394,14 @@ public class HerbBackpackMatchService {
         String currentName = null;
         for (String rawLine : normalized.split("\\R")) {
             String line = rawLine.trim();
+            Matcher inlineMatcher = INLINE_HERB_COUNT_PATTERN.matcher(line);
+            if (inlineMatcher.matches()) {
+                String herbName = normalizeHerbName(inlineMatcher.group(1));
+                addInventoryCount(inventory, herbName, inlineMatcher.group(2));
+                currentName = null;
+                continue;
+            }
+
             Matcher nameMatcher = NAME_PATTERN.matcher(line);
             if (nameMatcher.find()) {
                 currentName = normalizeHerbName(nameMatcher.group(1));
@@ -399,16 +411,21 @@ public class HerbBackpackMatchService {
 
             Matcher countMatcher = COUNT_PATTERN.matcher(line);
             if (countMatcher.find()) {
-                try {
-                    long count = Long.parseLong(countMatcher.group(1));
-                    inventory.merge(currentName, count, Math::addExact);
-                } catch (NumberFormatException | ArithmeticException ignore) {
-                    // 当前条目无效时继续解析本页的后续条目。
-                }
+                addInventoryCount(inventory, currentName, countMatcher.group(1));
                 currentName = null;
             }
         }
         return inventory;
+    }
+
+    private void addInventoryCount(Map<String, Long> inventory, String herbName, String countText) {
+        if (StringUtils.isBlank(herbName)) return;
+        try {
+            long count = Long.parseLong(countText);
+            inventory.merge(herbName, count, Math::addExact);
+        } catch (NumberFormatException | ArithmeticException ignore) {
+            // 当前条目无效时继续解析本页的后续条目。
+        }
     }
 
     private String normalizeHerbName(String value) {
@@ -539,36 +556,32 @@ public class HerbBackpackMatchService {
             HerbBackpackMatchResult result,
             MatchRequester requester
     ) {
-        String senderId = String.valueOf(bot.getBotId());
-        List<ForwardNodeMessage> nodes = new ArrayList<>();
-        String requesterLine = requester == null || !requester.known
-                ? ""
-                : "\n请求者：" + requester.displayName + "（QQ：" + requester.userId + "）";
-        nodes.add(new ForwardNodeMessage(senderId, FORWARD_NAME, new MessageChain().text(
-                "药材背包匹配：" + command.mode.getDisplayName() + "｜每炉" + command.danCount
-                        + "丹｜按单炉净利润优先"
-                        + requesterLine + "\n\n"
-                        + "总炉数：" + result.getTotalFurnaces() + "炉  总利润："
-                        + formatWanAmount(result.getTotalProfit()))));
+        String requesterName = requester == null || !requester.known ? "未知" : requester.displayName;
+        String header = "药材背包匹配：" + command.mode.getDisplayName() + "｜每炉" + command.danCount
+                + "丹｜按单炉净利润优先\n"
+                + "请求者：" + requesterName + "\n\n"
+                + "总炉数：" + result.getTotalFurnaces() + "炉  总利润："
+                + formatWanAmount(result.getTotalProfit()) + "\n\n"
+                + PRICE_REFRESH_NOTE;
 
+        StringBuilder details = new StringBuilder();
         if (result.getAllocations().isEmpty()) {
-            nodes.add(new ForwardNodeMessage(senderId, FORWARD_NAME,
-                    new MessageChain().text("没有匹配到库存足够且单炉净利润为正的丹方。")));
+            details.append("没有匹配到库存足够且单炉净利润为正的丹方。");
         } else {
             for (HerbBackpackMatchResult.Allocation allocation : result.getAllocations()) {
                 DanRecipeBlueprint b = allocation.getBlueprint();
                 String priceLabel = command.mode == MatchMode.ALCHEMY ? "炼金价" : "坊市价";
-                String text = "丹药：" + b.getDanName() + "  " + priceLabel
-                        + formatWanAmount(allocation.getDanUnitPrice()) + "\n"
-                        + formatHerbPrice("主药", b.getMainName(), b.getMainCount(), allocation) + "\n"
-                        + formatHerbPrice("药引", b.getLeadName(), b.getLeadCount(), allocation) + "\n"
-                        + formatHerbPrice("辅药", b.getAssistName(), b.getAssistCount(), allocation) + "\n"
-                        + "配方主药" + b.getMainName() + b.getMainCount()
-                        + "药引" + b.getLeadName() + b.getLeadCount()
-                        + "辅药" + b.getAssistName() + b.getAssistCount() + FURNACE + "\n"
-                        + "可炼制：" + allocation.getFurnaceCount() + "炉  利润："
-                        + formatWanAmount(allocation.getTotalProfit());
-                nodes.add(new ForwardNodeMessage(senderId, FORWARD_NAME, new MessageChain().text(text)));
+                if (details.length() > 0) details.append("\n\n");
+                details.append("配方主药").append(b.getMainName()).append(b.getMainCount())
+                        .append("药引").append(b.getLeadName()).append(b.getLeadCount())
+                        .append("辅药").append(b.getAssistName()).append(b.getAssistCount()).append(FURNACE)
+                        .append("\n可炼制：").append(allocation.getFurnaceCount()).append("炉  利润：")
+                        .append(formatWanAmount(allocation.getTotalProfit()))
+                        .append("\n丹药：").append(b.getDanName()).append("  ").append(priceLabel)
+                        .append(formatWanAmount(allocation.getDanUnitPrice())).append("\n")
+                        .append(formatHerbPrice("主药", b.getMainName(), b.getMainCount(), allocation)).append("\n")
+                        .append(formatHerbPrice("药引", b.getLeadName(), b.getLeadCount(), allocation)).append("\n")
+                        .append(formatHerbPrice("辅药", b.getAssistName(), b.getAssistCount(), allocation));
             }
         }
 
@@ -577,8 +590,15 @@ public class HerbBackpackMatchService {
         appendMissing(footer, "缺少坊市丹价", result.getMissingMarketDanPrices());
         appendMissing(footer, "缺少固定炼金值", result.getMissingAlchemyValues());
         if (footer.length() > 0) {
-            nodes.add(new ForwardNodeMessage(senderId, FORWARD_NAME, new MessageChain().text(footer.toString())));
+            if (details.length() > 0) details.append("\n\n");
+            details.append(footer);
         }
+
+        String senderId = String.valueOf(bot.getBotId());
+        List<ForwardNodeMessage> nodes = new ArrayList<>(2);
+        nodes.add(new ForwardNodeMessage(senderId, FORWARD_NAME, new MessageChain().text(header)));
+        nodes.add(new ForwardNodeMessage(senderId, FORWARD_NAME,
+                new MessageChain().text(details.toString())));
         group.sendGroupForwardMessage(nodes);
     }
 

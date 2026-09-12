@@ -31,7 +31,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -73,6 +73,28 @@ class HerbBackpackMatchServiceTest {
         assertEquals(2, inventory.size());
         assertEquals(30L, inventory.get("幻心草"));
         assertEquals(5L, inventory.get("鬼臼草"));
+    }
+
+    @Test
+    void parseBackpack_supportsNameDashQuantityFormatAndIgnoresHeadingsAndPagination() {
+        String page = "@咕咕咕丫\n"
+                + "冰灵果 - 数量：2 炼金 | 坊市数据\n"
+                + "☆------五品药材------☆\n"
+                + "地心火芝 - 数量：16 炼金 | 坊市数据\n"
+                + "天蝉灵叶 - 数量：14 炼金 | 坊市数据\n"
+                + "☆------六品药材------☆\n"
+                + "白沉脂 - 数量：12 炼金 | 坊市数据\n"
+                + "冰灵果 - 数量：3 炼金 | 坊市数据\n"
+                + "第2页/共3页 上一页 下一页";
+
+        Map<String, Long> inventory = service.parseBackpack(page);
+
+        assertEquals(4, inventory.size());
+        assertEquals(5L, inventory.get("冰灵果"));
+        assertEquals(16L, inventory.get("地心火芝"));
+        assertEquals(14L, inventory.get("天蝉灵叶"));
+        assertEquals(12L, inventory.get("白沉脂"));
+        assertFalse(inventory.containsKey("咕咕咕丫"));
     }
 
     @Test
@@ -262,20 +284,25 @@ class HerbBackpackMatchServiceTest {
 
     @Test
     @SuppressWarnings({"rawtypes", "unchecked"})
-    void handleMatch_sendsMergedForwardWithFormulaFurnacesAndTotalProfit() throws Exception {
-        mockPrices(Map.of("甲药", 10, "乙药", 10, "丙药", 10));
+    void handleMatch_sendsHeaderAndAllRecipeDetailsAsTwoForwardNodes() throws Exception {
+        mockPrices(Map.of(
+                "甲药", 10, "乙药", 10, "丙药", 10,
+                "丁药", 10, "戊药", 10, "己药", 10));
         DanRecipeQueryService queryService = Mockito.mock(DanRecipeQueryService.class);
         DanCalculator calculator = Mockito.mock(DanCalculator.class);
         Config config = new Config();
         config.setDanNumber(1);
         when(calculator.getConfig(123L)).thenReturn(config);
-        when(queryService.getAllRecipeBlueprints()).thenReturn(List.of(blueprint("输出测试丹", 1, 1, 1)));
-        when(queryService.getDanAlchemyValues()).thenReturn(Map.of("输出测试丹", 100));
+        when(queryService.getAllRecipeBlueprints()).thenReturn(List.of(
+                blueprint("输出测试丹", 1, 1, 1),
+                new DanRecipeBlueprint("第二个测试丹", "丁药", 1, "戊药", 1, "己药", 1)));
+        when(queryService.getDanAlchemyValues()).thenReturn(Map.of("输出测试丹", 100, "第二个测试丹", 100));
         ReflectionTestUtils.setField(service, "danRecipeQueryService", queryService);
         ReflectionTestUtils.setField(service, "danCalculator", calculator);
 
         ReplyMessage reply = new ReplyMessage();
-        reply.setText("药材背包\n名字：甲药\n拥有数量:1\n名字：乙药\n拥有数量:1\n名字：丙药\n拥有数量:1");
+        reply.setText("药材背包\n名字：甲药\n拥有数量:1\n名字：乙药\n拥有数量:1\n名字：丙药\n拥有数量:1"
+                + "\n名字：丁药\n拥有数量:1\n名字：戊药\n拥有数量:1\n名字：己药\n拥有数量:1");
         MessageChain incoming = new MessageChain();
         incoming.add(reply);
         Group group = Mockito.mock(Group.class);
@@ -291,23 +318,31 @@ class HerbBackpackMatchServiceTest {
 
         ArgumentCaptor<List> captor = ArgumentCaptor.forClass(List.class);
         verify(group).sendGroupForwardMessage(captor.capture());
-        StringBuilder output = new StringBuilder();
-        for (Object value : captor.getValue()) {
-            output.append(((ForwardNodeMessage) value).getContent().toJSONString());
-        }
-        String outputText = output.toString();
-        assertTrue(outputText.contains("请求者：测试用户（QQ：456）"));
-        assertTrue(outputText.contains("丹药：输出测试丹  炼金价100万"));
-        assertTrue(outputText.contains("主药甲药*1（10万）"));
-        assertTrue(outputText.contains("药引乙药*1（10万）"));
-        assertTrue(outputText.contains("辅药丙药*1（10万）"));
-        assertFalse(outputText.contains("当前10万"));
-        assertTrue(outputText.contains("丹炉寒铁铸心炉"));
-        assertTrue(outputText.contains("可炼制：1炉"));
-        assertTrue(outputText.contains("总利润：70万"));
-        assertTrue(outputText.indexOf("总利润：70万") < outputText.indexOf("丹药：输出测试丹"));
-        assertTrue(outputText.indexOf("辅药丙药*1（10万）") < outputText.indexOf("配方主药甲药1"));
-        verify(group, times(1)).sendGroupForwardMessage(anyList());
+        List<?> nodes = captor.getValue();
+        assertEquals(2, nodes.size());
+        String header = ((ForwardNodeMessage) nodes.get(0)).getContent().toJSONString();
+        String details = ((ForwardNodeMessage) nodes.get(1)).getContent().toJSONString();
+
+        assertTrue(header.contains("药材背包匹配：炼金丹｜每炉1丹｜按单炉净利润优先"));
+        assertTrue(header.contains("请求者：测试用户"));
+        assertFalse(header.contains("QQ：456"));
+        assertTrue(header.contains("总炉数：2炉  总利润：140万"));
+        assertTrue(header.contains("注：匹配结果会随药材和坊市丹药价格实时变动"));
+        assertTrue(details.contains("配方主药甲药1药引乙药1辅药丙药1丹炉寒铁铸心炉"));
+        assertTrue(details.contains("配方主药丁药1药引戊药1辅药己药1丹炉寒铁铸心炉"));
+        assertTrue(details.contains("可炼制：1炉  利润：70万"));
+        assertTrue(details.contains("丹药：输出测试丹  炼金价100万"));
+        assertTrue(details.contains("丹药：第二个测试丹  炼金价100万"));
+        assertTrue(details.contains("主药甲药*1（10万）"));
+        assertTrue(details.contains("药引乙药*1（10万）"));
+        assertTrue(details.contains("辅药丙药*1（10万）"));
+        int firstRecipe = details.indexOf("配方主药甲药1");
+        int firstFurnaceSummary = details.indexOf("可炼制：", firstRecipe);
+        int firstDanDetails = details.indexOf("丹药：输出测试丹", firstRecipe);
+        assertTrue(firstRecipe >= 0 && firstRecipe < firstFurnaceSummary);
+        assertTrue(firstFurnaceSummary < firstDanDetails);
+        assertFalse(details.contains("当前10万"));
+        verify(group, never()).sendMessage(Mockito.any(MessageChain.class));
     }
 
     @Test
