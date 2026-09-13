@@ -155,6 +155,8 @@ bot-core 客户端空闲时不发心跳，导致连接反复掉线、断连窗�
 scp target/bot.jar ubuntu@42.194.185.3:/tmp/bot.jar.new
 ssh ubuntu@42.194.185.3 'sudo docker stop java-bot && sudo mv /tmp/bot.jar.new /home/user/JavaBot/bot.jar && sudo docker start java-bot'
 
+# ⚠️ java-bot 容器重建时必须带 -e TZ=Asia/Shanghai（2026-09-13 起）
+# 缺失时容器跑 UTC，@Scheduled 的 cron 会晚 8 小时触发（04:36 变 12:36）
 # ⚠️ java-bot 容器必须带 JVM 内存参数重建（2026-09-12 起）
 # 裸 java -jar 会让堆膨胀到 ~1GB（默认上限≈系统1/4），加了上限和内存归还比例后 1023MB → 328MB（Min/MaxHeapFreeRatio=10/30 让 GC 后把多余内存还给系统）
 # G1PeriodicGCInterval：空闲时每2分钟自动GC并把内存还给系统
@@ -162,6 +164,7 @@ ssh ubuntu@42.194.185.3 'sudo docker stop java-bot && sudo mv /tmp/bot.jar.new /
 #   活数据基线约190MB，Full GC 后即回落，无泄漏）
 # 若误删容器，按此重建（host 网络 + 挂载 + 堆上限 + OOM自动重启）：
 sudo docker run -d --name java-bot --restart always --network host \
+  -e TZ=Asia/Shanghai \
   -v /home/user/JavaBot:/app \
   eclipse-temurin:17-jdk \
   sh -c "cd /app && java -Xms128m -Xmx640m -XX:MinHeapFreeRatio=10 -XX:MaxHeapFreeRatio=30 -XX:G1PeriodicGCInterval=120000 -XX:+ExplicitGCInvokesConcurrent -XX:+ExitOnOutOfMemoryError -jar bot.jar"
