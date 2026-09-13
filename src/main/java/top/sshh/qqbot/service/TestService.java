@@ -53,6 +53,7 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.constant.Constant;
 import top.sshh.qqbot.data.BotConfigPersist;
 import top.sshh.qqbot.data.GuessIdiom;
+import top.sshh.qqbot.data.MiYuExploreContext;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.data.UpdateManifest;
@@ -87,6 +88,14 @@ public class TestService {
 
     // 秘域自动结算：botId -> 预计到期时间戳（bot-core 的 BotConfig 无法加字段，内存态即可）
     private final Map<Long, Long> myTimeMap = new ConcurrentHashMap<>();
+    // 秘域探索（探索秘域地图自动选路/选丹药）：botId -> 上下文，内存态
+    private final Map<Long, MiYuExploreContext> miyuExploreMap = new ConcurrentHashMap<>();
+    private static final int MIYU_MAX_MAP_REFRESH = 6;
+    private static final long MIYU_CONTEXT_TIMEOUT_MS = 30 * 60 * 1000L;
+    private static final List<String> MIYU_PILL_WHITELIST = Arrays.asList(
+            "天命血凝丹", "归藏灵丹", "九阳真丹", "太元真丹", "养元丹");
+    // 地区按钮标签格式：危险等级·地区名称，如 低·青石道
+    private static final Pattern MIYU_REGION_BUTTON_PATTERN = Pattern.compile("^[低中高禁]·.+");
     private static final List<String> KEYWORDS = Arrays.asList("机缘巧合", "古洞深处", "烟雾缭绕", "在秘境最深处", "道友在秘境", "道友进入秘境后",
             "秘境内竟然", "道友大战一番成功", "道友大战一番不敌", "星河光芒神q", "秘境将闭时忽闻异香", "见玉榻白骨手持", "终在秘境核心", "白须老者笑赠", "掌心莫名多出", "秘境中遭迷阵所困",
             "历经心魔劫与雷狱考验，天道赐下", "言吾创太虚乾元诀将遇传人于此", "秘境将崩之际", "昏迷中似有仙人耳语", "道友破开秘境禁制闯入上古兵冢", "云中仙鹤衔来玉匣", "于祭坛顶端取得",
@@ -152,6 +161,7 @@ public class TestService {
 
             if ("停止执行".equals(message)) {
                 botConfig.setStop(true);
+                this.miyuExploreMap.remove(bot.getBotId());
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
                 bot.getBotConfig().setCommand("");
             }
@@ -177,12 +187,26 @@ public class TestService {
                 this.startAutoTask(bot, botConfig, cultivationMode, groupId, message);
             }
 
-            if ("开始自动秘域".equals(message)) {
-                botConfig.setCommand("开始自动秘域");
-                if (cultivationMode == 3) {
-                    familyBotList.add(bot);
+            if ("开始自动秘域".equals(message) || message.trim().startsWith("开始自动秘域")) {
+                // 多行携带路线/禁区/丹药设置时进入探索秘域自动选路流程，单发则维持原有快捷流程
+                MiYuExploreContext exploreContext = null;
+                boolean plainMiYuCommand = "开始自动秘域".equals(message.trim());
+                if (plainMiYuCommand) {
+                    // 不带设置 = 明确走快捷流程，清掉可能残留的旧设置
+                    this.miyuExploreMap.remove(bot.getBotId());
+                } else {
+                    exploreContext = this.parseMiYuExploreContext(bot, group, message.trim(), messageId);
                 }
-                this.startAutoTask(bot, botConfig, cultivationMode, groupId, message);
+                if (plainMiYuCommand || exploreContext != null) {
+                    if (exploreContext != null) {
+                        this.miyuExploreMap.put(bot.getBotId(), exploreContext);
+                    }
+                    botConfig.setCommand("开始自动秘域");
+                    if (cultivationMode == 3) {
+                        familyBotList.add(bot);
+                    }
+                    this.startAutoTask(bot, botConfig, cultivationMode, groupId, message);
+                }
             }
 
             if ("开始自动宗门任务".equals(message)) {
@@ -909,6 +933,100 @@ public class TestService {
         }
     }
 
+    /**
+     * 解析多行「开始自动秘域」的路线/禁区/丹药设置。
+     * 返回 null 表示格式错误（已回复提示，不启动探索）。
+     */
+    private MiYuExploreContext parseMiYuExploreContext(Bot bot, Group group, String message, Integer messageId) {
+        List<String> route = new ArrayList<>();
+        boolean forbiddenSet = false;
+        boolean forbiddenZone = true;
+        List<String> pills = new ArrayList<>();
+        boolean randomPills = false;
+
+        String[] lines = message.split("\\r?\\n");
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            String[] kv = line.split("[：:]", 2);
+            String key = kv[0].trim();
+            String value = kv.length > 1 ? kv[1].trim() : "";
+            if (key.startsWith("路线设置")) {
+                for (String name : value.split("[\\s、，,]+")) {
+                    if (!name.isEmpty()) {
+                        route.add(name);
+                    }
+                }
+            } else if (key.startsWith("禁区选择")) {
+                forbiddenSet = true;
+                forbiddenZone = "是".equals(value) || "1".equals(value);
+            } else if (key.startsWith("携带丹药")) {
+                if (value.contains("随机")) {
+                    randomPills = true;
+                } else {
+                    for (String name : value.split("[\\s、，,]+")) {
+                        if (!name.isEmpty()) {
+                            pills.add(name);
+                        }
+                    }
+                }
+            }
+        }
+
+        String error = null;
+        if (!route.isEmpty() && route.size() != 3) {
+            error = "路线设置需要3个地区，用空格分隔";
+        } else if (!randomPills && !pills.isEmpty()
+                && (pills.size() != 3 || !pills.stream().allMatch(MIYU_PILL_WHITELIST::contains))) {
+            error = "携带丹药需从 " + String.join(" ", MIYU_PILL_WHITELIST) + " 中指定3种不重复丹药，或填 随机";
+        } else if (!randomPills && pills.size() == 3 && pills.stream().distinct().count() != 3) {
+            error = "携带丹药不能重复";
+        } else if (route.isEmpty() && !forbiddenSet) {
+            error = "路线设置 与 禁区选择 至少设置一个；不带任何设置单发 开始自动秘域 则走原有快捷流程";
+        }
+        if (error != null) {
+            group.sendMessage((new MessageChain()).reply(messageId).text("秘域探索设置格式错误：" + error
+                    + "\n多行格式示例：\n开始自动秘域\n路线设置：青石道 试剑崖 弑师坪\n禁区选择：是\n携带丹药：随机"));
+            return null;
+        }
+
+        MiYuExploreContext context = new MiYuExploreContext();
+        context.setRoute(route);
+        // 未填禁区选择时默认按难度最高兜底
+        context.setForbiddenZone(forbiddenSet ? forbiddenZone : true);
+        context.setPills(randomPills ? new ArrayList<>() : pills);
+        context.setRandomPills(randomPills);
+
+        StringBuilder summary = new StringBuilder("秘域探索设置成功：");
+        summary.append(route.isEmpty() ? "路线未设置(按危险等级选择)" : "路线 " + String.join(" → ", route));
+        summary.append("；禁区").append(context.isForbiddenZone() ? "是" : "否");
+        if (randomPills) {
+            summary.append("；丹药随机3种");
+        } else if (!pills.isEmpty()) {
+            summary.append("；丹药 ").append(String.join(" ", pills));
+        } else {
+            summary.append("；不携带丹药");
+        }
+        group.sendMessage((new MessageChain()).reply(messageId).text(summary.toString()));
+        return context;
+    }
+
+    /**
+     * 发出秘域探索起点命令：有探索设置走「探索秘域」进入地图自动选择，否则维持原有「秘域快捷开始」。
+     */
+    private void sendMiYuExploreStart(Bot bot, long groupId) {
+        MiYuExploreContext context = this.miyuExploreMap.get(bot.getBotId());
+        String commandText = "秘域快捷开始";
+        if (context != null) {
+            commandText = "探索秘域";
+            context.setState(MiYuExploreContext.State.WAIT_MAP);
+            context.touch();
+        }
+        Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text(commandText));
+    }
+
     private void startAutoTask(Bot bot, BotConfig botConfig, int cultivationMode, Long groupId, String command) {
         if (cultivationMode == 2) {
             Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("出关"));
@@ -951,7 +1069,7 @@ public class TestService {
 
             if ("开始自动秘域".equals(command)) {
                 botConfig.setCommand("");
-                Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("秘域快捷开始"));
+                this.sendMiYuExploreStart(bot, groupId);
             }
             if ("一键使用次元之钥".equals(command)) {
                 botConfig.setCommand("");
@@ -1006,8 +1124,7 @@ public class TestService {
 
                 try {
                     TimeUnit.SECONDS.sleep(2L);
-                    Utils.sendGroupMessage(bot, botConfig.getGroupId(),
-                            (new MessageChain()).at("3889001741").text("秘域快捷开始"));
+                    this.sendMiYuExploreStart(bot, botConfig.getGroupId());
                 } catch (InterruptedException var10) {
                     throw new RuntimeException(var10);
                 }
@@ -1218,6 +1335,11 @@ public class TestService {
                 sb.append("启用/关闭自动秘境\n");
                 sb.append("开始自动秘境\n");
                 sb.append("开始自动秘域\n");
+                sb.append("带设置多行格式(路线/禁区至少一项)：\n");
+                sb.append("开始自动秘域\n");
+                sb.append("路线设置：青石道 试剑崖 弑师坪\n");
+                sb.append("禁区选择：是/否\n");
+                sb.append("携带丹药：随机 或 3种丹药名(可不填)\n");
                 sb.append("一键使用次元之钥\n");
                 sb.append("取消一键使用\n");
                 break;
@@ -2854,6 +2976,296 @@ public class TestService {
         }
     }
 
+    /**
+     * 秘域探索自动选路：接收「探索秘域」的地图卡片与备药卡片，按设置的路线/禁区/丹药自动点击按钮。
+     */
+    @GroupMessageHandler(senderIds = { 3889001741L })
+    public void 秘域地图选择(Bot bot, Group group, Member member, MessageChain messageChain, String message,
+            Integer messageId, Buttons buttons) {
+        MiYuExploreContext context = this.miyuExploreMap.get(bot.getBotId());
+        if (context == null) {
+            return;
+        }
+        if (!bot.getBotConfig().isEnableAutoSecret()) {
+            this.miyuExploreMap.remove(bot.getBotId());
+            return;
+        }
+        // 设置已保存但还没发出探索秘域（可能在闭关等出关），不处理任何消息
+        if (context.getState() == MiYuExploreContext.State.WAIT_START) {
+            return;
+        }
+        context.touch();
+        // 已参与等终态消息，放弃本次自动探索
+        if (message.contains("已经参加过本次秘")) {
+            this.miyuExploreMap.remove(bot.getBotId());
+            return;
+        }
+        if (context.getState() == MiYuExploreContext.State.CLICKING_ROUTE
+                || context.getState() == MiYuExploreContext.State.CLICKING_PILLS) {
+            return;
+        }
+        // 只处理@本bot的卡片，避免同群其他玩家的秘域卡片干扰
+        if (!this.isMiYuCardForSelf(bot, message)) {
+            return;
+        }
+        boolean looksLikeMiYuCard = message.contains("秘域探险") || message.contains("本次现世地区")
+                || message.contains("请选择备药") || message.contains("候选丹药");
+        if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
+            buttons = Utils.parseButtonsFromMessage(bot, message, messageId);
+        }
+        if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
+            if (looksLikeMiYuCard) {
+                log.warn("秘域卡片按钮解析失败：botId={}", bot.getBotId());
+                this.miyuExploreMap.remove(bot.getBotId());
+                Bot remindBot = this.getRemindAtQQ(bot);
+                if (remindBot != null) {
+                    Utils.sendGroupMessage(bot, this.getRemindGroupId(bot),
+                            (new MessageChain()).at(remindBot.getBotConfig().getMasterQQ() + "")
+                                    .text("秘域探索按钮解析失败，请手动处理！"));
+                }
+            }
+            return;
+        }
+        buttons.setGroupId(group.getGroupId());
+
+        List<Button> regionButtons = new ArrayList<>();
+        List<Button> pillButtons = new ArrayList<>();
+        Button refreshButton = null;
+        Button departButton = null;
+        for (Button button : buttons.getButtonList()) {
+            String label = button.getLabel() == null ? "" : button.getLabel().trim();
+            if (MIYU_REGION_BUTTON_PATTERN.matcher(label).matches()) {
+                regionButtons.add(button);
+            } else if (label.startsWith("刷新路线")) {
+                refreshButton = button;
+            } else if ("出发".equals(label)) {
+                departButton = button;
+            } else if (MIYU_PILL_WHITELIST.contains(label)) {
+                pillButtons.add(button);
+            }
+        }
+
+        if (context.getState() == MiYuExploreContext.State.WAIT_MAP) {
+            this.handleMiYuMapCard(bot, message, buttons, context, regionButtons, refreshButton);
+        } else if (context.getState() == MiYuExploreContext.State.WAIT_PILLS) {
+            this.handleMiYuPillCard(bot, message, buttons, context, pillButtons, departButton);
+        }
+    }
+
+    /**
+     * 秘域卡片正文通过 markdown 提及 @玩家，at_tinyid 是本 bot 才处理。
+     */
+    private boolean isMiYuCardForSelf(Bot bot, String message) {
+        Matcher matcher = Pattern.compile("at_tinyid=(\\d+)").matcher(message);
+        if (matcher.find()) {
+            return (bot.getBotId() + "").equals(matcher.group(1));
+        }
+        return message.contains(bot.getBotId() + "");
+    }
+
+    /**
+     * 处理秘域地图卡片：路线设置优先，未匹配按禁区/危险等级选择，必要时点刷新路线（上限6次）。
+     */
+    private void handleMiYuMapCard(Bot bot, String message, Buttons buttons, MiYuExploreContext context,
+            List<Button> regionButtons, Button refreshButton) {
+        // 三重识别：状态机 + 地区按钮结构 + 文本标记
+        boolean mapCard = regionButtons.size() >= 3
+                && (message.contains("秘域探险") || message.contains("本次现世地区") || message.contains("请点选"));
+        if (!mapCard) {
+            log.info("秘域等待地图中收到未识别按钮消息，忽略：botId={}", bot.getBotId());
+            return;
+        }
+        log.info("秘域地图卡命中：botId={}，地区按钮={}个，已刷新={}次", bot.getBotId(), regionButtons.size(),
+                context.getRefreshCount());
+
+        // 1. 路线设置优先：3个地区全部出现才点选
+        if (!context.getRoute().isEmpty()) {
+            List<Button> matched = this.matchMiYuRouteButtons(context.getRoute(), regionButtons);
+            if (!matched.isEmpty()) {
+                context.setState(MiYuExploreContext.State.CLICKING_ROUTE);
+                this.clickMiYuButtons(bot, buttons, matched, context, MiYuExploreContext.State.WAIT_PILLS);
+                return;
+            }
+            if (this.canRefreshMiYuMap(message, context, refreshButton)) {
+                this.refreshMiYuMap(bot, buttons, context, refreshButton);
+                return;
+            }
+            log.info("秘域路线{}刷新{}次未匹配，按危险等级兜底：botId={}", context.getRoute(),
+                    context.getRefreshCount(), bot.getBotId());
+        }
+
+        // 2. 禁区选择=是：有禁区先选禁区再配其余难度最高2个；没刷出禁区且还能刷就继续刷
+        Button forbiddenButton = null;
+        for (Button button : regionButtons) {
+            if (button.getLabel().startsWith("禁")) {
+                forbiddenButton = button;
+                break;
+            }
+        }
+        if (context.isForbiddenZone() && forbiddenButton != null) {
+            List<Button> others = new ArrayList<>(regionButtons);
+            others.remove(forbiddenButton);
+            List<Button> picked = new ArrayList<>();
+            picked.add(forbiddenButton);
+            picked.addAll(this.topMiYuRegionButtons(others, 2));
+            log.info("秘域选中禁区路线：botId={}，{}个地区", bot.getBotId(), picked.size());
+            context.setState(MiYuExploreContext.State.CLICKING_ROUTE);
+            this.clickMiYuButtons(bot, buttons, picked, context, MiYuExploreContext.State.WAIT_PILLS);
+            return;
+        }
+        if (context.isForbiddenZone() && this.canRefreshMiYuMap(message, context, refreshButton)) {
+            this.refreshMiYuMap(bot, buttons, context, refreshButton);
+            return;
+        }
+
+        // 3. 兜底：禁区=否 排除禁级取最高3个；禁区=是 刷新用尽后全部参与取最高3个
+        List<Button> candidates = new ArrayList<>(regionButtons);
+        if (!context.isForbiddenZone()) {
+            candidates.removeIf(button -> button.getLabel().startsWith("禁"));
+        }
+        List<Button> picked = this.topMiYuRegionButtons(candidates, 3);
+        if (picked.isEmpty()) {
+            log.warn("秘域地图未解析到可选地区按钮：botId={}", bot.getBotId());
+            this.miyuExploreMap.remove(bot.getBotId());
+            return;
+        }
+        log.info("秘域按危险等级兜底选择：botId={}，{}个地区", bot.getBotId(), picked.size());
+        context.setState(MiYuExploreContext.State.CLICKING_ROUTE);
+        this.clickMiYuButtons(bot, buttons, picked, context, MiYuExploreContext.State.WAIT_PILLS);
+    }
+
+    /**
+     * 处理备药卡片：按设置点丹药（指定/随机/不设置），最后点出发，完成后清理上下文。
+     */
+    private void handleMiYuPillCard(Bot bot, String message, Buttons buttons, MiYuExploreContext context,
+            List<Button> pillButtons, Button departButton) {
+        boolean pillCard = !pillButtons.isEmpty()
+                && (message.contains("请选择备药") || message.contains("候选丹药"));
+        if (!pillCard) {
+            log.info("秘域等待备药卡中收到未识别按钮消息，忽略：botId={}", bot.getBotId());
+            return;
+        }
+        log.info("秘域备药卡命中：botId={}，丹药按钮={}个", bot.getBotId(), pillButtons.size());
+        context.setState(MiYuExploreContext.State.CLICKING_PILLS);
+
+        List<Button> targets = new ArrayList<>();
+        if (context.isRandomPills()) {
+            List<Button> shuffled = new ArrayList<>(pillButtons);
+            Collections.shuffle(shuffled);
+            targets.addAll(shuffled.subList(0, Math.min(3, shuffled.size())));
+        } else if (!context.getPills().isEmpty()) {
+            for (String pillName : context.getPills()) {
+                for (Button button : pillButtons) {
+                    if (pillName.equals(button.getLabel().trim())) {
+                        targets.add(button);
+                        break;
+                    }
+                }
+            }
+            if (targets.size() < context.getPills().size()) {
+                log.warn("秘域指定丹药未全部找到：botId={}，设置={}，找到={}个", bot.getBotId(), context.getPills(),
+                        targets.size());
+            }
+        }
+
+        if (departButton == null) {
+            log.warn("秘域备药卡未找到出发按钮：botId={}", bot.getBotId());
+            this.miyuExploreMap.remove(bot.getBotId());
+            return;
+        }
+        targets.add(departButton);
+        // doneState=null：点击完成后清理上下文，后续由现有秘域结算流程接管
+        this.clickMiYuButtons(bot, buttons, targets, context, null);
+    }
+
+    private boolean canRefreshMiYuMap(String message, MiYuExploreContext context, Button refreshButton) {
+        return refreshButton != null && context.getRefreshCount() < MIYU_MAX_MAP_REFRESH
+                && !message.contains("刷新地图次数已用尽");
+    }
+
+    private void refreshMiYuMap(Bot bot, Buttons buttons, MiYuExploreContext context, Button refreshButton) {
+        context.setRefreshCount(context.getRefreshCount() + 1);
+        log.info("秘域刷新路线：botId={}，第{}次", bot.getBotId(), context.getRefreshCount());
+        // 保持 WAIT_MAP，游戏会发新地图卡继续评估
+        this.clickMiYuButtons(bot, buttons, Collections.singletonList(refreshButton), context,
+                MiYuExploreContext.State.WAIT_MAP);
+    }
+
+    private List<Button> matchMiYuRouteButtons(List<String> route, List<Button> regionButtons) {
+        List<Button> matched = new ArrayList<>();
+        for (String name : route) {
+            Button hit = null;
+            for (Button button : regionButtons) {
+                String label = button.getLabel().trim();
+                int idx = label.indexOf('·');
+                String areaName = idx >= 0 ? label.substring(idx + 1).trim() : label;
+                if (areaName.equals(name)) {
+                    hit = button;
+                    break;
+                }
+            }
+            if (hit == null) {
+                // 路线必须全部出现才开始点选
+                return new ArrayList<>();
+            }
+            matched.add(hit);
+        }
+        return matched;
+    }
+
+    /** 按危险等级 禁>高>中>低 从高到低取前 count 个地区按钮 */
+    private List<Button> topMiYuRegionButtons(List<Button> regionButtons, int count) {
+        List<Button> sorted = new ArrayList<>(regionButtons);
+        sorted.sort(Comparator.comparingInt((Button button) -> miYuRegionLevel(button.getLabel())).reversed());
+        return new ArrayList<>(sorted.subList(0, Math.min(count, sorted.size())));
+    }
+
+    private static int miYuRegionLevel(String label) {
+        if (label.startsWith("禁")) {
+            return 3;
+        } else if (label.startsWith("高")) {
+            return 2;
+        } else if (label.startsWith("中")) {
+            return 1;
+        }
+        return 0;
+    }
+
+    /**
+     * 串行点击秘域卡片按钮（间隔 BUTTON_CLICK_INTERVAL_MS），完成后切换状态或清理上下文。
+     */
+    private void clickMiYuButtons(Bot bot, Buttons buttons, List<Button> targets, MiYuExploreContext context,
+            MiYuExploreContext.State doneState) {
+        final long groupId = buttons.getGroupId() > 0L ? buttons.getGroupId() : bot.getBotConfig().getGroupId();
+        customPool.submit(() -> {
+            for (int i = 0; i < targets.size(); i++) {
+                if (i > 0) {
+                    try {
+                        TimeUnit.MILLISECONDS.sleep(BUTTON_CLICK_INTERVAL_MS);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        return;
+                    }
+                }
+                Button button = targets.get(i);
+                try {
+                    bot.clickKeyboardButton(groupId, buttons.getBotAppid(), button.getId(), button.getData(),
+                            buttons.getMsgSeq());
+                    log.info("秘域点击按钮：botId={}，label={}", bot.getBotId(), button.getLabel());
+                } catch (Exception e) {
+                    log.warn("秘域点击按钮失败：botId={}，label={}", bot.getBotId(), button.getLabel(), e);
+                    this.miyuExploreMap.remove(bot.getBotId());
+                    return;
+                }
+            }
+            if (doneState != null) {
+                context.setState(doneState);
+            } else {
+                this.miyuExploreMap.remove(bot.getBotId());
+            }
+        });
+    }
+
     @GroupMessageHandler(senderIds = { 3889001741L })
     public void 悬赏令(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId)
             throws InterruptedException {
@@ -3309,6 +3721,15 @@ public class TestService {
 
     @Scheduled(fixedDelay = 60000L, initialDelay = 3000L)
     public void 结算() {
+        // 秘域探索上下文超时清理（未启用的 WAIT_START 等出关，不参与清理），防止选路流程卡死后状态残留
+        long now = System.currentTimeMillis();
+        this.miyuExploreMap.forEach((botId, exploreContext) -> {
+            if (exploreContext.getState() != MiYuExploreContext.State.WAIT_START
+                    && now - exploreContext.getLastActiveTime() > MIYU_CONTEXT_TIMEOUT_MS) {
+                this.miyuExploreMap.remove(botId);
+                log.info("秘域探索上下文超时清理：botId={}", botId);
+            }
+        });
         BotFactory.getBots().values().forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             Long myExpireTime = this.myTimeMap.get(bot.getBotId());

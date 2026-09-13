@@ -15,3 +15,5 @@
 
 # Per-bot local runtime configs
 /config/bot-*.json
+.zcode/
+.zcode/**
