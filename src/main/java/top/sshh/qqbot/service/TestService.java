@@ -24,6 +24,7 @@ import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -41,6 +42,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
@@ -78,6 +80,8 @@ public class TestService {
     private GroupManager groupManager;
     @Autowired
     private UpdateService updateService;
+    @Autowired
+    private BotConfigManager botConfigManager;
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
     // @Value("${captcha.shitu-url:#{null}}")
@@ -157,6 +161,24 @@ public class TestService {
             if ("当前设置".equals(message)) {
                 group.sendMessage(
                         (new MessageChain()).reply(messageId).text(this.showReplyMessage(message, botConfig, bot)));
+            }
+
+            if ("查看秘域路线设置".equals(message)
+                    || "查看指定路线".equals(message)
+                    || "查看当前指定路线设置".equals(message)) {
+                this.viewMiYuRoutes(bot, group, messageId);
+            }
+
+            if ("清空秘域路线设置".equals(message)) {
+                if (this.updateMiYuRoutes(bot.getBotId(), Collections.emptyList())) {
+                    group.sendMessage((new MessageChain()).reply(messageId).text("已清空秘域固定路线设置。"));
+                } else {
+                    group.sendMessage((new MessageChain()).reply(messageId).text("清空秘域固定路线失败，请稍后重试。"));
+                }
+            }
+
+            if (message.startsWith("设置秘域路线")) {
+                this.saveMiYuRoutes(bot, group, message, messageId);
             }
 
             if ("停止执行".equals(message)) {
@@ -882,13 +904,25 @@ public class TestService {
             persist.setEnableAlchemy(botConfig.isEnableAlchemy());
             persist.setLingShiNum(botConfig.getLingShiNum());
             persist.setChallengeMode(botConfig.getChallengeMode());
+            if (this.botConfigManager != null) {
+                BotConfigPersist existingPersist = this.botConfigManager.getBotConfig(bot.getBotId());
+                if (existingPersist != null) {
+                    persist.setMiYuRoutes(existingPersist.getMiYuRoutes());
+                }
+            }
 
-            Path path = Paths.get("./config/bot-" + bot.getBotId() + ".json");
-            Files.createDirectories(path.getParent());
-            Files.write(path,
-                    JSON.toJSONString(persist).getBytes(StandardCharsets.UTF_8),
-                    StandardOpenOption.CREATE,
-                    StandardOpenOption.TRUNCATE_EXISTING);
+            if (this.botConfigManager != null) {
+                if (!this.botConfigManager.persistBotConfig(bot.getBotId(), persist)) {
+                    throw new IOException("机器人配置持久化失败");
+                }
+            } else {
+                Path path = Paths.get("./config/bot-" + bot.getBotId() + ".json");
+                Files.createDirectories(path.getParent());
+                Files.write(path,
+                        JSON.toJSONString(persist).getBytes(StandardCharsets.UTF_8),
+                        StandardOpenOption.CREATE,
+                        StandardOpenOption.TRUNCATE_EXISTING);
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -933,16 +967,124 @@ public class TestService {
         }
     }
 
+    private void viewMiYuRoutes(Bot bot, Group group, Integer messageId) {
+        List<List<String>> routes = this.getMiYuRoutes(bot.getBotId());
+        StringBuilder reply = new StringBuilder();
+        if (routes.isEmpty()) {
+            reply.append("当前未设置秘域固定路线。发送“设置秘域路线”配置；启动探索时用“指定路线：是”启用。");
+        } else {
+            reply.append("当前秘域固定路线（").append(routes.size()).append("条）：");
+            for (int i = 0; i < routes.size(); i++) {
+                reply.append("\n").append(i + 1).append(". ").append(String.join(" → ", routes.get(i)));
+            }
+        }
+        group.sendMessage((new MessageChain()).reply(messageId).text(reply.toString()));
+    }
+
+    /** 设置命令会整体替换当前机器人的固定路线；每条路线填写3个地区。 */
+    private void saveMiYuRoutes(Bot bot, Group group, String message, Integer messageId) {
+        List<List<String>> routes = new ArrayList<>();
+        String[] lines = message.split("\\r?\\n");
+        String error = null;
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            String[] kv = line.split("[：:]", 2);
+            if (kv.length < 2 || !kv[0].trim().startsWith("路线")) {
+                error = "请用“路线：地区1 地区2 地区3”逐条配置固定路线";
+                break;
+            }
+            for (String routeValue : kv[1].split("[；;]")) {
+                List<String> route = new ArrayList<>();
+                for (String name : routeValue.trim().split("[\\s、，,]+")) {
+                    if (!name.isEmpty()) {
+                        route.add(name);
+                    }
+                }
+                if (route.contains("随机")) {
+                    error = "固定路线不能填写随机";
+                    break;
+                }
+                if (route.size() != 3) {
+                    error = "每条固定路线必须恰好填写3个地区名";
+                    break;
+                }
+                if (route.stream().distinct().count() != 3) {
+                    error = "同一条固定路线中的地区不能重复";
+                    break;
+                }
+                routes.add(route);
+            }
+            if (error != null) {
+                break;
+            }
+        }
+        if (error == null && routes.isEmpty()) {
+            error = "至少配置一条固定路线";
+        }
+        if (error != null) {
+            group.sendMessage((new MessageChain()).reply(messageId).text("秘域路线设置失败：" + error
+                    + "\n格式示例：\n设置秘域路线\n路线：青石道 试剑崖 弑师坪\n路线：玄火洞 寒潭谷 落星原"));
+            return;
+        }
+        if (!this.updateMiYuRoutes(bot.getBotId(), routes)) {
+            group.sendMessage((new MessageChain()).reply(messageId).text("秘域路线保存失败，请检查配置目录后重试。"));
+            return;
+        }
+        group.sendMessage((new MessageChain()).reply(messageId)
+                .text("已保存" + routes.size() + "条秘域固定路线，可发送“查看秘域路线设置”查看。"));
+    }
+
+    private boolean updateMiYuRoutes(long botId, List<List<String>> routes) {
+        if (this.botConfigManager == null) {
+            return false;
+        }
+        BotConfigPersist currentConfig = this.botConfigManager.getBotConfig(botId);
+        if (currentConfig == null) {
+            return false;
+        }
+        BotConfigPersist updatedConfig = JSON.parseObject(JSON.toJSONString(currentConfig), BotConfigPersist.class);
+        List<List<String>> routeCopy = new ArrayList<>();
+        if (routes != null) {
+            for (List<String> route : routes) {
+                routeCopy.add(new ArrayList<>(route));
+            }
+        }
+        updatedConfig.setMiYuRoutes(routeCopy);
+        return this.botConfigManager.persistBotConfig(botId, updatedConfig);
+    }
+
+    private List<List<String>> getMiYuRoutes(long botId) {
+        if (this.botConfigManager == null) {
+            return new ArrayList<>();
+        }
+        BotConfigPersist config = this.botConfigManager.getBotConfig(botId);
+        if (config == null || config.getMiYuRoutes() == null) {
+            return new ArrayList<>();
+        }
+        List<List<String>> copy = new ArrayList<>();
+        for (List<String> route : config.getMiYuRoutes()) {
+            if (route != null) {
+                copy.add(new ArrayList<>(route));
+            }
+        }
+        return copy;
+    }
+
     /**
-     * 解析多行「开始自动秘域」的路线/禁区/丹药设置。
+     * 解析多行「开始自动秘域」的指定路线/禁区/丹药设置。
      * 返回 null 表示格式错误（已回复提示，不启动探索）。
      */
     private MiYuExploreContext parseMiYuExploreContext(Bot bot, Group group, String message, Integer messageId) {
-        List<String> route = new ArrayList<>();
+        boolean specifiedRouteSet = false;
+        boolean useSpecifiedRoute = false;
         boolean forbiddenSet = false;
-        boolean forbiddenZone = true;
+        boolean forbiddenZone = false;
         List<String> pills = new ArrayList<>();
         boolean randomPills = false;
+        String error = null;
 
         String[] lines = message.split("\\r?\\n");
         for (int i = 1; i < lines.length; i++) {
@@ -953,12 +1095,19 @@ public class TestService {
             String[] kv = line.split("[：:]", 2);
             String key = kv[0].trim();
             String value = kv.length > 1 ? kv[1].trim() : "";
-            if (key.startsWith("路线设置")) {
-                for (String name : value.split("[\\s、，,]+")) {
-                    if (!name.isEmpty()) {
-                        route.add(name);
-                    }
+            if (key.startsWith("指定路线")) {
+                specifiedRouteSet = true;
+                if ("是".equals(value) || "1".equals(value)) {
+                    useSpecifiedRoute = true;
+                } else if ("否".equals(value) || "0".equals(value)) {
+                    useSpecifiedRoute = false;
+                } else {
+                    error = "指定路线只能填写 是 或 否";
+                    break;
                 }
+            } else if (key.startsWith("路线设置")) {
+                error = "固定路线请先用“设置秘域路线”单独配置，探索时填写“指定路线：是/否”";
+                break;
             } else if (key.startsWith("禁区选择")) {
                 forbiddenSet = true;
                 forbiddenZone = "是".equals(value) || "1".equals(value);
@@ -975,32 +1124,43 @@ public class TestService {
             }
         }
 
-        String error = null;
-        if (!route.isEmpty() && route.size() != 3) {
-            error = "路线设置需要3个地区，用空格分隔";
-        } else if (!randomPills && !pills.isEmpty()
+        List<List<String>> routes = useSpecifiedRoute
+                ? this.getMiYuRoutes(bot.getBotId())
+                : new ArrayList<>();
+        if (error == null && useSpecifiedRoute && routes.isEmpty()) {
+            error = "指定路线为是，但当前没有已保存路线，请先发送“设置秘域路线”配置";
+        } else if (error == null && !randomPills && !pills.isEmpty()
                 && (pills.size() != 3 || !pills.stream().allMatch(MIYU_PILL_WHITELIST::contains))) {
             error = "携带丹药需从 " + String.join(" ", MIYU_PILL_WHITELIST) + " 中指定3种不重复丹药，或填 随机";
-        } else if (!randomPills && pills.size() == 3 && pills.stream().distinct().count() != 3) {
+        } else if (error == null && !randomPills && pills.size() == 3
+                && pills.stream().distinct().count() != 3) {
             error = "携带丹药不能重复";
-        } else if (route.isEmpty() && !forbiddenSet) {
-            error = "路线设置 与 禁区选择 至少设置一个；不带任何设置单发 开始自动秘域 则走原有快捷流程";
+        } else if (error == null && forbiddenSet && forbiddenZone && !randomPills && pills.isEmpty()) {
+            error = "选择禁区=是时必须携带丹药才可以进入，请填写随机或3种丹药名";
+        } else if (error == null && !specifiedRouteSet && !forbiddenSet) {
+            error = "指定路线 与 禁区选择 至少设置一项；不带任何设置单发 开始自动秘域则走原有快捷流程";
         }
         if (error != null) {
             group.sendMessage((new MessageChain()).reply(messageId).text("秘域探索设置格式错误：" + error
-                    + "\n多行格式示例：\n开始自动秘域\n路线设置：青石道 试剑崖 弑师坪\n禁区选择：是\n携带丹药：随机"));
+                    + "\n多行格式示例：\n开始自动秘域\n指定路线：是\n禁区选择：是\n携带丹药：随机"));
             return null;
         }
 
         MiYuExploreContext context = new MiYuExploreContext();
-        context.setRoute(route);
-        // 未填禁区选择时默认按难度最高兜底
-        context.setForbiddenZone(forbiddenSet ? forbiddenZone : true);
+        context.setRoutes(routes);
+        // 未填禁区选择时默认不追禁区
+        context.setForbiddenZone(forbiddenSet ? forbiddenZone : false);
         context.setPills(randomPills ? new ArrayList<>() : pills);
         context.setRandomPills(randomPills);
 
         StringBuilder summary = new StringBuilder("秘域探索设置成功：");
-        summary.append(route.isEmpty() ? "路线未设置(按危险等级选择)" : "路线 " + String.join(" → ", route));
+        summary.append(useSpecifiedRoute ? "启用指定路线(" + routes.size() + "条)"
+                : "不指定路线(按危险等级选择)");
+        if (useSpecifiedRoute) {
+            summary.append("：").append(routes.stream()
+                        .map(route -> String.join(" → ", route))
+                        .collect(Collectors.joining("；")));
+        }
         summary.append("；禁区").append(context.isForbiddenZone() ? "是" : "否");
         if (randomPills) {
             summary.append("；丹药随机3种");
@@ -1335,13 +1495,36 @@ public class TestService {
                 sb.append("启用/关闭自动秘境\n");
                 sb.append("开始自动秘境\n");
                 sb.append("开始自动秘域\n");
-                sb.append("带设置多行格式(路线/禁区至少一项)：\n");
+                sb.append("带设置多行格式(指定路线/禁区至少一项)：\n");
                 sb.append("开始自动秘域\n");
-                sb.append("路线设置：青石道 试剑崖 弑师坪\n");
-                sb.append("禁区选择：是/否\n");
-                sb.append("携带丹药：随机 或 3种丹药名(可不填)\n");
+                sb.append("指定路线：是/否(不填默认否)\n");
+                sb.append("禁区选择：是/否(不填默认否)\n");
+                sb.append("禁区选择是必须携带丹药才能进入\n");
+                sb.append("携带丹药：随机 或 3种丹药名(不填不携带)\n");
+                sb.append("固定路线需先用 设置秘域路线 配置；发送 查看秘域路线设置 可查看\n");
+                sb.append("秘域设置格式及效果：发送 秘域设置帮助\n");
                 sb.append("一键使用次元之钥\n");
                 sb.append("取消一键使用\n");
+                break;
+            case "秘域设置帮助":
+                sb.append("〓秘域设置帮助〓\n");
+                sb.append("固定路线写入本机器人的 config/bot-{QQ}.json 中 miYuRoutes 字段；新配置会整体替换。\n");
+                sb.append("设置秘域路线\n路线：青石道 试剑崖 弑师坪\n路线：玄火洞 寒潭谷 落星原\n");
+                sb.append("查看秘域路线设置/查看当前指定路线设置：查看当前保存路线；清空秘域路线设置：删除保存路线。\n");
+                sb.append("探索配置(指定路线/禁区选择至少填一项)：\n");
+                sb.append("开始自动秘域\n");
+                sb.append("指定路线：是\n禁区选择：否\n携带丹药：随机\n");
+                sb.append("禁区选择：是/否(不填默认否)\n");
+                sb.append("携带丹药：随机 或 3种丹药名(可不填)\n");
+                sb.append("指定路线=是：地图上任意一条已配置路线的3个地区同时出现就按该路线顺序选择；多条命中时取配置靠前的一条。未匹配最多刷新6次，仍未匹配则按禁区设置兜底。\n");
+                sb.append("指定路线=否：不检查固定路线，直接按禁区设置或当前危险等级选择。\n");
+                sb.append("禁区选择是：优先选择禁级地区和其他难度最高的2个；没出现禁区时最多刷新6次，仍没有则按难度选当前最高的3个。\n");
+                sb.append("携带丹药随机：随机选择3种；指定丹药：从天命血凝丹、归藏灵丹、九阳真丹、太元真丹、养元丹中选3种且不重复。\n");
+                sb.append("禁区选择是必须携带丹药才能进入；不填丹药时不携带(禁区选择是会拒绝启动)。\n");
+                sb.append("选完丹药后自动@小小发送“确认秘域出发”进入，不点击卡片出发按钮。\n");
+                sb.append("固定路线每条恰好3个地区名，可重复填写路线行或用分号分隔多条；地区名可用空格、顿号或逗号分隔。设置失败不会覆盖旧配置。\n");
+                sb.append("只发单行 开始自动秘域 且不带任何设置：保持原有秘域快捷开始流程。\n");
+                sb.append("示例：设置秘域路线\n路线：青石道 试剑崖 弑师坪\n路线：玄火洞 寒潭谷 落星原\n然后发送：开始自动秘域\n指定路线：是\n禁区选择：否\n携带丹药：随机");
                 break;
             case "修炼帮助":
                 sb.append("〓修炼菜单〓\n");
@@ -3031,15 +3214,12 @@ public class TestService {
         List<Button> regionButtons = new ArrayList<>();
         List<Button> pillButtons = new ArrayList<>();
         Button refreshButton = null;
-        Button departButton = null;
         for (Button button : buttons.getButtonList()) {
             String label = button.getLabel() == null ? "" : button.getLabel().trim();
             if (MIYU_REGION_BUTTON_PATTERN.matcher(label).matches()) {
                 regionButtons.add(button);
             } else if (label.startsWith("刷新路线")) {
                 refreshButton = button;
-            } else if ("出发".equals(label)) {
-                departButton = button;
             } else if (MIYU_PILL_WHITELIST.contains(label)) {
                 pillButtons.add(button);
             }
@@ -3048,7 +3228,7 @@ public class TestService {
         if (context.getState() == MiYuExploreContext.State.WAIT_MAP) {
             this.handleMiYuMapCard(bot, message, buttons, context, regionButtons, refreshButton);
         } else if (context.getState() == MiYuExploreContext.State.WAIT_PILLS) {
-            this.handleMiYuPillCard(bot, message, buttons, context, pillButtons, departButton);
+            this.handleMiYuPillCard(bot, message, buttons, context, pillButtons);
         }
     }
 
@@ -3064,7 +3244,7 @@ public class TestService {
     }
 
     /**
-     * 处理秘域地图卡片：路线设置优先，未匹配按禁区/危险等级选择，必要时点刷新路线（上限6次）。
+     * 处理秘域地图卡片：启用指定路线时优先匹配任意一条候选路线，未匹配按禁区/危险等级选择，必要时点刷新路线（上限6次）。
      */
     private void handleMiYuMapCard(Bot bot, String message, Buttons buttons, MiYuExploreContext context,
             List<Button> regionButtons, Button refreshButton) {
@@ -3078,9 +3258,9 @@ public class TestService {
         log.info("秘域地图卡命中：botId={}，地区按钮={}个，已刷新={}次", bot.getBotId(), regionButtons.size(),
                 context.getRefreshCount());
 
-        // 1. 路线设置优先：3个地区全部出现才点选
-        if (!context.getRoute().isEmpty()) {
-            List<Button> matched = this.matchMiYuRouteButtons(context.getRoute(), regionButtons);
+        // 1. 固定路线优先：候选中的任一条路线3个地区全部出现就点选
+        if (!context.getRoutes().isEmpty()) {
+            List<Button> matched = this.matchMiYuRouteButtons(context.getRoutes(), regionButtons);
             if (!matched.isEmpty()) {
                 context.setState(MiYuExploreContext.State.CLICKING_ROUTE);
                 this.clickMiYuButtons(bot, buttons, matched, context, MiYuExploreContext.State.WAIT_PILLS);
@@ -3090,7 +3270,7 @@ public class TestService {
                 this.refreshMiYuMap(bot, buttons, context, refreshButton);
                 return;
             }
-            log.info("秘域路线{}刷新{}次未匹配，按危险等级兜底：botId={}", context.getRoute(),
+            log.info("秘域候选路线{}刷新{}次未匹配，按危险等级兜底：botId={}", context.getRoutes(),
                     context.getRefreshCount(), bot.getBotId());
         }
 
@@ -3119,8 +3299,13 @@ public class TestService {
         }
 
         // 3. 兜底：禁区=否 排除禁级取最高3个；禁区=是 刷新用尽后全部参与取最高3个
+        this.selectMiYuRegionsByDifficulty(bot, buttons, context, regionButtons, context.isForbiddenZone());
+    }
+
+    private void selectMiYuRegionsByDifficulty(Bot bot, Buttons buttons, MiYuExploreContext context,
+            List<Button> regionButtons, boolean includeForbidden) {
         List<Button> candidates = new ArrayList<>(regionButtons);
-        if (!context.isForbiddenZone()) {
+        if (!includeForbidden) {
             candidates.removeIf(button -> button.getLabel().startsWith("禁"));
         }
         List<Button> picked = this.topMiYuRegionButtons(candidates, 3);
@@ -3135,10 +3320,10 @@ public class TestService {
     }
 
     /**
-     * 处理备药卡片：按设置点丹药（指定/随机/不设置），最后点出发，完成后清理上下文。
+     * 处理备药卡片：按设置点丹药（指定/随机/不设置），随后发送「确认秘域出发」命令并清理上下文。
      */
     private void handleMiYuPillCard(Bot bot, String message, Buttons buttons, MiYuExploreContext context,
-            List<Button> pillButtons, Button departButton) {
+            List<Button> pillButtons) {
         boolean pillCard = !pillButtons.isEmpty()
                 && (message.contains("请选择备药") || message.contains("候选丹药"));
         if (!pillCard) {
@@ -3168,14 +3353,8 @@ public class TestService {
             }
         }
 
-        if (departButton == null) {
-            log.warn("秘域备药卡未找到出发按钮：botId={}", bot.getBotId());
-            this.miyuExploreMap.remove(bot.getBotId());
-            return;
-        }
-        targets.add(departButton);
-        // doneState=null：点击完成后清理上下文，后续由现有秘域结算流程接管
-        this.clickMiYuButtons(bot, buttons, targets, context, null);
+        // 丹药按钮全部选完后，以群命令触发进入，不再点击卡片上的「出发」按钮。
+        this.clickMiYuButtons(bot, buttons, targets, context, null, "确认秘域出发");
     }
 
     private boolean canRefreshMiYuMap(String message, MiYuExploreContext context, Button refreshButton) {
@@ -3191,7 +3370,17 @@ public class TestService {
                 MiYuExploreContext.State.WAIT_MAP);
     }
 
-    private List<Button> matchMiYuRouteButtons(List<String> route, List<Button> regionButtons) {
+    private List<Button> matchMiYuRouteButtons(List<List<String>> routes, List<Button> regionButtons) {
+        for (List<String> route : routes) {
+            List<Button> matched = matchSingleMiYuRouteButtons(route, regionButtons);
+            if (!matched.isEmpty()) {
+                return matched;
+            }
+        }
+        return new ArrayList<>();
+    }
+
+    private List<Button> matchSingleMiYuRouteButtons(List<String> route, List<Button> regionButtons) {
         List<Button> matched = new ArrayList<>();
         for (String name : route) {
             Button hit = null;
@@ -3236,6 +3425,11 @@ public class TestService {
      */
     private void clickMiYuButtons(Bot bot, Buttons buttons, List<Button> targets, MiYuExploreContext context,
             MiYuExploreContext.State doneState) {
+        this.clickMiYuButtons(bot, buttons, targets, context, doneState, null);
+    }
+
+    private void clickMiYuButtons(Bot bot, Buttons buttons, List<Button> targets, MiYuExploreContext context,
+            MiYuExploreContext.State doneState, String commandAfterClicks) {
         final long groupId = buttons.getGroupId() > 0L ? buttons.getGroupId() : bot.getBotConfig().getGroupId();
         customPool.submit(() -> {
             for (int i = 0; i < targets.size(); i++) {
@@ -3258,10 +3452,31 @@ public class TestService {
                     return;
                 }
             }
+            if (commandAfterClicks != null) {
+                try {
+                    // 给最后一次选丹药点击留出处理时间；未选择丹药时直接发送确认命令。
+                    if (!targets.isEmpty()) {
+                        TimeUnit.MILLISECONDS.sleep(BUTTON_CLICK_INTERVAL_MS);
+                    }
+                    if (this.miyuExploreMap.get(bot.getBotId()) != context) {
+                        return;
+                    }
+                    Utils.sendGroupMessage(bot, groupId,
+                            (new MessageChain()).at("3889001741").text(commandAfterClicks));
+                    log.info("秘域发送出发命令：botId={}，command={}", bot.getBotId(), commandAfterClicks);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                } catch (Exception e) {
+                    log.warn("秘域发送出发命令失败：botId={}，command={}", bot.getBotId(), commandAfterClicks, e);
+                    this.miyuExploreMap.remove(bot.getBotId(), context);
+                    return;
+                }
+            }
             if (doneState != null) {
                 context.setState(doneState);
             } else {
-                this.miyuExploreMap.remove(bot.getBotId());
+                this.miyuExploreMap.remove(bot.getBotId(), context);
             }
         });
     }

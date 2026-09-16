@@ -8,6 +8,7 @@ import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
 import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.MessageChain;
+import top.sshh.qqbot.service.utils.HerbBackpackParser;
 import top.sshh.qqbot.service.utils.Utils;
 import com.zhuangxv.bot.message.support.TextMessage;
 import com.zhuangxv.bot.utilEnum.IgnoreItselfEnum;
@@ -238,23 +239,35 @@ public class AutoBuyHerbs {
 
         for (String line : medicinalList) {
             line = line.trim();
+            HerbBackpackParser.Entry inlineEntry = HerbBackpackParser.parseInlineEntry(line);
+            if (inlineEntry != null) {
+                saveHerbPack(botId, inlineEntry.getName(), inlineEntry.getCount());
+                currentHerb = null;
+                continue;
+            }
+
             if (line.contains("名字：")) {
                 // SnowLuma 下药名为 markdown 链接 [名字](mqqapi://...)，剥离链接保留药名
-                currentHerb = Utils.stripMarkdownLink(line.replaceAll("名字：", ""));
-            } else if (currentHerb != null && line.contains("拥有数量:")) {
+                currentHerb = Utils.stripMarkdownLink(line.replaceAll("名字\\s*[:：]", ""))
+                        .replaceAll("\\s+", "");
+            } else if (currentHerb != null && line.contains("拥有数量")) {
                 try {
                     int count = Utils.parseHerbCount(line);
                     if (count >= 0) {
-                        ProductPrice productPrice = new ProductPrice();
-                        productPrice.setName(currentHerb);
-                        productPrice.setHerbCount(count);
-                        herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).put(currentHerb, productPrice);
+                        saveHerbPack(botId, currentHerb, count);
                     }
                 } catch (Exception ignore) {}
                 currentHerb = null;
             }
         }
 
+    }
+
+    private void saveHerbPack(long botId, String herbName, int count) {
+        ProductPrice productPrice = new ProductPrice();
+        productPrice.setName(herbName);
+        productPrice.setHerbCount(count);
+        herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).put(herbName, productPrice);
     }
 
     private void handlePurchaseCommands(Bot bot, Group group, String message, Integer messageId) {

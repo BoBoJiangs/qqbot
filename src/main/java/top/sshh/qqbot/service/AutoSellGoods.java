@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.constant.Constant;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
+import top.sshh.qqbot.service.utils.HerbBackpackParser;
 import top.sshh.qqbot.service.utils.Utils;
 
 import java.util.*;
@@ -326,10 +327,18 @@ public class AutoSellGoods {
         while (var2.hasNext()) {
             String line = (String) var2.next();
             line = line.trim();
+            HerbBackpackParser.Entry inlineEntry = HerbBackpackParser.parseInlineEntry(line);
+            if (inlineEntry != null) {
+                herbsCountLimit10(bot, inlineEntry.getCount(), inlineEntry.getName());
+                currentHerb = null;
+                continue;
+            }
+
             if (line.contains("名字：")) {
                 // SnowLuma 下药名为 markdown 链接 [名字](mqqapi://...)，剥离链接保留药名
-                currentHerb = Utils.stripMarkdownLink(line.replaceAll("名字：", ""));
-            } else if (currentHerb != null && line.contains("拥有数量:")) {
+                currentHerb = Utils.stripMarkdownLink(line.replaceAll("名字\\s*[:：]", ""))
+                        .replaceAll("\\s+", "");
+            } else if (currentHerb != null && line.contains("拥有数量")) {
                 int count = Utils.parseHerbCount(line);
                 if (count >= 0) {
                     herbsCountLimit10(bot, count, currentHerb);

@@ -508,7 +508,8 @@ public class Utils {
         if (line == null) {
             return -1;
         }
-        Matcher matcher = Pattern.compile("拥有数量:\\s*(\\d+)").matcher(line);
+        Matcher matcher = Pattern.compile("(?:拥有数量|数量)\\s*[:：]\\s*(\\d+)")
+                .matcher(stripMarkdownLink(line));
         return matcher.find() ? Integer.parseInt(matcher.group(1)) : -1;
     }
 }

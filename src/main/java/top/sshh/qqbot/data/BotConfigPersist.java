@@ -4,6 +4,7 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 public class BotConfigPersist implements Serializable {
     //悬赏令价格查询
@@ -58,6 +59,26 @@ public class BotConfigPersist implements Serializable {
     private int lingShiNum;
 
     private int challengeMode;
+    /** 秘域固定路线；不设置时为 null，便于部分配置更新保留已有路线 */
+    private List<List<String>> miYuRoutes;
+    /** 各群的本群丹方匹配开关；Map key 为群号，未配置时默认关闭 */
+    private Map<Long, Boolean> groupRecipeMatchEnabled;
+
+    public Map<Long, Boolean> getGroupRecipeMatchEnabled() {
+        return groupRecipeMatchEnabled;
+    }
+
+    public void setGroupRecipeMatchEnabled(Map<Long, Boolean> groupRecipeMatchEnabled) {
+        this.groupRecipeMatchEnabled = groupRecipeMatchEnabled;
+    }
+
+    public List<List<String>> getMiYuRoutes() {
+        return miYuRoutes;
+    }
+
+    public void setMiYuRoutes(List<List<String>> miYuRoutes) {
+        this.miYuRoutes = miYuRoutes;
+    }
 
     public int getChallengeMode() {
         return challengeMode;

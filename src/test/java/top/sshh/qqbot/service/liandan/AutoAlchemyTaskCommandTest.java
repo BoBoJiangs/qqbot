@@ -10,6 +10,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.List;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -41,6 +44,23 @@ class AutoAlchemyTaskCommandTest {
 
         assertEquals("匹配炼金丹 abc", command);
         assertFalse(new HerbBackpackMatchService().parseCommand(command, 6).isValid());
+    }
+
+    @Test
+    void autoAlchemyInventoryParserSupportsInlineRowsAndLegacyRows() {
+        Map<String, Integer> herbCounts = task.parseHerbInventory(List.of(
+                "@咕咕咕丫",
+                "冰灵果 - 数量：2 炼金 | 坊市数据",
+                "☆------五品药材------☆",
+                "地心火芝 - 数量：16 炼金 | 坊市数据",
+                "名字：旧格式药材",
+                "拥有数量：3 炼金 | 坊市数据",
+                "第2页/共3页 上一页 下一页"));
+
+        assertEquals(3, herbCounts.size());
+        assertEquals(2, herbCounts.get("冰灵果"));
+        assertEquals(16, herbCounts.get("地心火芝"));
+        assertEquals(3, herbCounts.get("旧格式药材"));
     }
 
     @Test

@@ -1,5 +1,6 @@
 package top.sshh.qqbot.service.liandan;
 
+import com.zhuangxv.bot.core.Bot;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -13,6 +14,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -55,6 +58,30 @@ class AutoBuyHerbsRepeatPurchaseTest {
         AutoBuyHerbs reader = new AutoBuyHerbs();
         assertTrue(repeatHerbs(reader).contains("乌灵参"));
         assertEquals(80, repeatPrices(reader).get("乌灵参"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void parseHerbListSupportsInlineInventoryRows() throws Exception {
+        AutoBuyHerbs service = new AutoBuyHerbs();
+        Map<Long, List<String>> medicinalLists =
+                (Map<Long, List<String>>) ReflectionTestUtils.getField(service, "medicinalListMap");
+        medicinalLists.put(BOT_ID, new ArrayList<>(List.of(
+                "@咕咕咕丫",
+                "冰灵果 - 数量：2 炼金 | 坊市数据",
+                "☆------五品药材------☆",
+                "地心火芝 - 数量：16 炼金 | 坊市数据",
+                "第2页/共3页 上一页 下一页")));
+        Bot bot = org.mockito.Mockito.mock(Bot.class);
+        org.mockito.Mockito.when(bot.getBotId()).thenReturn(BOT_ID);
+
+        service.parseHerbList(bot);
+
+        Map<Long, Map<String, ProductPrice>> herbPacks =
+                (Map<Long, Map<String, ProductPrice>>) ReflectionTestUtils.getField(service, "herbPackMapMap");
+        assertEquals(2, herbPacks.get(BOT_ID).size());
+        assertEquals(2, herbPacks.get(BOT_ID).get("冰灵果").getHerbCount());
+        assertEquals(16, herbPacks.get(BOT_ID).get("地心火芝").getHerbCount());
     }
 
     @Test

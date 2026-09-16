@@ -21,6 +21,7 @@ import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.ProductPriceResponse;
 import top.sshh.qqbot.service.utils.GetForwardMsgApi;
+import top.sshh.qqbot.service.utils.HerbBackpackParser;
 import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PreDestroy;
@@ -67,8 +68,6 @@ public class HerbBackpackMatchService {
     private static final Pattern COMMAND_PATTERN = Pattern.compile("^匹配(炼金丹|坊市丹)(?:\\s+(\\S+))?\\s*$");
     private static final Pattern NAME_PATTERN = Pattern.compile("名字\\s*[:：]\\s*(.+)");
     private static final Pattern COUNT_PATTERN = Pattern.compile("拥有数量\\s*[:：]\\s*(\\d+)");
-    private static final Pattern INLINE_HERB_COUNT_PATTERN =
-            Pattern.compile("^(.+?)\\s*[-－—]\\s*数量\\s*[:：]\\s*(\\d+)(?:\\D.*)?$");
 
     private static final Comparator<PricedRecipe> RECIPE_ORDER = Comparator
             .comparingLong(PricedRecipe::getUnitProfit).reversed()
@@ -420,10 +419,9 @@ public class HerbBackpackMatchService {
         String currentName = null;
         for (String rawLine : normalized.split("\\R")) {
             String line = rawLine.trim();
-            Matcher inlineMatcher = INLINE_HERB_COUNT_PATTERN.matcher(line);
-            if (inlineMatcher.matches()) {
-                String herbName = normalizeHerbName(inlineMatcher.group(1));
-                addInventoryCount(inventory, herbName, inlineMatcher.group(2));
+            HerbBackpackParser.Entry inlineEntry = HerbBackpackParser.parseInlineEntry(line);
+            if (inlineEntry != null) {
+                addInventoryCount(inventory, inlineEntry.getName(), String.valueOf(inlineEntry.getCount()));
                 currentName = null;
                 continue;
             }

@@ -685,22 +685,22 @@ public class FamilyTask {
         }
     }
 
-    @Scheduled(cron = "0 35 12 * * *" ,zone = "Asia/Shanghai")
-    public void 准备秘境() throws InterruptedException {
-        Iterator var1 = BotFactory.getBots().values().iterator();
+    // @Scheduled(cron = "0 35 12 * * *" ,zone = "Asia/Shanghai")
+    // public void 准备秘境() throws InterruptedException {
+    //     Iterator var1 = BotFactory.getBots().values().iterator();
 
-        while (var1.hasNext()) {
-            Bot bot = (Bot) var1.next();
-            if (bot.getBotConfig().isEnableAutoTask()) {
-                try {
-                    Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain()).text("开始自动秘境"));
-                } catch (Exception e) {
-                    logger.error("定时发送消息失败", e);
-                }
-            }
+    //     while (var1.hasNext()) {
+    //         Bot bot = (Bot) var1.next();
+    //         if (bot.getBotConfig().isEnableAutoTask()) {
+    //             try {
+    //                 Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(), (new MessageChain()).text("开始自动秘境"));
+    //             } catch (Exception e) {
+    //                 logger.error("定时发送消息失败", e);
+    //             }
+    //         }
 
-        }
-    }
+    //     }
+    // }
 
     @Scheduled(
             cron = "0 10 20 ? * SUN",

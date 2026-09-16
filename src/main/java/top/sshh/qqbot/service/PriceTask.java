@@ -27,6 +27,7 @@ import top.sshh.qqbot.data.BountyInfo;
 import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
+import top.sshh.qqbot.service.utils.HerbBackpackParser;
 import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PostConstruct;
@@ -574,11 +575,17 @@ public class PriceTask {
     private void processTextMessage(String text, String originalMessage, PriceCalculationResult result) {
         String[] lines = text.split("\n");
 
-        for (int i = 0; i < lines.length - 1; i++) {
+        for (int i = 0; i < lines.length; i++) {
             String line = Utils.stripMarkdownLink(lines[i].trim());
+            HerbBackpackParser.Entry inlineEntry = HerbBackpackParser.parseInlineEntry(line);
+            if (inlineEntry != null) {
+                processItem(inlineEntry.getName(), inlineEntry.getCount(), originalMessage, result);
+                continue;
+            }
+
             if (isItemLine(line)) {
                 String name = extractItemName(line);
-                if (StringUtils.isNotBlank(name)) {
+                if (StringUtils.isNotBlank(name) && i + 1 < lines.length) {
                     int quantity = extractQuantity(Utils.stripMarkdownLink(lines[i + 1].trim()));
                     processItem(name, quantity, originalMessage, result);
                 }

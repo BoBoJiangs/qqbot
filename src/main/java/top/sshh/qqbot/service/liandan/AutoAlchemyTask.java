@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.MessageNumber;
 import top.sshh.qqbot.service.GroupManager;
+import top.sshh.qqbot.service.utils.HerbBackpackParser;
 import top.sshh.qqbot.service.utils.Utils;
 
 import java.io.*;
@@ -620,25 +621,9 @@ public class AutoAlchemyTask {
 
     // -------------------- 读取并解析 背包药材 -> 更新到背包文件 -> 启动配方匹配 --------------------
     public void parseHerbList(Long botId) throws Exception {
-        List<String> medicinalList = getMedicinalList(botId);
-        String currentHerb = null;
-
-        for (String line : medicinalList) {
-            line = line.trim();
-            if (line.contains("名字：")) {
-                // SnowLuma 下药名为 markdown 链接 [名字](mqqapi://...)，剥离链接保留药名
-                currentHerb = Utils.stripMarkdownLink(line.replaceAll("名字：", ""));
-            } else if (currentHerb != null && line.contains("拥有数量:")) {
-                try {
-                    int count = Utils.parseHerbCount(line);
-                    if (count >= 0) {
-                        updateMedicine(currentHerb, count, botId);
-                    }
-                } catch (Exception e) {
-                    // 忽略解析错误，继续
-                }
-                currentHerb = null;
-            }
+        Map<String, Integer> herbCounts = parseHerbInventory(getMedicinalList(botId));
+        for (Map.Entry<String, Integer> herb : herbCounts.entrySet()) {
+            updateMedicine(herb.getKey(), herb.getValue(), botId);
         }
 
         log.info("药材背包已更新, botId={}", botId);
@@ -649,6 +634,38 @@ public class AutoAlchemyTask {
                 System.out.println("加载药材基础数据异常");
             }
         });
+    }
+
+    Map<String, Integer> parseHerbInventory(List<String> medicinalList) {
+        Map<String, Integer> herbCounts = new LinkedHashMap<>();
+        String currentHerb = null;
+
+        for (String line : medicinalList) {
+            line = line.trim();
+            HerbBackpackParser.Entry inlineEntry = HerbBackpackParser.parseInlineEntry(line);
+            if (inlineEntry != null) {
+                herbCounts.put(inlineEntry.getName(), inlineEntry.getCount());
+                currentHerb = null;
+                continue;
+            }
+
+            if (line.contains("名字：")) {
+                // SnowLuma 下药名为 markdown 链接 [名字](mqqapi://...)，剥离链接保留药名
+                currentHerb = Utils.stripMarkdownLink(line.replaceAll("名字\\s*[:：]", ""))
+                        .replaceAll("\\s+", "");
+            } else if (currentHerb != null && line.contains("拥有数量")) {
+                try {
+                    int count = Utils.parseHerbCount(line);
+                    if (count >= 0) {
+                        herbCounts.put(currentHerb, count);
+                    }
+                } catch (Exception e) {
+                    // 忽略解析错误，继续
+                }
+                currentHerb = null;
+            }
+        }
+        return herbCounts;
     }
 
     /** 解析并构造可炼丹的配方队列，扣减背包并开始自动炼丹 */

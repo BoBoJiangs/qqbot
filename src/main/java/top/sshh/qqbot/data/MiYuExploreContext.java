@@ -18,14 +18,14 @@ public class MiYuExploreContext {
         CLICKING_ROUTE,
         /** 地区已选完，等待游戏的备药卡片 */
         WAIT_PILLS,
-        /** 正在点击丹药/出发按钮 */
+        /** 正在点击丹药按钮或发送出发命令 */
         CLICKING_PILLS
     }
 
-    /** 路线设置的地区名（3个），可为空表示未设置路线 */
-    private List<String> route = new ArrayList<>();
-    /** 禁区选择：是=true（追禁区，兜底时按 禁>高>中>低 取最高）；否=false（不选禁级） */
-    private boolean forbiddenZone = true;
+    /** 候选路线；每条路线由3个地区名组成，可为空表示未设置固定路线 */
+    private List<List<String>> routes = new ArrayList<>();
+    /** 禁区选择：是=true（追禁区，兜底时按 禁>高>中>低 取最高）；否=false（不选禁级，默认） */
+    private boolean forbiddenZone = false;
     /** 指定携带的丹药名（3种），空=不设置（选完地区直接出发） */
     private List<String> pills = new ArrayList<>();
     /** 携带丹药=随机 */
@@ -38,12 +38,12 @@ public class MiYuExploreContext {
     /** 最近一次活跃时间（发出探索秘域或收到卡片时刷新），用于超时清理 */
     private long lastActiveTime = createTime;
 
-    public List<String> getRoute() {
-        return route;
+    public List<List<String>> getRoutes() {
+        return routes;
     }
 
-    public void setRoute(List<String> route) {
-        this.route = route;
+    public void setRoutes(List<List<String>> routes) {
+        this.routes = routes;
     }
 
     public boolean isForbiddenZone() {

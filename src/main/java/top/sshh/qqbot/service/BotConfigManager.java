@@ -15,8 +15,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -28,8 +32,17 @@ import java.util.concurrent.ConcurrentHashMap;
 public class BotConfigManager {
     
     private static final Logger log = LoggerFactory.getLogger(BotConfigManager.class);
-    
-    
+
+    private final Path configDirectory;
+
+    public BotConfigManager() {
+        this(Paths.get("./config"));
+    }
+
+    public BotConfigManager(Path configDirectory) {
+        this.configDirectory = configDirectory;
+    }
+
     // 缓存所有Bot的配置
     private final Map<Long, BotConfigPersist> botConfigCache = new ConcurrentHashMap<>();
     
@@ -93,28 +106,108 @@ public class BotConfigManager {
      */
     public boolean updateBotConfig(Long botId, BotConfigPersist newConfig) {
         try {
-            // 验证配置参数
-            if (!validateConfig(newConfig)) {
+            if (!persistBotConfig(botId, newConfig)) {
                 return false;
             }
-            
-            // 保存到文件
-            saveBotConfigToFile(botId, newConfig);
-            
+
             // 更新到Bot运行时配置
             Bot bot = BotFactory.getBots().get(botId);
             if (bot != null) {
                 applyConfigToBot(bot, newConfig);
             }
-            
-            // 更新缓存
-            botConfigCache.put(botId, newConfig);
-            
+
             log.info("Bot {} 配置更新成功", botId);
             return true;
             
         } catch (Exception e) {
             log.error("更新Bot配置失败: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    /**
+     * 持久保存Bot配置并刷新缓存，但不覆盖运行时配置。
+     * 供TestService同步保存运行时快照，以及保存不属于BotConfig运行时对象的扩展字段使用。
+     */
+    public synchronized boolean persistBotConfig(Long botId, BotConfigPersist config) {
+        try {
+            if (config == null) {
+                return false;
+            }
+            // 部分配置更新未携带秘域路线时保留已有值；空列表才表示明确清空。
+            if (config.getMiYuRoutes() == null) {
+                BotConfigPersist current = loadBotConfig(botId);
+                if (current != null && current.getMiYuRoutes() != null) {
+                    config.setMiYuRoutes(copyMiYuRoutes(current.getMiYuRoutes()));
+                }
+            }
+            // 旧版或部分配置更新未携带群丹方开关时保留已有值；空 Map 才表示明确清空。
+            if (config.getGroupRecipeMatchEnabled() == null) {
+                BotConfigPersist current = loadBotConfig(botId);
+                if (current != null && current.getGroupRecipeMatchEnabled() != null) {
+                    config.setGroupRecipeMatchEnabled(
+                            new HashMap<>(current.getGroupRecipeMatchEnabled()));
+                }
+            }
+            if (!validateConfig(config)) {
+                return false;
+            }
+            saveBotConfigToFile(botId, config);
+            botConfigCache.put(botId, config);
+            return true;
+        } catch (Exception e) {
+            log.error("持久化Bot配置失败: {}", e.getMessage(), e);
+            return false;
+        }
+    }
+
+    public boolean isGroupRecipeMatchEnabled(Long botId, Long groupId) {
+        if (botId == null || groupId == null) {
+            return false;
+        }
+        BotConfigPersist config = loadBotConfig(botId);
+        Map<Long, Boolean> groupSettings = config == null ? null : config.getGroupRecipeMatchEnabled();
+        return groupSettings != null && Boolean.TRUE.equals(groupSettings.get(groupId));
+    }
+
+    /** 更新指定群的开关，并在写入成功后刷新配置缓存。 */
+    public synchronized boolean setGroupRecipeMatchEnabled(Long botId, Long groupId, boolean enabled) {
+        return saveGroupRecipeMatchSetting(botId, groupId, enabled, false);
+    }
+
+    /** 迁移旧配置时只补入目标配置中尚不存在的群，保证中断后重试不会覆盖新设置。 */
+    public synchronized boolean migrateGroupRecipeMatchSetting(Long botId, Long groupId, boolean enabled) {
+        return saveGroupRecipeMatchSetting(botId, groupId, enabled, true);
+    }
+
+    private boolean saveGroupRecipeMatchSetting(Long botId, Long groupId, boolean enabled,
+                                                boolean onlyWhenMissing) {
+        if (botId == null || groupId == null) {
+            return false;
+        }
+        try {
+            BotConfigPersist current = loadBotConfig(botId);
+            if (current == null) {
+                current = createDefaultConfig();
+            }
+            Map<Long, Boolean> currentSettings = current.getGroupRecipeMatchEnabled();
+            if (onlyWhenMissing && currentSettings != null && currentSettings.containsKey(groupId)) {
+                return true;
+            }
+
+            BotConfigPersist updated = JSON.parseObject(JSON.toJSONString(current), BotConfigPersist.class);
+            Map<Long, Boolean> updatedSettings = currentSettings == null
+                    ? new HashMap<>() : new HashMap<>(currentSettings);
+            updatedSettings.put(groupId, enabled);
+            updated.setGroupRecipeMatchEnabled(updatedSettings);
+            if (!validateConfig(updated)) {
+                return false;
+            }
+            saveBotConfigToFile(botId, updated);
+            botConfigCache.put(botId, updated);
+            return true;
+        } catch (Exception e) {
+            log.error("保存Bot {} 群 {} 的丹方匹配开关失败: {}", botId, groupId, e.getMessage(), e);
             return false;
         }
     }
@@ -222,7 +315,7 @@ public class BotConfigManager {
         }
         
         try {
-            Path path = Paths.get("./config/bot-" + botId + ".json");
+            Path path = getBotConfigPath(botId);
             if (!Files.exists(path)) {
                 Bot bot = BotFactory.getBots().get(botId);
                 if (bot != null) {
@@ -274,12 +367,40 @@ public class BotConfigManager {
     }
     
     private void saveBotConfigToFile(Long botId, BotConfigPersist config) throws IOException {
-        Path path = Paths.get("./config/bot-" + botId + ".json");
+        Path path = getBotConfigPath(botId);
         Files.createDirectories(path.getParent());
-        Files.write(path,
-                JSON.toJSONString(config).getBytes(StandardCharsets.UTF_8),
-                StandardOpenOption.CREATE,
-                StandardOpenOption.TRUNCATE_EXISTING);
+        Path temp = Files.createTempFile(path.getParent(), "bot-" + botId + "-", ".tmp");
+        try {
+            Files.write(temp,
+                    JSON.toJSONString(config).getBytes(StandardCharsets.UTF_8),
+                    StandardOpenOption.WRITE,
+                    StandardOpenOption.TRUNCATE_EXISTING);
+            try {
+                Files.move(temp, path,
+                        StandardCopyOption.ATOMIC_MOVE,
+                        StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temp);
+        }
+    }
+
+    private List<List<String>> copyMiYuRoutes(List<List<String>> routes) {
+        List<List<String>> copy = new ArrayList<>();
+        if (routes != null) {
+            for (List<String> route : routes) {
+                if (route != null) {
+                    copy.add(new ArrayList<>(route));
+                }
+            }
+        }
+        return copy;
+    }
+
+    private Path getBotConfigPath(Long botId) {
+        return this.configDirectory.resolve("bot-" + botId + ".json");
     }
     
     private void applyConfigToBot(Bot bot, BotConfigPersist persist) {

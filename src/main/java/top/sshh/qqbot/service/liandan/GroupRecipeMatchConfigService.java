@@ -4,44 +4,39 @@ import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import top.sshh.qqbot.service.BotConfigManager;
 import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PostConstruct;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardOpenOption;
-import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 
-/** 按机器人和群号持久化“本群丹方匹配”开关；没有配置的群默认关闭。 */
+/** 将“本群丹方匹配”开关保存在对应机器人的 bot-{QQ}.json 中；未配置的群默认关闭。 */
 @Component
 public class GroupRecipeMatchConfigService {
     private static final Logger logger = LoggerFactory.getLogger(GroupRecipeMatchConfigService.class);
-    private static final Path DEFAULT_CONFIG_PATH = Paths.get("./config/group-recipe-match.json");
+    private static final Path LEGACY_CONFIG_PATH = Paths.get("./config/group-recipe-match.json");
 
+    private final BotConfigManager botConfigManager;
     private final Path configPath;
-    private final Map<String, Boolean> enabledGroups = new ConcurrentHashMap<>();
 
-    public GroupRecipeMatchConfigService() {
-        this(DEFAULT_CONFIG_PATH);
+    @Autowired
+    public GroupRecipeMatchConfigService(BotConfigManager botConfigManager) {
+        this(botConfigManager, LEGACY_CONFIG_PATH);
     }
 
-    GroupRecipeMatchConfigService(Path configPath) {
+    GroupRecipeMatchConfigService(BotConfigManager botConfigManager, Path configPath) {
+        this.botConfigManager = botConfigManager;
         this.configPath = configPath;
     }
 
     @PostConstruct
     void load() {
-        enabledGroups.clear();
         if (!Files.exists(configPath)) {
-            logger.info("群丹方匹配配置不存在，所有群默认关闭");
             return;
         }
         try {
@@ -49,74 +44,58 @@ public class GroupRecipeMatchConfigService {
                     Utils.readString(configPath),
                     new TypeReference<Map<String, Boolean>>() {
                     });
-            if (saved != null) {
-                saved.forEach((key, enabled) -> {
-                    if (Boolean.TRUE.equals(enabled)) {
-                        enabledGroups.put(key, true);
-                    }
-                });
+            if (saved == null || saved.isEmpty()) {
+                Files.deleteIfExists(configPath);
+                return;
             }
-            logger.info("已加载 {} 个群丹方匹配开关", enabledGroups.size());
+
+            boolean migrated = true;
+            int migratedCount = 0;
+            for (Map.Entry<String, Boolean> entry : saved.entrySet()) {
+                long[] ids = parseKey(entry.getKey());
+                if (ids == null) {
+                    logger.warn("旧群丹方配置键格式无效，保留旧文件供检查：{}", entry.getKey());
+                    migrated = false;
+                    continue;
+                }
+                if (!botConfigManager.migrateGroupRecipeMatchSetting(
+                        ids[0], ids[1], Boolean.TRUE.equals(entry.getValue()))) {
+                    migrated = false;
+                    continue;
+                }
+                migratedCount++;
+            }
+            if (migrated) {
+                Files.deleteIfExists(configPath);
+                logger.info("已将 {} 个群丹方匹配开关迁入对应机器人配置", migratedCount);
+            } else {
+                logger.error("群丹方配置未能全部迁移，旧文件保留并会在下次启动时重试");
+            }
         } catch (Exception e) {
-            logger.error("加载群丹方匹配配置失败，所有群保持默认关闭", e);
+            logger.error("迁移旧群丹方匹配配置失败，保留旧文件", e);
         }
     }
 
     public boolean isEnabled(long botId, long groupId) {
-        return Boolean.TRUE.equals(enabledGroups.get(key(botId, groupId)));
+        return botConfigManager.isGroupRecipeMatchEnabled(botId, groupId);
     }
 
-    /** 保存成功后才更新内存状态，避免写盘失败时提示与实际配置不一致。 */
-    public synchronized boolean setEnabled(long botId, long groupId, boolean enabled) {
-        Map<String, Boolean> snapshot = new LinkedHashMap<>(enabledGroups);
-        String key = key(botId, groupId);
-        if (enabled) {
-            snapshot.put(key, true);
-        } else {
-            snapshot.remove(key);
-        }
+    public boolean setEnabled(long botId, long groupId, boolean enabled) {
+        return botConfigManager.setGroupRecipeMatchEnabled(botId, groupId, enabled);
+    }
 
+    private long[] parseKey(String key) {
+        if (key == null) {
+            return null;
+        }
         try {
-            saveAtomically(snapshot);
-            if (enabled) {
-                enabledGroups.put(key, true);
-            } else {
-                enabledGroups.remove(key);
+            String[] parts = key.split(":", -1);
+            if (parts.length != 2) {
+                return null;
             }
-            return true;
-        } catch (Exception e) {
-            logger.error("保存群丹方匹配配置失败 botId={} groupId={} enabled={}",
-                    botId, groupId, enabled, e);
-            return false;
+            return new long[]{Long.parseLong(parts[0]), Long.parseLong(parts[1])};
+        } catch (NumberFormatException e) {
+            return null;
         }
-    }
-
-    private void saveAtomically(Map<String, Boolean> snapshot) throws IOException {
-        Path target = configPath.toAbsolutePath().normalize();
-        Path parent = target.getParent();
-        if (parent == null) {
-            throw new IOException("群丹方匹配配置路径缺少父目录：" + target);
-        }
-        Files.createDirectories(parent);
-        Path temp = Files.createTempFile(parent, "group-recipe-match-", ".tmp");
-        try {
-            Files.write(temp,
-                    JSON.toJSONString(snapshot).getBytes(StandardCharsets.UTF_8),
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING);
-            try {
-                Files.move(temp, target,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(temp, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temp);
-        }
-    }
-
-    private String key(long botId, long groupId) {
-        return botId + ":" + groupId;
     }
 }

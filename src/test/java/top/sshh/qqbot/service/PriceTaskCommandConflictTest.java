@@ -5,6 +5,7 @@ import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.ReplyMessage;
+import com.zhuangxv.bot.message.support.MarkdownMessage;
 import com.zhuangxv.bot.message.support.TextMessage;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -47,6 +48,31 @@ class PriceTaskCommandConflictTest {
                 .map(TextMessage::getText)
                 .reduce("", String::concat);
         assertTrue(output.contains("炼金 红绫草 1 总价:110万"));
+    }
+
+    @Test
+    void quotedInlineHerbRows_areUsedByRefiningPriceQuery() {
+        PriceTask task = new PriceTask();
+        Bot bot = Mockito.mock(Bot.class);
+        BotConfig config = Mockito.mock(BotConfig.class);
+        Group group = Mockito.mock(Group.class);
+        when(bot.getBotConfig()).thenReturn(config);
+        when(config.isEnableCheckPrice()).thenReturn(true);
+
+        ReplyMessage reply = new ReplyMessage();
+        MessageChain quoted = new MessageChain();
+        quoted.add(new MarkdownMessage("@咕咕咕丫\n冰灵果 - 数量：2 炼金 | 坊市数据\n☆------五品药材------☆"));
+        reply.setChain(quoted);
+        MessageChain chain = new MessageChain();
+        chain.add(reply);
+        task.查上架价格(bot, group, null, chain, "炼金", 4);
+
+        ArgumentCaptor<MessageChain> messageCaptor = ArgumentCaptor.forClass(MessageChain.class);
+        verify(group).sendMessage(messageCaptor.capture());
+        String output = messageCaptor.getValue().getMessageByType(TextMessage.class).stream()
+                .map(TextMessage::getText)
+                .reduce("", String::concat);
+        assertTrue(output.contains("炼金 冰灵果 2 总价:"));
     }
 
     private MessageChain herbReply() {
