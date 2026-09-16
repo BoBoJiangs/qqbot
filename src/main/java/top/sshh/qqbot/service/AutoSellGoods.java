@@ -356,14 +356,20 @@ public class AutoSellGoods {
         while (var2.hasNext()) {
             String line = (String) var2.next();
             line = line.trim();
-            if (line.contains("名字：")) {
-                currentPill = Utils.stripMarkdownLink(line.replaceAll("名字：", ""));
-            } else if (currentPill != null && line.contains("拥有数量:")) {
-                // 使用正则表达式提取数字
-                Pattern pattern = Pattern.compile("拥有数量:(\\d+)");
-                Matcher matcher = pattern.matcher(line);
-                if (matcher.find()) {
-                    int count = Integer.parseInt(matcher.group(1));
+            HerbBackpackParser.Entry inlineEntry = HerbBackpackParser.parseInlineEntry(line);
+            if (inlineEntry != null) {
+                pillsCountLimit(bot, inlineEntry.getCount(), inlineEntry.getName());
+                currentPill = null;
+                continue;
+            }
+
+            if (line.contains("名字：") || line.contains("名字:")) {
+                // SnowLuma 下药名为 markdown 链接 [名字](mqqapi://...)，剥离链接保留药名
+                currentPill = Utils.stripMarkdownLink(line.replaceAll("名字\\s*[:：]", ""))
+                        .replaceAll("\\s+", "");
+            } else if (currentPill != null && line.contains("拥有数量")) {
+                int count = Utils.parseHerbCount(line);
+                if (count >= 0) {
                     pillsCountLimit(bot, count, currentPill);
                 }
                 currentPill = null;

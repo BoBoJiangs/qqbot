@@ -793,13 +793,10 @@ public class AutoBuyHerbs {
                     return new ConcurrentHashMap<>();
                 });
                 ProductPrice normalPurchaseRule = productMap.get(itemName);
-                ProductPrice repeatPurchaseRule = getRepeatPurchaseRule(botId, itemName, normalPurchaseRule);
-                ProductPrice purchaseRule = repeatPurchaseRule != null ? repeatPurchaseRule : normalPurchaseRule;
-                if (isMarketPriceAllowed(price, purchaseRule)) {
-                    if (canPurchaseHerb(botId, purchaseRule, itemName, price, config)) {
-                        ProductPrice candidate = createPurchaseCandidate(purchaseRule, code, price);
-                        enqueuePurchaseCandidate(botId, candidate);
-                    }
+                ProductPrice purchaseRule = selectPurchaseRule(botId, itemName, normalPurchaseRule, price, config);
+                if (purchaseRule != null) {
+                    ProductPrice candidate = createPurchaseCandidate(purchaseRule, code, price);
+                    enqueuePurchaseCandidate(botId, candidate);
                 }
             }
         }
@@ -816,6 +813,26 @@ public class AutoBuyHerbs {
             this.refreshHerbsIndexByInterval(bot, config);
         }
 
+    }
+
+    /**
+     * 选择当前坊市条目使用的采购规则。重复采购价优先，但重复采购价不满足时，
+     * 仍应回退到普通采购价，不能因为存在重复采购配置就屏蔽普通采购。
+     */
+    private ProductPrice selectPurchaseRule(long botId, String herbName, ProductPrice normalRule,
+                                            double marketPrice, Config config) {
+        ProductPrice repeatRule = getRepeatPurchaseRule(botId, herbName, normalRule);
+        if (repeatRule != null
+                && isMarketPriceAllowed(marketPrice, repeatRule)
+                && canPurchaseHerb(botId, repeatRule, herbName, marketPrice, config)) {
+            return repeatRule;
+        }
+        if (normalRule != null
+                && isMarketPriceAllowed(marketPrice, normalRule)
+                && canPurchaseHerb(botId, normalRule, herbName, marketPrice, config)) {
+            return normalRule;
+        }
+        return null;
     }
 
     private boolean isMarketPriceAllowed(double marketPrice, ProductPrice purchaseRule) {
@@ -890,9 +907,16 @@ public class AutoBuyHerbs {
     }
 
     private boolean isRepeatPurchase(long botId, ProductPrice productPrice) {
-        return productPrice != null
-                && productPrice.getName() != null
-                && getRepeatBuyPrices(botId).containsKey(productPrice.getName());
+        if (productPrice == null || productPrice.getName() == null) {
+            return false;
+        }
+        Integer repeatPrice = getRepeatBuyPrices(botId).get(productPrice.getName());
+        // 同一药材配置了重复采购时，候选仍可能回退到普通采购价；只有价格与重复采购价一致
+        // 的候选才保持“重复采购”语义，否则成功后会被误认为需要无限重试。
+        if (repeatPrice == null) {
+            return false;
+        }
+        return productPrice.getPrice() == repeatPrice;
     }
 
     private void refreshHerbsIndexByInterval(Bot bot, Config config) {

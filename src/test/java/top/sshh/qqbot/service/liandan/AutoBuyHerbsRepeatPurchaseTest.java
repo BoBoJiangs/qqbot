@@ -120,6 +120,29 @@ class AutoBuyHerbsRepeatPurchaseTest {
     }
 
     @Test
+    void normalPurchaseFallsBackWhenRepeatPriceIsTooLow() {
+        AutoBuyHerbs service = new AutoBuyHerbs();
+        enableRepeat(service, "乌灵参", 900);
+        ProductPrice normal = product("乌灵参", 950);
+
+        ProductPrice selectedAt910 = ReflectionTestUtils.invokeMethod(
+                service, "selectPurchaseRule", BOT_ID, "乌灵参", normal, 910D, null);
+        assertEquals(950, selectedAt910.getPrice());
+        ProductPrice normalCandidate = ReflectionTestUtils.invokeMethod(
+                service, "createPurchaseCandidate", selectedAt910, "normal-code", 910D);
+        assertFalse(Boolean.TRUE.equals(ReflectionTestUtils.invokeMethod(
+                service, "isRepeatPurchase", BOT_ID, normalCandidate)));
+
+        ProductPrice selectedAt890 = ReflectionTestUtils.invokeMethod(
+                service, "selectPurchaseRule", BOT_ID, "乌灵参", normal, 890D, null);
+        assertEquals(900, selectedAt890.getPrice());
+        ProductPrice repeatCandidate = ReflectionTestUtils.invokeMethod(
+                service, "createPurchaseCandidate", selectedAt890, "repeat-code", 890D);
+        assertTrue(Boolean.TRUE.equals(ReflectionTestUtils.invokeMethod(
+                service, "isRepeatPurchase", BOT_ID, repeatCandidate)));
+    }
+
+    @Test
     void repeatPurchaseIsPrioritizedOverNormalPurchaseOnSamePage() {
         AutoBuyHerbs service = new AutoBuyHerbs();
         enableRepeat(service, "乌灵参", 80);
