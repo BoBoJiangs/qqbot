@@ -7,6 +7,8 @@ import java.util.regex.Pattern;
 public final class HerbBackpackParser {
     private static final Pattern INLINE_HERB_COUNT_PATTERN =
             Pattern.compile("^(.+?)\\s*[-－—]\\s*数量\\s*[:：]\\s*(\\d+)(?:\\D.*)?$");
+    private static final Pattern LEGACY_HERB_NAME_PATTERN =
+            Pattern.compile("名字\\s*[:：]\\s*(.+?)(?=\\s*(?:拥有数量|数量)\\s*[:：]|$)");
 
     private HerbBackpackParser() {
     }
@@ -25,6 +27,23 @@ public final class HerbBackpackParser {
         } catch (NumberFormatException e) {
             return null;
         }
+    }
+
+    /** 解析旧式“名字：药材名”，也兼容名字和拥有数量位于同一行。 */
+    public static String parseLegacyName(String rawLine) {
+        if (rawLine == null) return null;
+        String line = Utils.stripMarkdownLink(rawLine.trim());
+        Matcher matcher = LEGACY_HERB_NAME_PATTERN.matcher(line);
+        if (!matcher.find()) return null;
+        String name = Utils.stripMarkdownLink(matcher.group(1)).replaceAll("\\s+", "");
+        return name.isEmpty() ? null : name;
+    }
+
+    /** 解析“名字：药材名 拥有数量：2”这种单行旧格式。 */
+    public static Entry parseLegacyInlineEntry(String rawLine) {
+        String name = parseLegacyName(rawLine);
+        int count = Utils.parseHerbCount(rawLine);
+        return name == null || count < 0 ? null : new Entry(name, count);
     }
 
     public static final class Entry {

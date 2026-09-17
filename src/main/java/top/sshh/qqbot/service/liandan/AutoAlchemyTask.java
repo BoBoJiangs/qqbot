@@ -468,7 +468,7 @@ public class AutoAlchemyTask {
             sb.append("－－－－－功能设置－－－－－\n");
             sb.append("取消采购药材××\n");
             sb.append("批量取消采购药材\n");
-            sb.append("重复采购药材×× ××\n");
+            sb.append("重复采购药材×× ×× [背包数量上限]\n");
             sb.append("取消重复采购药材××\n");
             sb.append("批量取消重复采购药材\n");
             sb.append("查询重复采购药材\n");

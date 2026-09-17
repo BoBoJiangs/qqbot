@@ -1,6 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
 import com.zhuangxv.bot.core.Bot;
+import com.zhuangxv.bot.core.Group;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -58,6 +59,36 @@ class AutoBuyHerbsRepeatPurchaseTest {
         AutoBuyHerbs reader = new AutoBuyHerbs();
         assertTrue(repeatHerbs(reader).contains("乌灵参"));
         assertEquals(80, repeatPrices(reader).get("乌灵参"));
+    }
+
+    @Test
+    void repeatPurchaseQuantityLimitCanBeConfiguredAndPersisted() throws Exception {
+        AutoBuyHerbs writer = new AutoBuyHerbs();
+        enableRepeat(writer, "玄冰花", 900);
+        repeatLimits(writer).put("玄冰花", 30);
+        ReflectionTestUtils.invokeMethod(writer, "saveRepeatBuyConfig", BOT_ID);
+
+        Path configPath = tempDir.resolve(String.valueOf(BOT_ID)).resolve("重复采购药材.txt");
+        assertEquals("900 30 玄冰花", Files.readAllLines(configPath, StandardCharsets.UTF_8).get(0));
+
+        AutoBuyHerbs reader = new AutoBuyHerbs();
+        assertEquals(900, repeatPrices(reader).get("玄冰花"));
+        assertEquals(30, repeatLimits(reader).get("玄冰花"));
+    }
+
+    @Test
+    void repeatPurchaseCommandAcceptsPriceAndQuantityLimit() {
+        AutoBuyHerbs service = new AutoBuyHerbs();
+        Bot bot = org.mockito.Mockito.mock(Bot.class);
+        Group group = org.mockito.Mockito.mock(Group.class);
+        org.mockito.Mockito.when(bot.getBotId()).thenReturn(BOT_ID);
+        Map<String, ProductPrice> normalRules = new java.util.concurrent.ConcurrentHashMap<>();
+
+        ReflectionTestUtils.invokeMethod(service, "addProductsToMap", bot, group,
+                "重复采购药材玄冰花 900 30", 1, normalRules, true);
+
+        assertEquals(900, repeatPrices(service).get("玄冰花"));
+        assertEquals(30, repeatLimits(service).get("玄冰花"));
     }
 
     @Test
@@ -143,6 +174,32 @@ class AutoBuyHerbsRepeatPurchaseTest {
     }
 
     @Test
+    void repeatPriceDisablesAboveBackpackLimitAndRecoversAtLimit() {
+        AutoBuyHerbs service = new AutoBuyHerbs();
+        enableRepeat(service, "玄冰花", 900);
+        repeatLimits(service).put("玄冰花", 30);
+        ProductPrice normal = product("玄冰花", 950);
+
+        @SuppressWarnings("unchecked")
+        Map<Long, Map<String, ProductPrice>> packs =
+                (Map<Long, Map<String, ProductPrice>>) ReflectionTestUtils.getField(service, "herbPackMapMap");
+        Map<String, ProductPrice> botPack = new java.util.concurrent.ConcurrentHashMap<>();
+        ProductPrice herb = product("玄冰花", 0);
+        herb.setHerbCount(31);
+        botPack.put("玄冰花", herb);
+        packs.put(BOT_ID, botPack);
+
+        ProductPrice normalCandidate = ReflectionTestUtils.invokeMethod(
+                service, "selectPurchaseRule", BOT_ID, "玄冰花", normal, 910D, null);
+        assertEquals(950, normalCandidate.getPrice());
+
+        herb.setHerbCount(30);
+        ProductPrice repeatCandidate = ReflectionTestUtils.invokeMethod(
+                service, "selectPurchaseRule", BOT_ID, "玄冰花", normal, 890D, null);
+        assertEquals(900, repeatCandidate.getPrice());
+    }
+
+    @Test
     void repeatPurchaseIsPrioritizedOverNormalPurchaseOnSamePage() {
         AutoBuyHerbs service = new AutoBuyHerbs();
         enableRepeat(service, "乌灵参", 80);
@@ -206,6 +263,10 @@ class AutoBuyHerbsRepeatPurchaseTest {
 
     private Map<String, Integer> repeatPrices(AutoBuyHerbs service) {
         return ReflectionTestUtils.invokeMethod(service, "getRepeatBuyPrices", BOT_ID);
+    }
+
+    private Map<String, Integer> repeatLimits(AutoBuyHerbs service) {
+        return ReflectionTestUtils.invokeMethod(service, "getRepeatBuyLimits", BOT_ID);
     }
 
     private void enableRepeat(AutoBuyHerbs service, String herbName, int price) {
