@@ -2078,12 +2078,9 @@ public class TestService {
                         .text(botConfig.getLingShiNum() * 10000 + ""));
             }
             if (message.contains("共赠送") && message.contains("手续费")) {
-                message = messageChain.get(messageChain.size() - 1).toString();
-                Pattern pattern = Pattern.compile("\\d+");
-                Matcher matcher = pattern.matcher(message);
-                long sum = 0;
-                while (matcher.find()) {
-                    sum += Long.parseLong(matcher.group());
+                long sum = extractGiftAmount(message);
+                if (sum <= 0) {
+                    sum = botConfig.getLingShiNum() * 10000L;
                 }
                 botConfig.setLingShiTotal(botConfig.getLingShiTotal() + sum);
                 group.sendMessage((new MessageChain()).reply(messageId)
@@ -2092,6 +2089,27 @@ public class TestService {
             }
         }
 
+    }
+
+    /**
+     * 从小大赠送确认文本中提取本次实际支出（共赠送数额+手续费）。
+     * 只按游戏文案精确提取，禁止用 \d+ 对整条消息求和：SnowLuma 会在消息尾部
+     * 附加 json[inline_keyboard] 段，其 bot_appid（102074059）等数字会被误当作赠送灵石。
+     */
+    static long extractGiftAmount(String text) {
+        if (StringUtils.isBlank(text)) {
+            return 0;
+        }
+        long sum = 0;
+        Matcher giveMatcher = Pattern.compile("共赠送(\\d+)枚灵石").matcher(text);
+        if (giveMatcher.find()) {
+            sum += Long.parseLong(giveMatcher.group(1));
+        }
+        Matcher feeMatcher = Pattern.compile("手续费(\\d+)枚").matcher(text);
+        if (feeMatcher.find()) {
+            sum += Long.parseLong(feeMatcher.group(1));
+        }
+        return sum;
     }
 
     private String getAtMessageQQ(MessageChain messageChain) {
