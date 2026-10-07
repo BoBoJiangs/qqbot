@@ -17,3 +17,6 @@
 /config/bot-*.json
 .zcode/
 .zcode/**
+
+# macOS system files
+.DS_Store
