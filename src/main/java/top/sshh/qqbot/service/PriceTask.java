@@ -436,7 +436,7 @@ public class PriceTask {
                         if (isDuplicateXslPriceMessage(bot, group, messageId)) {
                             return;
                         }
-                        stringBuilder.insert(0, "悬赏令价格查询：");
+                        stringBuilder.insert(0, "\uD83C\uDF81悬赏令查询：");
                         group.sendMessage((new MessageChain()).text(stringBuilder.toString()));
                         // 同一条消息链中可能包含多个 TextMessage，发送后立即结束本次处理。
                         return;

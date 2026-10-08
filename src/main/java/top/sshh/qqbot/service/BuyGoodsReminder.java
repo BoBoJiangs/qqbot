@@ -32,6 +32,8 @@ public class BuyGoodsReminder {
     private static final Pattern YEMA = Pattern.compile("(查看坊市|坊市查看)\\s*([^\\s@]+)");
     private static final Pattern PAGE_KEY = Pattern.compile("(技能|装备|丹药|药材|道具)\\s*\\d+");
     private static final Pattern TIME_RANGE = Pattern.compile("(\\d{1,2}):(\\d{1,2})-(\\d{1,2}):(\\d{1,2})");
+    /** 收藏商品的价格行带有 ⭐ 或 ⭐️ 前缀。 */
+    private static final Pattern MARKET_PRICE_LINE = Pattern.compile("^\\s*(?:⭐\\uFE0F?\\s*)?价格");
     private static final long ITEM_REMIND_INTERVAL_MS = 10 * 60 * 1000L;
     /** 23:00-08:00 夜间时段同一物品提醒间隔放宽到1小时 */
     private static final long NIGHT_REMIND_INTERVAL_MS = 60 * 60 * 1000L;
@@ -326,7 +328,7 @@ public class BuyGoodsReminder {
         // 同一物品在同一条消息内保留最低价
         Map<String, MarketHit> hits = new HashMap<>();
         for (String line : message.split("\n")) {
-            if (!line.startsWith("价格") || !line.contains("mqqapi")) {
+            if (!MARKET_PRICE_LINE.matcher(line).find() || !line.contains("mqqapi")) {
                 continue;
             }
             String[] parts = line.split("\\[|\\]");
