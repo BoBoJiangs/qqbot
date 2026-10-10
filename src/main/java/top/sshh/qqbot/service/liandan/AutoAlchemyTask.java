@@ -526,7 +526,7 @@ public class AutoAlchemyTask {
 
                     if (config != null && config.isFinishAutoBuyHerb()) {
                         Group g = groupMap.get(botId);
-                        if (g != null) g.sendMessage((new MessageChain()).text("确认一键丹药炼金"));
+                        if (g != null) g.sendMessage((new MessageChain()).text("批量炼金丹药"));
                     } else {
                         group.sendMessage((new MessageChain()).text("自动炼丹完成！！"));
                         botConfig.setStartAuto(false);
