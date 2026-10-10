@@ -108,7 +108,7 @@ public class AutoBuyHerbs {
         }
         message = message.trim();
         long botId = bot.getBotId();
-
+        long groupId = botConfig.getGroupId();
         if (!message.contains("可用命令")) {
             switch (message) {
                 case "丹药炼金完成":
@@ -116,7 +116,7 @@ public class AutoBuyHerbs {
                         resetPram(bot, botConfig);
                         botConfig.setStop(true);
                         botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
-                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
+                        Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("药材背包"));
                         botConfig.setAutoBuyHerbsMode(1);
                         botConfig.setStartAuto(false);
                     }
@@ -130,7 +130,7 @@ public class AutoBuyHerbs {
                     if (botConfig.getCultivationMode() == 1) {
                         botConfig.setStartScheduled(false);
                     }
-                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
+                    Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("药材背包"));
                     break;
                 case "停止采购药材":
                     resetPram(bot, botConfig);
@@ -146,7 +146,7 @@ public class AutoBuyHerbs {
                     pageMap.put(botId, 1);
                    
                     botConfig.setAutoBuyHerbsMode(0);
-                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
+                    Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("药材背包"));
                     break;
 
                 default:
