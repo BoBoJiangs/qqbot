@@ -108,15 +108,15 @@ public class AutoBuyHerbs {
         }
         message = message.trim();
         long botId = bot.getBotId();
-        long groupId = botConfig.getGroupId();
+
         if (!message.contains("可用命令")) {
             switch (message) {
                 case "丹药炼金完成":
-                    if(botConfig.isStartAuto()){
+                    if(botConfig.isStartAuto() && isAutoBuyGroup(group, botConfig)){
                         resetPram(bot, botConfig);
                         botConfig.setStop(true);
                         botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
-                        Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("药材背包"));
+                        Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
                         botConfig.setAutoBuyHerbsMode(1);
                         botConfig.setStartAuto(false);
                     }
@@ -130,7 +130,7 @@ public class AutoBuyHerbs {
                     if (botConfig.getCultivationMode() == 1) {
                         botConfig.setStartScheduled(false);
                     }
-                    Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("药材背包"));
+                    Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
                     break;
                 case "停止采购药材":
                     resetPram(bot, botConfig);
@@ -146,7 +146,7 @@ public class AutoBuyHerbs {
                     pageMap.put(botId, 1);
                    
                     botConfig.setAutoBuyHerbsMode(0);
-                    Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("药材背包"));
+                    Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包"));
                     break;
 
                 default:
@@ -192,7 +192,7 @@ public class AutoBuyHerbs {
     public void 药材背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
-        boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
+        boolean isGroup = isAutoBuyGroup(group, botConfig);
         boolean isSmartAdjustMode = smartAdjustModeMap.getOrDefault(botId, false);
         
         if (isGroup && (message.contains("上一页") || message.contains("下一页") || message.contains("药材背包")) && (botConfig.getAutoBuyHerbsMode()!=0 || isSmartAdjustMode)) {
@@ -215,16 +215,16 @@ public class AutoBuyHerbs {
                 if (hasNextPage) {
                     int nextPage = pageMap.getOrDefault(botId, 1) + 1;
                     pageMap.put(botId, nextPage);
-                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包" + nextPage));
+                    Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包" + nextPage));
                 } else {
                     if (isSmartAdjustMode) {
                         try {
                             botConfig.setStop(false);
                             int parsedHerbCount = this.parseHerbList(bot);
                             if (parsedHerbCount == 0) {
-                                group.sendMessage(new MessageChain().text("背包药材读取失败：未解析到任何药材，请稍后重试。"));
+                                Utils.sendGroupMessage(bot, botConfig.getGroupId(), new MessageChain().text("背包药材读取失败：未解析到任何药材，请稍后重试。"));
                             } else {
-                                this.analyzeHerbCount(botId, group);
+                                this.analyzeHerbCount(bot);
                             }
                         } finally {
                             smartAdjustModeMap.put(botId, false);
@@ -675,7 +675,7 @@ public class AutoBuyHerbs {
     public void 验证码判断(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
         if (message.contains("https") && message.contains("qqbot")  && message.contains("" + bot.getBotId())) {
             BotConfig botConfig = bot.getBotConfig();
-            boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
+            boolean isGroup = isAutoBuyGroup(group, botConfig);
             //出验证码跳过本页购买
 //            if(botConfig.getAutoBuyHerbsMode()!=0 && isGroup){
 //                autoBuyListMap.computeIfAbsent(bot.getBotId(), k -> new CopyOnWriteArrayList<>()).clear();
@@ -739,7 +739,7 @@ public class AutoBuyHerbs {
             if(message.contains("没钱还来买东西")){
                 Config config = danCalculator.getConfig(bot.getBotId());
                 if(config != null && config.isFinishAutoBuyHerb()){
-                    group.sendMessage((new MessageChain()).text("开始自动炼丹"));
+                    Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).text("开始自动炼丹"));
                 }else{
                     botConfig.setStartAuto(false);
                     botConfig.setAutoBuyHerbsMode(0);
@@ -776,11 +776,11 @@ public class AutoBuyHerbs {
             }else{
                 if (repeatPurchase && !itemNotFound) {
                     // 重复采购成功或遇到临时错误，都继续使用当前购买码。
-                    this.buyNextHerbAfterDelay(group, bot);
+                    this.buyNextHerbAfterDelay(bot);
                 } else if (message.contains("道友成功购买")) {
-                    this.buyNextHerbAfterDelay(group, bot);
+                    this.buyNextHerbAfterDelay(bot);
                 } else {
-                    this.buyHerbs(group, bot);
+                    this.buyHerbs(bot);
                 }
             }
 
@@ -801,7 +801,8 @@ public class AutoBuyHerbs {
     }
 
     private boolean isAutoBuyGroup(Group group, BotConfig botConfig){
-        return group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
+        // 采购和背包分析只接收各机器人配置的执行群消息。
+        return group != null && group.getGroupId() == botConfig.getGroupId();
     }
 
     private void stopAutoBuyHerbs(Bot bot, BotConfig botConfig) {
@@ -828,7 +829,7 @@ public class AutoBuyHerbs {
     public void 自动购买药材(Bot bot, Group group, String message, Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
-        boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
+        boolean isGroup = isAutoBuyGroup(group, botConfig);
         if (isGroup && message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架") && botConfig.getAutoBuyHerbsMode()!=0) {
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             this.customPool.submit(() -> {
@@ -841,7 +842,7 @@ public class AutoBuyHerbs {
     private void processMarketMessage(Bot bot, Group group, String message) {
         long botId = bot.getBotId();
         BotConfig botConfig = bot.getBotConfig();
-        if (botConfig.getAutoBuyHerbsMode() == 0) {
+        if (botConfig.getAutoBuyHerbsMode() == 0 || !isAutoBuyGroup(group, botConfig)) {
             return;
         }
         String[] split = message.split("\n");
@@ -855,12 +856,6 @@ public class AutoBuyHerbs {
             }
             String s = var5[var7];
             if (s.startsWith("价格") && s.contains("mqqapi")) {
-                if (botConfig.getTaskId() != 0L) {
-                    botConfig.getTaskId();
-                } else {
-                    botConfig.getGroupId();
-                }
-
                 String[] split1 = s.split("\\[|\\]");
                 String code = s.split("%E5%9D%8A%E5%B8%82%E8%B4%AD%E4%B9%B0|&")[1];
                 double price = this.extractPrice(s);
@@ -885,7 +880,7 @@ public class AutoBuyHerbs {
             return;
         }
         if(!autoBuyList.isEmpty()){
-            this.buyHerbs(group, bot);
+            this.buyHerbs(bot);
         }else{
             this.refreshHerbsIndexByInterval(bot, config);
         }
@@ -1080,7 +1075,7 @@ public class AutoBuyHerbs {
         return result.toString();
     }
 
-    private void buyHerbs(Group group, Bot bot) {
+    private void buyHerbs(Bot bot) {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
         CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>());
@@ -1088,7 +1083,7 @@ public class AutoBuyHerbs {
 
             try {
                 if (botConfig.getAutoBuyHerbsMode()!=0) {
-                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("坊市购买 " + productPrice.getCode()));
+                    Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("坊市购买 " + productPrice.getCode()));
                 }
                 break;
             } catch (Exception var6) {
@@ -1099,14 +1094,14 @@ public class AutoBuyHerbs {
 
     }
 
-    private void buyNextHerbAfterDelay(Group group, Bot bot) {
+    private void buyNextHerbAfterDelay(Bot bot) {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
         Config config = danCalculator.getConfig(botId);
         long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
 
         if (maxDelayMs <= 0) {
-            this.buyHerbs(group, bot);
+            this.buyHerbs(bot);
             return;
         }
 
@@ -1124,7 +1119,7 @@ public class AutoBuyHerbs {
                 }
                 if (botConfig.getAutoBuyHerbsMode() != 0
                         && !autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).isEmpty()) {
-                    this.buyHerbs(group, bot);
+                    this.buyHerbs(bot);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -1160,7 +1155,7 @@ public class AutoBuyHerbs {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
         if (botConfig.getAutoBuyHerbsMode() != 0) {
-            long groupId = botConfig.getTaskId() != 0L ? botConfig.getTaskId() : botConfig.getGroupId();
+            long groupId = botConfig.getGroupId();
             List<Integer> makeDrugIndexList = makeDrugIndexListMap.computeIfAbsent(botId, k -> new ArrayList<>());
             if(!makeDrugIndexList.isEmpty()){
                 int drugIndex = drugIndexMap.getOrDefault(botId,0);
@@ -1191,10 +1186,12 @@ public class AutoBuyHerbs {
     }
     
     // -------------------- 智能调整药材价格功能 --------------------
-    private void analyzeHerbCount(Long botId, Group group) {
+    private void analyzeHerbCount(Bot bot) {
+        long botId = bot.getBotId();
+        BotConfig botConfig = bot.getBotConfig();
         Config config = danCalculator.getConfig(botId);
         if (config == null) {
-            group.sendMessage(new MessageChain().text("配置信息获取失败，无法进行分析"));
+            Utils.sendGroupMessage(bot, botConfig.getGroupId(), new MessageChain().text("配置信息获取失败，无法进行分析"));
             return;
         }
 
@@ -1216,10 +1213,10 @@ public class AutoBuyHerbs {
                 ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(herbName.trim());
                 return first == null ? null : first.getPrice();
             });
-            group.sendMessage(new MessageChain().text(message));
+            Utils.sendGroupMessage(bot, botConfig.getGroupId(), new MessageChain().text(message));
         } catch (Exception e) {
             logger.error("分析背包药材失败 botId={}", botId, e);
-            group.sendMessage(new MessageChain().text("分析背包药材失败：" + e.getMessage()));
+            Utils.sendGroupMessage(bot, botConfig.getGroupId(), new MessageChain().text("分析背包药材失败：" + e.getMessage()));
         }
 
         medicinalListMap.put(botId, new ArrayList<>());

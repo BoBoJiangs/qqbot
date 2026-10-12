@@ -6,6 +6,7 @@ import com.zhuangxv.bot.core.Buttons;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.core.Member;
+import com.zhuangxv.bot.core.component.BotFactory;
 import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.AtMessage;
 import com.zhuangxv.bot.message.support.TextMessage;
@@ -46,9 +47,6 @@ public class AutoAlchemyTask {
 
     // 按 botId 隔离：炼丹配方队列（原 alchemyList）
     private final Map<Long, CopyOnWriteArrayList<String>> alchemyListMap = new ConcurrentHashMap<>();
-
-    // 与每个 botId 对应的 group（启动自动炼丹时保存，发送消息使用）
-    private final Map<Long, Group> groupMap = new ConcurrentHashMap<>();
 
     // 按 botId 隔离：炼丹命令发送延迟任务，避免重复发送下一炉炼丹命令
     private final Map<Long, AtomicBoolean> alchemyDelayScheduledFlagMap = new ConcurrentHashMap<>();
@@ -94,7 +92,6 @@ public class AutoAlchemyTask {
         medicinalListMap.put(botId, new ArrayList<>());
         pageMap.put(botId, 1);
         alchemyListMap.put(botId, new CopyOnWriteArrayList<>());
-        groupMap.remove(botId);
         AtomicBoolean scheduledFlag = alchemyDelayScheduledFlagMap.get(botId);
         if (scheduledFlag != null) {
             scheduledFlag.set(false);
@@ -115,6 +112,15 @@ public class AutoAlchemyTask {
 
     private void setPage(Long botId, int p) {
         pageMap.put(botId, p);
+    }
+
+    // 异步炼丹任务始终使用机器人的当前配置群，不保存启动命令所在群。
+    private Group getAlchemyGroup(Long botId) {
+        Bot bot = BotFactory.getBots().get(botId);
+        if (bot == null || !bot.getBotConfig().isStartAuto()) {
+            return null;
+        }
+        return bot.getGroup(bot.getBotConfig().getGroupId());
     }
 
     // -------------------- 消息处理入口（大函数，保持原逻辑） --------------------
@@ -143,7 +149,6 @@ public class AutoAlchemyTask {
 
         if ("开始自动炼丹".equals(message)) {
             resetPram(botId);
-            groupMap.put(botId, group);
             if (botConfig.getCultivationMode() == 1) {
                 botConfig.setStartScheduled(false);
             }
@@ -525,10 +530,9 @@ public class AutoAlchemyTask {
                 if (alchemyList.isEmpty()) {
 
                     if (config != null && config.isFinishAutoBuyHerb()) {
-                        Group g = groupMap.get(botId);
-                        if (g != null) g.sendMessage((new MessageChain()).text("批量炼金丹药"));
+                        Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).text("批量炼金丹药"));
                     } else {
-                        group.sendMessage((new MessageChain()).text("自动炼丹完成！！"));
+                        Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).text("自动炼丹完成！！"));
                         botConfig.setStartAuto(false);
                         resetPram(botId);
                     }
@@ -559,7 +563,7 @@ public class AutoAlchemyTask {
                 }
 
                 CopyOnWriteArrayList<String> alchemyList = getAlchemyList(botId);
-                Group g = groupMap.get(botId);
+                Group g = getAlchemyGroup(botId);
                 for (String remedy : alchemyList) {
                     try {
                         if (g != null) {
@@ -583,7 +587,7 @@ public class AutoAlchemyTask {
     public void 药材背包(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws Exception {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
-        boolean isGroup = group.getGroupId() == botConfig.getGroupId() || group.getGroupId() == botConfig.getTaskId();
+        boolean isGroup = group.getGroupId() == botConfig.getGroupId();
 
         if (isGroup && (message.contains("上一页") || message.contains("下一页") || message.contains("药材背包")) && botConfig.isStartAuto()) {
             List<TextMessage> textMessages = messageChain.getMessageByType(TextMessage.class);
@@ -610,9 +614,9 @@ public class AutoAlchemyTask {
                 if (hasNextPage) {
                     int nextPage = getPage(botId) + 1;
                     setPage(botId, nextPage);
-                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包" + nextPage));
+                    Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("药材背包" + nextPage));
                 } else {
-                    group.sendMessage((new MessageChain()).text("药材背包已刷新，开始匹配丹方..."));
+                    Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).text("药材背包已刷新，开始匹配丹方..."));
                     parseHerbList(botId);
                 }
             }
@@ -737,7 +741,7 @@ public class AutoAlchemyTask {
             }
         }
 
-        Group g = groupMap.get(botId);
+        Group g = getAlchemyGroup(botId);
         if (!matchedAny) {
             if (g != null) g.sendMessage(new MessageChain().text("未匹配到丹方，请检查丹方设置"));
             resetPram(botId);
