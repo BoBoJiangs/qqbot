@@ -112,7 +112,8 @@ public class AutoBuyHerbs {
         if (!message.contains("可用命令")) {
             switch (message) {
                 case "丹药炼金完成":
-                    if(botConfig.isStartAuto() && isAutoBuyGroup(group, botConfig)){
+                    // 内部完成通知可能发到提醒群，后续采购仍在配置的执行群进行。
+                    if(botConfig.isStartAuto()){
                         resetPram(bot, botConfig);
                         botConfig.setStop(true);
                         botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());

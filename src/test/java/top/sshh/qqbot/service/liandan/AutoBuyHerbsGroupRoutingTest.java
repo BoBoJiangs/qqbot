@@ -93,6 +93,18 @@ class AutoBuyHerbsGroupRoutingTest {
     }
 
     @Test
+    void alchemyCompletionInReminderGroupResumesPurchasesInConfiguredGroup() {
+        botConfig.setStartAuto(true);
+        service.enableScheduled(bot, taskGroup, null, new MessageChain().text("丹药炼金完成"),
+                "丹药炼金完成", 1);
+
+        assertSentTexts(executionGroup, "药材背包");
+        assertEquals(1, botConfig.getAutoBuyHerbsMode());
+        assertEquals(false, botConfig.isStartAuto());
+        verify(taskGroup, never()).sendMessage(any(MessageChain.class));
+    }
+
+    @Test
     void purchaseBackpackPaginationAndMarketRefreshStayInConfiguredGroup() throws Exception {
         start("开始采购药材");
         receiveBackpack(taskGroup, "冰灵果 - 数量：2 炼金 | 坊市数据\n下一页");
