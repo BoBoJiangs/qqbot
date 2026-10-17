@@ -52,6 +52,7 @@ public class AutoBuyHerbs {
     private static final String MARKET_COMMAND = "查看坊市药材";
     private static final String REPEAT_BUY_COMMAND = "重复采购药材";
     private static final String REPEAT_BUY_CONFIG_FILE = "重复采购药材.txt";
+    private static final long NORMAL_BUY_CODE_COOLDOWN_MS = 12000L;
 
     /** 保持原有的按 botId 隔离的采购价格表 */
     public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_HERBS = new ConcurrentHashMap<>();
@@ -88,7 +89,15 @@ public class AutoBuyHerbs {
     private final Map<Long, AtomicBoolean> marketRefreshScheduledFlagMap = new ConcurrentHashMap<>();
 
     // 按 botId 隔离：购买成功后下一件药材的延迟任务，避免重复发送购买命令
-    private final Map<Long, AtomicBoolean> purchaseDelayScheduledFlagMap = new ConcurrentHashMap<>();
+    private final Map<Long, Object> purchaseDelayTaskMap = new ConcurrentHashMap<>();
+    /** 同一机器人的入队、发送和购买结果处理必须串行执行。 */
+    private final Map<Long, Object> purchaseLockMap = new ConcurrentHashMap<>();
+    private final Map<Long, ProductPrice> inFlightPurchaseMap = new ConcurrentHashMap<>();
+    private final Map<Long, Map<String, Long>> recentNormalBuyCodeMap = new ConcurrentHashMap<>();
+
+    private Object purchaseLock(long botId) {
+        return purchaseLockMap.computeIfAbsent(botId, k -> new Object());
+    }
 
     @Autowired
     public DanCalculator danCalculator;
@@ -174,7 +183,16 @@ public class AutoBuyHerbs {
     }
 
     private void resetPram(Bot bot, BotConfig botConfig) {
+        synchronized (purchaseLock(bot.getBotId())) {
+            resetPurchaseState(bot, botConfig);
+        }
+    }
+
+    private void resetPurchaseState(Bot bot, BotConfig botConfig) {
         long botId = bot.getBotId();
+        inFlightPurchaseMap.remove(botId);
+        recentNormalBuyCodeMap.remove(botId);
+        purchaseDelayTaskMap.remove(botId);
         loadRepeatBuyConfig(botId);
         pageMap.put(botId, 1);
         noQueriedCountMap.put(botId, 0);
@@ -690,6 +708,12 @@ public class AutoBuyHerbs {
             senderIds = {3889001741L}
     )
     public void 成功购买药材(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) throws InterruptedException {
+        synchronized (purchaseLock(bot.getBotId())) {
+            handlePurchaseResult(bot, group, message);
+        }
+    }
+
+    private void handlePurchaseResult(Bot bot, Group group, String message) {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
         boolean isGroup = isAutoBuyGroup(group, botConfig);
@@ -700,37 +724,25 @@ public class AutoBuyHerbs {
         }
         if (isGroup && botConfig.getAutoBuyHerbsMode()!=0 && (message.contains("道友成功购买") || message.contains("卖家正在进行其他操作")  ||
                 message.contains("坊市现在太繁忙了")||message.contains("验证码不正确") || message.contains("没钱还来买东西")  || message.contains("未查询") || message.contains("道友的上一条指令还没执行完"))) {
+            ProductPrice currentProduct = inFlightPurchaseMap.remove(botId);
+            if (currentProduct == null) {
+                return;
+            }
             botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
             CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(
                     botId, k -> new CopyOnWriteArrayList<>());
-            ProductPrice currentProduct = autoBuyList.isEmpty() ? null : autoBuyList.get(0);
             boolean repeatPurchase = isRepeatPurchase(botId, currentProduct);
             boolean itemNotFound = message.contains("未查询到该物品");
 
             if (message.contains("道友成功购买")) {
-                if(!autoBuyList.isEmpty()){
-                    ProductPrice price = herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).get(autoBuyList.get(0).getName());
-                    if(price!=null){
-                        price.setHerbCount(price.getHerbCount() + 1);
-                        herbPackMapMap.get(botId).put(price.getName(), price);
-                    }
-                }else{
-                    String[] parts = message.split("成功购买|，消耗");
-                    if(parts.length >= 2){
-                        String herbName = parts[1].trim();
-                        ProductPrice price = herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>()).get(herbName);
-                        if(price!=null){
-                            price.setHerbCount(price.getHerbCount() + 1);
-                            herbPackMapMap.get(botId).put(price.getName(), price);
-                        }
-
-                    }
+                ProductPrice price = herbPackMapMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>())
+                        .get(currentProduct.getName());
+                if (price != null) {
+                    price.setHerbCount(price.getHerbCount() + 1);
                 }
-
             }
 
-            if (repeatPurchase && currentProduct != null
-                    && !isRepeatPurchaseActive(botId, currentProduct.getName())) {
+            if (repeatPurchase && !isRepeatPurchaseActive(botId, currentProduct.getName())) {
                 removeInactiveRepeatCandidates(botId, autoBuyList);
                 repeatPurchase = false;
             }
@@ -766,8 +778,8 @@ public class AutoBuyHerbs {
                 if (repeatPurchase && itemNotFound) {
                     removeRepeatPurchaseCandidates(autoBuyList, currentProduct);
                 } else if (!repeatPurchase) {
-                    // 普通采购保持原逻辑：收到一次购买结果后移除当前队首。
-                    autoBuyList.remove(0);
+                    // 坊市新消息可能已重排队列，结果只能移除实际发送的条目。
+                    autoBuyList.remove(currentProduct);
                 }
             }
             if(autoBuyList.isEmpty()){
@@ -808,6 +820,7 @@ public class AutoBuyHerbs {
 
     private void stopAutoBuyHerbs(Bot bot, BotConfig botConfig) {
         long botId = bot.getBotId();
+        inFlightPurchaseMap.remove(botId);
         botConfig.setStartAuto(false);
         botConfig.setAutoBuyHerbsMode(0);
         autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
@@ -816,10 +829,7 @@ public class AutoBuyHerbs {
         if (scheduledFlag != null) {
             scheduledFlag.set(false);
         }
-        AtomicBoolean purchaseScheduledFlag = purchaseDelayScheduledFlagMap.get(botId);
-        if (purchaseScheduledFlag != null) {
-            purchaseScheduledFlag.set(false);
-        }
+        purchaseDelayTaskMap.remove(botId);
     }
 
 
@@ -841,6 +851,12 @@ public class AutoBuyHerbs {
     }
 
     private void processMarketMessage(Bot bot, Group group, String message) {
+        synchronized (purchaseLock(bot.getBotId())) {
+            processMarketMessageLocked(bot, group, message);
+        }
+    }
+
+    private void processMarketMessageLocked(Bot bot, Group group, String message) {
         long botId = bot.getBotId();
         BotConfig botConfig = bot.getBotConfig();
         if (botConfig.getAutoBuyHerbsMode() == 0 || !isAutoBuyGroup(group, botConfig)) {
@@ -993,14 +1009,32 @@ public class AutoBuyHerbs {
     }
 
     private void enqueuePurchaseCandidate(long botId, ProductPrice candidate) {
-        CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(
-                botId, k -> new CopyOnWriteArrayList<>());
-        if (isRepeatPurchase(botId, candidate)
-                && autoBuyList.stream().anyMatch(item -> candidate.getName().equals(item.getName()))) {
-            // 重复采购必须保留当前购买码，避免同一药材的其他坊市条目覆盖队首购买码。
-            return;
+        synchronized (purchaseLock(botId)) {
+            CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(
+                    botId, k -> new CopyOnWriteArrayList<>());
+            if (autoBuyList.stream().anyMatch(item -> Objects.equals(candidate.getCode(), item.getCode()))) {
+                return;
+            }
+            if (isRepeatPurchase(botId, candidate)
+                    && autoBuyList.stream().anyMatch(item -> candidate.getName().equals(item.getName()))) {
+                // 重复采购必须保留当前购买码，避免同一药材的其他坊市条目覆盖队首购买码。
+                return;
+            }
+            if (!isRepeatPurchase(botId, candidate) && wasNormalCodeRecentlySent(botId, candidate.getCode())) {
+                return;
+            }
+            autoBuyList.add(candidate);
         }
-        autoBuyList.add(candidate);
+    }
+
+    private boolean wasNormalCodeRecentlySent(long botId, String code) {
+        Map<String, Long> recentCodes = recentNormalBuyCodeMap.get(botId);
+        if (recentCodes == null) {
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        recentCodes.entrySet().removeIf(entry -> now - entry.getValue() >= NORMAL_BUY_CODE_COOLDOWN_MS);
+        return recentCodes.containsKey(code);
     }
 
     private boolean isRepeatPurchase(long botId, ProductPrice productPrice) {
@@ -1077,26 +1111,40 @@ public class AutoBuyHerbs {
     }
 
     private void buyHerbs(Bot bot) {
-        BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
-        CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>());
-        for (ProductPrice productPrice : autoBuyList) {
-
+        synchronized (purchaseLock(botId)) {
+            BotConfig botConfig = bot.getBotConfig();
+            if (botConfig.getAutoBuyHerbsMode() == 0 || inFlightPurchaseMap.containsKey(botId)
+                    || purchaseDelayTaskMap.containsKey(botId)) {
+                return;
+            }
+            CopyOnWriteArrayList<ProductPrice> autoBuyList = autoBuyListMap.computeIfAbsent(
+                    botId, k -> new CopyOnWriteArrayList<>());
+            if (autoBuyList.isEmpty()) {
+                return;
+            }
+            ProductPrice productPrice = autoBuyList.get(0);
+            inFlightPurchaseMap.put(botId, productPrice);
             try {
-                if (botConfig.getAutoBuyHerbsMode()!=0) {
-                    Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("坊市购买 " + productPrice.getCode()));
+                boolean sent = Utils.sendGroupMessage(bot, botConfig.getGroupId(),
+                        new MessageChain().at("3889001741").text("坊市购买 " + productPrice.getCode()));
+                if (!sent) {
+                    inFlightPurchaseMap.remove(botId);
+                    return;
                 }
-                break;
-            } catch (Exception var6) {
-                logger.error("发送购买消息失败");
-                Thread.currentThread().interrupt();
+                botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
+                if (!isRepeatPurchase(botId, productPrice)) {
+                    recentNormalBuyCodeMap.computeIfAbsent(botId, k -> new ConcurrentHashMap<>())
+                            .put(productPrice.getCode(), System.currentTimeMillis());
+                }
+            } catch (Exception e) {
+                inFlightPurchaseMap.remove(botId);
+                logger.error("发送购买消息失败 botId={} code={}", botId, productPrice.getCode(), e);
             }
         }
-
     }
 
     private void buyNextHerbAfterDelay(Bot bot) {
-        BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
         Config config = danCalculator.getConfig(botId);
         long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
@@ -1106,8 +1154,8 @@ public class AutoBuyHerbs {
             return;
         }
 
-        AtomicBoolean scheduledFlag = purchaseDelayScheduledFlagMap.computeIfAbsent(botId, k -> new AtomicBoolean(false));
-        if (!scheduledFlag.compareAndSet(false, true)) {
+        Object delayTask = new Object();
+        if (purchaseDelayTaskMap.putIfAbsent(botId, delayTask) != null) {
             return;
         }
 
@@ -1118,14 +1166,16 @@ public class AutoBuyHerbs {
                 if (delayMs > 0) {
                     Thread.sleep(delayMs);
                 }
-                if (botConfig.getAutoBuyHerbsMode() != 0
-                        && !autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).isEmpty()) {
-                    this.buyHerbs(bot);
+                synchronized (purchaseLock(botId)) {
+                    // 重置/停止后旧延迟任务失效，不能抢发新一轮的队首。
+                    if (purchaseDelayTaskMap.remove(botId, delayTask)) {
+                        this.buyHerbs(bot);
+                    }
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
-                scheduledFlag.set(false);
+                purchaseDelayTaskMap.remove(botId, delayTask);
             }
         });
     }
@@ -1133,22 +1183,24 @@ public class AutoBuyHerbs {
     @Scheduled(fixedDelay = 5000L, initialDelay = 30000L)
     public void 定时查询坊市() {
         BotFactory.getBots().values().forEach((bot) -> {
-            BotConfig botConfig = bot.getBotConfig();
-            long botId = bot.getBotId();
-            if (botConfig.getAutoBuyHerbsMode() != 0 && !botConfig.isStop()) {
-                Config config = danCalculator.getConfig(botId);
-                long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
-                long thresholdMs = Math.max(10000L, maxDelayMs + 2000L);
+            synchronized (purchaseLock(bot.getBotId())) {
+                BotConfig botConfig = bot.getBotConfig();
+                long botId = bot.getBotId();
+                if (botConfig.getAutoBuyHerbsMode() != 0 && !botConfig.isStop()) {
+                    Config config = danCalculator.getConfig(botId);
+                    long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
+                    long thresholdMs = Math.max(10000L, maxDelayMs + 2000L);
 
-                if (System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > thresholdMs) {
-                    autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
-                    botConfig.setStop(false);
-                    botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
-                    this.refreshHerbsIndexByInterval(bot, config);
+                    if (System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > thresholdMs) {
+                        autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
+                        inFlightPurchaseMap.remove(botId);
+                        purchaseDelayTaskMap.remove(botId);
+                        botConfig.setStop(false);
+                        botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
+                        this.refreshHerbsIndexByInterval(bot, config);
+                    }
                 }
             }
-
-
         });
     }
 

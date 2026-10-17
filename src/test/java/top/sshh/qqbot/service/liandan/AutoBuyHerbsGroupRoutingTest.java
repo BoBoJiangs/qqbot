@@ -144,6 +144,7 @@ class AutoBuyHerbsGroupRoutingTest {
                 product("乌灵参", "code-1"), product("血灵芝", "code-2")));
         Map<Long, CopyOnWriteArrayList<ProductPrice>> queues = field("autoBuyListMap");
         queues.put(BOT_ID, queue);
+        ReflectionTestUtils.invokeMethod(service, "buyHerbs", bot);
         String success = "道友成功购买乌灵参，消耗60万灵石";
 
         service.成功购买药材(bot, taskGroup, null, new MessageChain(), success, 1);
@@ -154,7 +155,7 @@ class AutoBuyHerbsGroupRoutingTest {
         service.成功购买药材(bot, executionGroup, null, new MessageChain(), success, 3);
 
         assertEquals(1, queue.size());
-        assertSentTexts(executionGroup, "坊市购买 code-2");
+        assertSentTexts(executionGroup, "坊市购买 code-1", "坊市购买 code-2");
         verify(taskGroup, never()).sendMessage(any(MessageChain.class));
     }
 
