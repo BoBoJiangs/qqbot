@@ -1,10 +1,34 @@
 package top.sshh.qqbot.service;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class TestServiceGiftAmountTest {
+
+    @ParameterizedTest
+    @CsvSource({"5400万,54000000", "1.5亿,150000000", "0.05万,500", "54000000枚,54000000", "0万,0"})
+    void extractsRemainingReceiveLimitWithUnits(String amount, long expected) {
+        assertEquals(expected, TestService.extractGiftReceiveLimit("今日您还可收 " + amount + "灵石 赠送上限"));
+    }
+
+    @Test
+    void onlyUsesTodayRemainingLimitAndIgnoresExclusiveAllowancesAndMarkup() {
+        String text = "您的接收码为：c882710a-3fef-4c84-acd4-3362d6eb0069 点击赠送 （有效期10分钟）\n"
+                + "今日您还可收 [**5,400万灵石**](mqqapi://test) 赠送上限\n"
+                + "（师徒/羁绊另有 1000万、好友另有 300万 的每日专属额度）";
+        assertEquals(54000000L, TestService.extractGiftReceiveLimit(text));
+    }
+
+    @Test
+    void missingInvalidOrOverflowingLimitIsNotTreatedAsAnAmount() {
+        assertEquals(-1L, TestService.extractGiftReceiveLimit("师徒/羁绊另有1000万、好友另有300万"));
+        assertEquals(-1L, TestService.extractGiftReceiveLimit("今日您还可收 -100万灵石"));
+        assertEquals(-1L, TestService.extractGiftReceiveLimit("今日您还可收 999999999999999999999亿灵石"));
+        assertEquals(-1L, TestService.extractGiftReceiveLimit(null));
+    }
 
     @Test
     void extractsGiveAndFeeFromPlainConfirmationText() {
@@ -24,7 +48,7 @@ class TestServiceGiftAmountTest {
 
     @Test
     void returnsZeroWhenConfirmationNumbersMissing() {
-        // 文案变化导致提取不到时返回0，handler 会回退用 LingShiNum*10000
+        // 文案缺少金额时不累计，避免将无法确认归属的回执记入统计。
         assertEquals(0L, TestService.extractGiftAmount(
                 "json[{\"type\":\"inline_keyboard\",\"data\":{\"bot_appid\":\"102074059\",\"rows\":[]}}]"));
         assertEquals(0L, TestService.extractGiftAmount(""));

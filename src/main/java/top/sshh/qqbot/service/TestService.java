@@ -31,6 +31,7 @@ import java.net.HttpURLConnection;
 import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -76,6 +77,16 @@ public class TestService {
     public Map<Long, Buttons> botButtonMap = new ConcurrentHashMap();
     private final Map<Long, List<String>> xslPriorityItemsMap = new ConcurrentHashMap();
     private boolean isStartAutoTalent = false;
+    // 默认选择按群和收款人保存；内存请求只跟踪当前已发送、等待回执的一笔赠送。
+    @Autowired
+    private LingShiGiftPreferenceStore lingShiGiftPreferenceStore;
+    private final Map<Long, LingShiGiftRequest> lingShiGiftRequests = new ConcurrentHashMap<>();
+    private final Map<Long, Set<String>> handledLingShiGiftMessages = new ConcurrentHashMap<>();
+    private static final long LING_SHI_GIFT_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(10);
+    private static final Pattern GIFT_CODE_PATTERN = Pattern.compile(
+            "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
+    private static final Pattern GIFT_MENTION_PATTERN = Pattern.compile(
+            "(?:@!?|at_tinyid=|\\[CQ:at,qq=)([0-9]+)(?![0-9])");
     @Autowired
     private GroupManager groupManager;
     @Autowired
@@ -1605,7 +1616,9 @@ public class TestService {
                 sb.append("设置/添加提醒群号××\n");
                 sb.append("设置赠送灵石群号××\n");
                 sb.append("更新赠送灵石××\n");
-                sb.append("我要灵石××\n");
+                sb.append("@机器人 我要灵石（按今日剩余可收额度）\n");
+                sb.append("@机器人 我要灵石××（万，按指定数量）\n");
+                sb.append("@机器人 我要灵石0（取消默认赠送）\n");
                 break;
             case "系统帮助":
                 sb.append("〓系统菜单〓\n");
@@ -1862,32 +1875,26 @@ public class TestService {
     public void 艾特小号执行(Bot bot, Group group, Member member, MessageChain messageChain, String message,
             Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        if (botConfig.getLingShiQQ() != null && group.getGroupId() == botConfig.getLingShiQQ()) {
-            messageChain = this.getMessageText(messageChain);
-            if (messageChain.size() == 0) {
+        boolean isController = member != null && this.checkControlQQ(bot, member);
+        boolean isGiftGroup = botConfig.getLingShiQQ() != null
+                && group.getGroupId() == botConfig.getLingShiQQ();
+        if (isGiftGroup || isController) {
+            String command = Utils.getMessageText(messageChain).trim();
+            if (command.startsWith("我要灵石")) {
+                if (isGiftMessageForUser(messageChain, message, bot.getBotId(), false)) {
+                    this.setLingShiNum(bot, group, member, command);
+                }
                 return;
             }
-            message = ((TextMessage) messageChain.get(0)).getText().trim();
-            if (group.getGroupId() == botConfig.getLingShiQQ() || this.checkControlQQ(bot, member)) {
-                this.setLingShiNum(bot, group, member, messageChain, message);
+        }
+        if (isController) {
+            // 不删除原消息链中的 @，其他消息处理器仍需据此判断消息归属。
+            MessageChain commandChain = this.getMessageText(messageChain.copy());
+            if (!commandChain.isEmpty()) {
+                String command = ((TextMessage) commandChain.get(0)).getText().trim();
+                this.clickButton(bot, group, member, commandChain, command);
             }
         }
-
-        if (this.checkControlQQ(bot, member)) {
-            messageChain = this.getMessageText(messageChain);
-            if (messageChain.size() == 0) {
-                return;
-            }
-            message = ((TextMessage) messageChain.get(0)).getText().trim();
-            if (this.checkControlQQ(bot, member)) {
-                this.setLingShiNum(bot, group, member, messageChain, message);
-            }
-
-            if (this.checkControlQQ(bot, member)) {
-                this.clickButton(bot, group, member, messageChain, message);
-            }
-        }
-
     }
 
     private MessageChain getMessageText(MessageChain messageChain) {
@@ -1904,19 +1911,121 @@ public class TestService {
         return messageChain;
     }
 
-    private void setLingShiNum(Bot bot, Group group, Member member, MessageChain messageChain, String message) {
-        if (message.contains("我要灵石")) {
-            BotConfig botConfig = bot.getBotConfig();
-            String num = message.substring("我要灵石".length()).trim();
-            if (StringUtils.isNumeric(num)) {
-                botConfig.setLingShiNum(Integer.parseInt(num));
+    private void setLingShiNum(Bot bot, Group group, Member member, String message) {
+        if (member == null) {
+            return;
+        }
+        BotConfig botConfig = bot.getBotConfig();
+        String number = message.substring("我要灵石".length()).trim();
+        boolean autoLimit = number.isEmpty();
+        int amount;
+        try {
+            if (!autoLimit && !number.matches("[0-9]+")) {
+                throw new NumberFormatException();
+            }
+            amount = autoLimit ? 0 : Integer.parseInt(number);
+        } catch (NumberFormatException e) {
+            group.sendMessage(new MessageChain().text("请输入正确的数量（单位：万，不填按今日可收额度，0取消默认赠送）"));
+            return;
+        }
+        if (botConfig.getLingShiQQ() == null || botConfig.getLingShiQQ() <= 0) {
+            group.sendMessage(new MessageChain().text("请先设置赠送灵石群号"));
+            return;
+        }
+        // 统一按默认设置锁、BotConfig锁的顺序处理，切换账号与接收码处理不会交叉。
+        synchronized (lingShiGiftPreferenceStore) {
+            synchronized (botConfig) {
+                try {
+                    if (!autoLimit && amount == 0) {
+                        lingShiGiftPreferenceStore.clear(botConfig.getLingShiQQ(), member.getUserId());
+                        botConfig.setLingShiNum(0);
+                        saveBotConfig(bot);
+                        group.sendMessage(new MessageChain().text("已取消你在该赠送群的默认赠送，已发出的赠送仍会正常统计。"));
+                        return;
+                    }
+                    if (autoLimit) {
+                        lingShiGiftPreferenceStore.selectAutoLimit(botConfig.getLingShiQQ(), member.getUserId(), bot.getBotId());
+                    } else {
+                        lingShiGiftPreferenceStore.select(botConfig.getLingShiQQ(), member.getUserId(), bot.getBotId(), amount);
+                    }
+                } catch (IOException e) {
+                    log.warn("保存默认灵石赠送设置失败: botId={}", bot.getBotId(), e);
+                    group.sendMessage(new MessageChain().text("默认赠送设置保存失败，请稍后重试。"));
+                    return;
+                }
+                botConfig.setLingShiNum(amount);
                 saveBotConfig(bot);
-                group.sendMessage((new MessageChain()).text(num + "万灵石已经准备好了，请发送你的接收码吧!"));
-            } else {
-                group.sendMessage((new MessageChain()).text("请输入正确的数量"));
+                String targetGroup = isSameGiftGroup(group, botConfig) ? "本群" : "赠送群" + botConfig.getLingShiQQ();
+                String amountText = autoLimit ? "按消息中的今日剩余可收额度赠送" : "赠送" + amount + "万灵石";
+                group.sendMessage(new MessageChain().at(String.valueOf(member.getUserId()))
+                        .text("已记住：以后你在" + targetGroup + "获取接收码，默认由本号" + amountText
+                                + "。更换账号或金额时重新@设置，发送我要灵石0可取消。"));
             }
         }
+    }
 
+    private boolean isSameGiftGroup(Group group, BotConfig botConfig) {
+        return botConfig.getLingShiQQ() != null && group.getGroupId() == botConfig.getLingShiQQ();
+    }
+
+    // 调用方持有 BotConfig 锁，使同一机器人的请求、发送与回执处理串行。
+    private LingShiGiftRequest activeGiftRequest(Bot bot) {
+        LingShiGiftRequest request = lingShiGiftRequests.get(bot.getBotId());
+        if (request != null && request.expiresAt <= System.currentTimeMillis()) {
+            lingShiGiftRequests.remove(bot.getBotId());
+            bot.getBotConfig().setLingShiNum(0);
+            saveBotConfig(bot);
+            return null;
+        }
+        return request;
+    }
+
+    private boolean isGiftMessageForUser(MessageChain chain, String message, long userId, boolean allowReply) {
+        if (chain != null) {
+            List<AtMessage> mentions = chain.getMessageByType(AtMessage.class);
+            if (!mentions.isEmpty()) {
+                return mentions.stream().anyMatch(at -> String.valueOf(userId).equals(at.getQq()));
+            }
+        }
+        // 只解析顶层正文中的 @；引用消息和按钮 JSON 里的数字不代表当前消息的接收人。
+        String text = Utils.getMessageText(chain);
+        if (StringUtils.isBlank(text)) {
+            text = StringUtils.defaultString(message);
+        }
+        Matcher matcher = GIFT_MENTION_PATTERN.matcher(text);
+        boolean hasMention = false;
+        while (matcher.find()) {
+            hasMention = true;
+            if (String.valueOf(userId).equals(matcher.group(1))) {
+                return true;
+            }
+        }
+        if (hasMention) {
+            return false;
+        }
+        if (allowReply && chain != null) {
+            for (ReplyMessage reply : chain.getMessageByType(ReplyMessage.class)) {
+                if (String.valueOf(userId).equals(reply.getQq())) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static final class LingShiGiftRequest {
+        private final long groupId;
+        private final long requesterId;
+        private final long amount;
+        private long expiresAt = System.currentTimeMillis() + LING_SHI_GIFT_TIMEOUT_MS;
+        private String code;
+        private Integer sentMessageId;
+
+        private LingShiGiftRequest(long groupId, long requesterId, long amount) {
+            this.groupId = groupId;
+            this.requesterId = requesterId;
+            this.amount = amount;
+        }
     }
 
     private void clickButton(Bot bot, Group group, Member member, MessageChain messageChain, String message) {
@@ -2062,33 +2171,139 @@ public class TestService {
     public void 识别大号接收码(Bot bot, Group group, Member member, MessageChain messageChain, String message,
             Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
-        if (botConfig.getLingShiNum() > 0 && botConfig.getLingShiQQ() != null
-                && botConfig.getLingShiQQ() == group.getGroupId()) {
-            if (message.contains("您的接收码为")) {
-                String code;
-                Matcher uuidMatcher = Pattern
-                        .compile("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
-                        .matcher(message);
-                if (uuidMatcher.find()) {
-                    code = uuidMatcher.group();
-                } else {
-                    code = message.split("您的接收码为：| ")[1];
+        if (!isSameGiftGroup(group, botConfig)) {
+            return;
+        }
+        String chainText = Utils.getMessageText(messageChain);
+        String eventText = StringUtils.isBlank(chainText) ? StringUtils.defaultString(message) : chainText;
+        synchronized (lingShiGiftPreferenceStore) {
+            synchronized (botConfig) {
+                LingShiGiftRequest request = activeGiftRequest(bot);
+                if (eventText.contains("您的接收码为")) {
+                    if (request != null) {
+                        return;
+                    }
+                    try {
+                        Map<Long, Integer> recipients = lingShiGiftPreferenceStore.recipientsFor(
+                                group.getGroupId(), bot.getBotId());
+                        Long recipientId = null;
+                        for (Long candidate : recipients.keySet()) {
+                            if (isGiftMessageForUser(messageChain, message, candidate, true)) {
+                                if (recipientId != null) {
+                                    return;
+                                }
+                                recipientId = candidate;
+                            }
+                        }
+                        if (recipientId == null) {
+                            return;
+                        }
+                        Matcher matcher = GIFT_CODE_PATTERN.matcher(
+                                eventText.substring(eventText.indexOf("您的接收码为")));
+                        if (!matcher.find()) {
+                            return;
+                        }
+                        String code = matcher.group();
+                        int configuredAmount = recipients.get(recipientId);
+                        long giftAmount = configuredAmount == 0
+                                ? extractGiftReceiveLimit(eventText) : configuredAmount * 10000L;
+                        if (giftAmount <= 0) {
+                            String reason = giftAmount == 0 ? "今日剩余可收额度为0，未发起赠送。"
+                                    : "未识别到今日剩余可收额度，请重新获取接收码或指定赠送数量。";
+                            group.sendMessage(new MessageChain().at(String.valueOf(recipientId)).text(reason));
+                            return;
+                        }
+                        String codeKey = group.getGroupId() + ":" + (messageId == null
+                                ? recipientId + ":" + code : "message:" + messageId);
+                        if (lingShiGiftPreferenceStore.hasHandledCode(codeKey)) {
+                            return;
+                        }
+                        // 在发送前持久记录接收码事件，账号切换和程序重启后也不会重复发送同一事件。
+                        lingShiGiftPreferenceStore.rememberCode(codeKey);
+                        request = new LingShiGiftRequest(group.getGroupId(), recipientId, giftAmount);
+                        request.code = code;
+                        lingShiGiftRequests.put(bot.getBotId(), request);
+                        try {
+                            int sentId = group.sendMessage(new MessageChain().at("3889001741")
+                                    .text("赠送灵石 " + request.code + " " + request.amount));
+                            request.sentMessageId = sentId == 0 ? null : sentId;
+                        } catch (RuntimeException e) {
+                            lingShiGiftRequests.remove(bot.getBotId());
+                            log.warn("灵石赠送指令发送失败: botId={}, groupId={}", bot.getBotId(), group.getGroupId(), e);
+                            group.sendMessage(new MessageChain().text("灵石赠送指令发送失败，请检查赠送结果。"));
+                        }
+                    } catch (IOException e) {
+                        log.warn("读取或记录默认灵石赠送配置失败: botId={}, groupId={}",
+                                bot.getBotId(), group.getGroupId(), e);
+                    }
+                    return;
                 }
-                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("赠送灵石 ").text(code + " ")
-                        .text(botConfig.getLingShiNum() * 10000 + ""));
-            }
-            if (message.contains("共赠送") && message.contains("手续费")) {
-                long sum = extractGiftAmount(message);
-                if (sum <= 0) {
-                    sum = botConfig.getLingShiNum() * 10000L;
+                if (request == null || request.groupId != group.getGroupId()
+                        || !isGiftResultForRequest(bot, messageChain, message, request)) {
+                    return;
                 }
-                botConfig.setLingShiTotal(botConfig.getLingShiTotal() + sum);
-                group.sendMessage((new MessageChain()).reply(messageId)
-                        .text("已赠送灵石：" + Utils.formatNumberWithUnit(botConfig.getLingShiTotal())));
-                saveBotConfig(bot);
+                Set<String> handledMessages = handledLingShiGiftMessages.computeIfAbsent(
+                        bot.getBotId(), key -> new LinkedHashSet<>());
+                String eventKey = messageId == null ? null : group.getGroupId() + ":" + messageId;
+                if (eventKey != null && handledMessages.contains(eventKey)) {
+                    return;
+                }
+                if (eventText.contains("共赠送") && eventText.contains("手续费")) {
+                    long sum = extractGiftAmount(eventText);
+                    if (sum <= 0 || sum != request.amount) {
+                        return;
+                    }
+                    lingShiGiftRequests.remove(bot.getBotId());
+                    botConfig.setLingShiNum(0);
+                    botConfig.setLingShiTotal(botConfig.getLingShiTotal() + sum);
+                    rememberGiftMessage(handledMessages, eventKey);
+                    saveBotConfig(bot);
+                    group.sendMessage(new MessageChain().reply(messageId)
+                            .text("已赠送灵石：" + Utils.formatNumberWithUnit(botConfig.getLingShiTotal())));
+                }
             }
         }
+    }
 
+    private boolean isGiftResultForRequest(Bot bot, MessageChain chain, String message, LingShiGiftRequest request) {
+        if (chain != null && request.sentMessageId != null) {
+            List<ReplyMessage> replies = chain.getMessageByType(ReplyMessage.class);
+            if (!replies.isEmpty()) {
+                return replies.stream().anyMatch(reply -> String.valueOf(request.sentMessageId).equals(reply.getId()));
+            }
+        }
+        return isGiftMessageForUser(chain, message, bot.getBotId(), true);
+    }
+
+    private void rememberGiftMessage(Set<String> handledMessages, String eventKey) {
+        if (eventKey == null) {
+            return;
+        }
+        handledMessages.add(eventKey);
+        // 保留最近的消息，防止上一笔的重复事件影响下一笔；每个机器人最多保存128条。
+        if (handledMessages.size() > 128) {
+            Iterator<String> iterator = handledMessages.iterator();
+            iterator.next();
+            iterator.remove();
+        }
+    }
+
+    /** 提取“今日还可收”额度；0表示额度耗尽，-1表示无法识别。 */
+    static long extractGiftReceiveLimit(String text) {
+        String normalized = Utils.stripMarkdownLink(StringUtils.defaultString(text))
+                .replace("**", "").replaceAll("[,，\\u200B-\\u200D\\uFEFF]", "");
+        Matcher matcher = Pattern.compile("今日(?:您)?还可收\\s*([0-9]+(?:\\.[0-9]+)?)\\s*([万亿]?)\\s*(?:枚)?灵石")
+                .matcher(normalized);
+        if (!matcher.find()) {
+            return -1L;
+        }
+        long multiplier = "亿".equals(matcher.group(2)) ? 100000000L
+                : "万".equals(matcher.group(2)) ? 10000L : 1L;
+        try {
+            return new BigDecimal(matcher.group(1)).multiply(BigDecimal.valueOf(multiplier)).longValueExact();
+        } catch (NumberFormatException | ArithmeticException e) {
+            return -1L;
+        }
     }
 
     /**
