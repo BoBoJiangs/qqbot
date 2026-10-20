@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.constant.Constant;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
+import top.sshh.qqbot.service.utils.CompletionMessageSender;
 import top.sshh.qqbot.service.utils.HerbBackpackParser;
 import top.sshh.qqbot.service.utils.Utils;
 
@@ -120,8 +121,8 @@ public class AutoSellGoods {
                 dataList.remove(0);
             }
             if (dataList != null && dataList.isEmpty()) {
-                Utils.getRemindGroup(bot, xxGroupId).sendMessage(new MessageChain().text("装备炼金完成"));
                 botConfig.setCommand("");
+                CompletionMessageSender.send(bot, xxGroupId, "装备炼金完成");
             } else {
                 this.alchemyEquip(dataList, group, botConfig);
             }
@@ -143,8 +144,8 @@ public class AutoSellGoods {
                 dataList.remove(0);
             }
             if (dataList != null && dataList.isEmpty()) {
-                Utils.getRemindGroup(bot, xxGroupId).sendMessage(new MessageChain().text("丹药炼金完成"));
                 botConfig.setCommand("");
+                CompletionMessageSender.send(bot, xxGroupId, "丹药炼金完成");
             } else {
                 this.alchemyPill(dataList, group, botConfig);
             }
@@ -390,7 +391,7 @@ public class AutoSellGoods {
     }
 
     private void pillsCountLimit(Bot bot, int quantity, String currentPill) {
-        boolean b = !"渡厄丹,寒铁铸心炉,陨铁炉,雕花紫铜炉".contains(currentPill);
+        boolean b = !Constant.ALCHEMY_PROTECTED_ITEMS.contains(currentPill);
         boolean isMakeDan = !Constant.MAKE_DAN_SET.contains(currentPill);
         if (b && isMakeDan
                 && !this.groupManager.isAlchemyExcluded(bot.getBotId(), currentPill)) {
@@ -474,8 +475,8 @@ public class AutoSellGoods {
     }
 
     private void finishHerbSelling(Group group, BotConfig botConfig) {
-        Utils.getRemindGroup(group.getBot(), xxGroupId).sendMessage(new MessageChain().text("药材上架完成"));
         botConfig.setCommand("");
+        CompletionMessageSender.send(group.getBot(), xxGroupId, "药材上架完成");
     }
 
     private void alchemyEquip(List<ProductPrice> autoBuyList, Group group, BotConfig botConfig) {

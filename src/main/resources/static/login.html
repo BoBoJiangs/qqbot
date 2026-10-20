@@ -316,7 +316,7 @@
                 if (e.key === 'Enter') doLogin();
             });
 
-            tryFillSavedCredentials();
+            tryFillSavedUsername();
             
             // 检查是否已登录
             $.get('/api/auth/me').done(function(res) {
@@ -333,19 +333,17 @@
             window.location.href = getNext();
         }
 
-        function tryFillSavedCredentials() {
+        function tryFillSavedUsername() {
             try {
+                localStorage.removeItem('qqbot_password');
                 var savedUsername = localStorage.getItem('qqbot_username') || '';
-                var savedPassword = localStorage.getItem('qqbot_password') || '';
                 if (savedUsername) $('#username').val(savedUsername);
-                if (savedPassword) $('#password').val(savedPassword);
             } catch (e) {}
         }
 
-        function saveCredentials(username, password) {
+        function saveUsername(username) {
             try {
                 localStorage.setItem('qqbot_username', username || '');
-                localStorage.setItem('qqbot_password', password || '');
             } catch (e) {}
         }
 
@@ -373,7 +371,7 @@
                 data: JSON.stringify({ username: username, password: password }),
                 success: function(res) {
                     if (res && res.success) {
-                        saveCredentials(username, password);
+                        saveUsername(username);
                         showToast('登录成功', 'success');
                         setTimeout(() => redirectNext(), 500);
                         return;

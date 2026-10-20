@@ -517,6 +517,14 @@ public class AutoAlchemyTask {
         long botId = bot.getBotId();
 
         if (isAtSelf(group, bot) && botConfig.isStartAuto()) {
+            if (message.contains("今天已经很努力了")) {
+                log.info("检测到炼丹频率限制，停止自动炼丹 botId={}", botId);
+                botConfig.setStartAuto(false);
+                resetPram(botId);
+                Utils.sendGroupMessage(bot, botConfig.getGroupId(), new MessageChain()
+                        .text("检测到“今天已经很努力了”，已停止自动炼丹。"));
+                return;
+            }
             if (message.contains("请检查炼丹炉是否在背包中") || message.contains("验证码不正确") || message.contains("成功炼成丹药") || message.contains("药材是否在背包中")) {
                 CopyOnWriteArrayList<String> alchemyList = getAlchemyList(botId);
                 if (message.contains("验证码不正确") && !alchemyList.isEmpty()) {

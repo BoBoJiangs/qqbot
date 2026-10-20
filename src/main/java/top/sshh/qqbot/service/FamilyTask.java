@@ -24,6 +24,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.QQBotConfig;
 import top.sshh.qqbot.data.RemindTime;
+import top.sshh.qqbot.service.utils.CompletionMessageSender;
 import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PostConstruct;
@@ -499,11 +500,7 @@ public class FamilyTask {
                 scheduler.schedule(() -> Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text(" 宗门闭关")), delaySeconds, TimeUnit.SECONDS);
             }
             if ((botConfig.getChallengeMode() == 1 || botConfig.getChallengeMode() == 2) && msg.contains("登上第九层")) {
-                if(xxGroupId>0){
-                    bot.sendGroupMessage(xxGroupId, (new MessageChain()).text("已完成本周妖塔挑战"));
-                }
-
-
+                CompletionMessageSender.send(bot, xxGroupId, "已完成本周妖塔挑战");
             }
         }
 

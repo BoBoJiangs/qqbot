@@ -16,6 +16,8 @@
 # Per-bot local runtime configs
 /config/bot-*.json
 /config/ling-shi-gift-defaults.json
+/config/ling-shi-gifts.json
+/config/ling-shi-gifts.json.v1-*.bak
 .zcode/
 .zcode/**
 

@@ -60,4 +60,14 @@ class TestServiceGiftAmountTest {
         String text = "弘瑑一共赠送80000000枚灵石给一心道友！收取手续费20000000枚";
         assertEquals(100000000L, TestService.extractGiftAmount(text));
     }
+
+    @Test
+    void parsesUserExampleAndMarkdownWithoutCountingOtherNumbers() {
+        assertEquals(87000000L, TestService.extractGiftAmount(
+                "尼檀共赠送69600000枚灵石给井雲道友！收取手续费17400000枚"));
+        assertEquals(87000000L, TestService.extractGiftAmount(
+                "尼檀共赠送[**69,600,000**](mqqapi://test)枚灵石给井雲道友！收取手续费 **17,400,000**枚"));
+        assertEquals(0L, TestService.extractGiftAmount("共赠送未知枚灵石给道友！收取手续费100枚"));
+        assertEquals(0L, TestService.extractGiftAmount("共赠送9223372036854775807枚灵石，手续费1枚"));
+    }
 }

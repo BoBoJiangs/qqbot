@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import top.sshh.qqbot.constant.Constant;
 import top.sshh.qqbot.data.BountyInfo;
 import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.ProductLowPrice;
@@ -506,6 +507,9 @@ public class PriceTask {
             // 如果计算结果有效，发送消息
             if (result.count > 0L) {
                 sendResultMessage(group, messageId, message, result);
+            } else if (result.protectedItemSkipped) {
+                group.sendMessage(new MessageChain().reply(messageId)
+                        .text("已过滤炼丹炉和渡厄丹，本次没有可生成的炼金命令。"));
             }
         } catch (Exception e) {
             logger.error("处理上架价格查询时出错", e);
@@ -516,6 +520,7 @@ public class PriceTask {
     private class PriceCalculationResult {
         long count = 0L;
         long totalFee = 0L;
+        boolean protectedItemSkipped;
         StringBuilder stringBuilder = new StringBuilder();
     }
 
@@ -646,6 +651,10 @@ public class PriceTask {
 
     // 处理炼金物品
     private void processRefiningItem(String name, int quantity, PriceCalculationResult result) {
+        if (Constant.ALCHEMY_PROTECTED_ITEMS.contains(name)) {
+            result.protectedItemSkipped = true;
+            return;
+        }
         int price = ProductLowPrice.getLowPrice(name);
         if (price > 0) {
             long totalPrice = (long) price * quantity;
@@ -773,6 +782,9 @@ public class PriceTask {
         String totalValueStr = formatAmount(result.count, "总价值");
 
         if (originalMessage.contains("炼金")) {
+            if (result.protectedItemSkipped) {
+                result.stringBuilder.append("已过滤炼丹炉和渡厄丹（不计入总价值）\n");
+            }
             result.stringBuilder.append("\n").append(totalValueStr);
         } else {
             String feeStr = formatAmount(result.totalFee, "手续费");

@@ -4,6 +4,7 @@ import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.MessageChain;
+import com.zhuangxv.bot.message.support.ForwardNodeMessage;
 import com.zhuangxv.bot.message.support.TextMessage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,7 +17,10 @@ import org.springframework.test.util.ReflectionTestUtils;
 import top.sshh.qqbot.constant.Constant;
 import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.ProductPrice;
+import top.sshh.qqbot.service.ProductPriceResponse;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -25,8 +29,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -138,6 +144,62 @@ class AutoBuyHerbsGroupRoutingTest {
     }
 
     @Test
+    void completedBackpackAnalysisSendsPlainSummaryForwardDetailsAndPlainCommandsInConfiguredGroup() throws Exception {
+        alchemyConfig.setLimitHerbsCount(3);
+        alchemyConfig.setAddPrice(-20);
+        Path botDir = Files.createDirectories(tempDir.resolve(String.valueOf(BOT_ID)));
+        Files.write(botDir.resolve("炼丹配方.txt"), List.of("炼金丹配方",
+                "主药天问花-1&100 药引搭配草-1&50 辅药辅草-1&50 花费200 炼金收益60 6丹 测试丹"), StandardCharsets.UTF_8);
+        Files.write(botDir.resolve("药材价格.txt"), List.of("100 天问花", "50 搭配草", "50 辅草"), StandardCharsets.UTF_8);
+        ProductPriceResponse prices = mock(ProductPriceResponse.class);
+        ProductPrice marketPrice = new ProductPrice();
+        marketPrice.setPrice(90);
+        when(prices.getFirstByNameOrderByTimeDesc(any(String.class))).thenReturn(marketPrice);
+        ReflectionTestUtils.setField(service, "productPriceResponse", prices);
+        botConfig.setAutoBuyHerbsMode(1);
+
+        start("分析背包药材");
+        receiveBackpack(executionGroup, "天问花 - 数量：10 炼金 | 坊市数据\n药材背包");
+
+        ArgumentCaptor<MessageChain> messages = ArgumentCaptor.forClass(MessageChain.class);
+        verify(executionGroup, times(3)).sendMessage(messages.capture());
+        List<String> texts = messages.getAllValues().stream().map(chain -> {
+            assertEquals(1, chain.getMessageByType(TextMessage.class).size());
+            TextMessage text = chain.getMessageByType(TextMessage.class).get(0);
+            assertEquals(TextMessage.class, text.getClass(), "不能再使用原生 Markdown");
+            return text.getText();
+        }).collect(Collectors.toList());
+        assertEquals("药材背包", texts.get(0));
+        assertTrue(texts.get(1).startsWith("背包药材分析完成\n"));
+        assertTrue(texts.get(1).contains("天问花 10/3"));
+        assertFalse(texts.get(1).contains("原因："));
+        assertTrue(texts.get(2).startsWith("可复制调整命令：\n"));
+        assertTrue(texts.get(2).contains("采购药材天问花 90"));
+        @SuppressWarnings({"rawtypes", "unchecked"})
+        ArgumentCaptor<List<ForwardNodeMessage>> nodes = ArgumentCaptor.forClass((Class) List.class);
+        verify(executionGroup).sendGroupForwardMessage(nodes.capture());
+        assertTrue(nodes.getValue().get(1).getContent().getJSONObject(0).getJSONObject("data")
+                .getString("text").contains("原因："));
+        assertEquals(1, botConfig.getAutoBuyHerbsMode());
+        assertEquals(false, field("smartAdjustModeMap").get(BOT_ID));
+        verify(commandGroup, never()).sendMessage(any(MessageChain.class));
+        verify(commandGroup, never()).sendGroupForwardMessage(anyList());
+        verify(taskGroup, never()).sendMessage(any(MessageChain.class));
+        verify(taskGroup, never()).sendGroupForwardMessage(anyList());
+    }
+
+    @Test
+    void echoedSuggestionMessagesDoNotAutomaticallyApplyPurchaseRules() {
+        String commands = HerbAnalysisMessageFormatter.format("背包药材分析完成\n已解析药材：1种\n\n可复制调整命令：\n"
+                + "采购药材玄冰花 800\n重复采购药材玄冰花 800 30").getCommands().get(0);
+        service.enableScheduled(bot, executionGroup, null, new MessageChain().text(commands), commands, 1);
+
+        assertTrue(AutoBuyHerbs.AUTO_BUY_HERBS.get(BOT_ID).isEmpty());
+        assertTrue(((Map<?, ?>) field("repeatBuyPriceMap").get(BOT_ID)).isEmpty());
+        verify(executionGroup, never()).sendMessage(any(MessageChain.class));
+    }
+
+    @Test
     void purchaseResultsFromTaskGroupCannotAdvanceOrStopQueue() throws Exception {
         botConfig.setAutoBuyHerbsMode(1);
         CopyOnWriteArrayList<ProductPrice> queue = new CopyOnWriteArrayList<>(List.of(
@@ -211,6 +273,8 @@ class AutoBuyHerbsGroupRoutingTest {
     private Group group(long groupId) {
         Group group = mock(Group.class);
         when(group.getGroupId()).thenReturn(groupId);
+        when(group.sendMessage(any(MessageChain.class))).thenReturn(-1);
+        when(group.sendGroupForwardMessage(anyList())).thenReturn(-2);
         when(bot.getGroup(groupId)).thenReturn(group);
         return group;
     }

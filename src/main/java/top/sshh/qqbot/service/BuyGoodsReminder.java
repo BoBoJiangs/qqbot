@@ -11,7 +11,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.UserRemindConfig;
 import top.sshh.qqbot.service.GroupManager;
@@ -19,7 +18,6 @@ import top.sshh.qqbot.service.GroupManager;
 import java.time.LocalTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,8 +27,6 @@ import java.util.stream.Collectors;
 
 @Component
 public class BuyGoodsReminder {
-    private static final Pattern YEMA = Pattern.compile("(查看坊市|坊市查看)\\s*([^\\s@]+)");
-    private static final Pattern PAGE_KEY = Pattern.compile("(技能|装备|丹药|药材|道具)\\s*\\d+");
     private static final Pattern TIME_RANGE = Pattern.compile("(\\d{1,2}):(\\d{1,2})-(\\d{1,2}):(\\d{1,2})");
     /** 收藏商品的价格行带有 ⭐ 或 ⭐️ 前缀。 */
     private static final Pattern MARKET_PRICE_LINE = Pattern.compile("^\\s*(?:⭐\\uFE0F?\\s*)?价格");
@@ -38,14 +34,12 @@ public class BuyGoodsReminder {
     /** 23:00-08:00 夜间时段同一物品提醒间隔放宽到1小时 */
     private static final long NIGHT_REMIND_INTERVAL_MS = 60 * 60 * 1000L;
     private static final int MAX_REMIND_ITEM_COUNT = 20;
-    private static final long PAGE_REQUEST_TTL_MS = 15 * 1000L;
-    private static final int MAX_PENDING_PAGE_COUNT = 20;
     private static final String[] REMIND_TEMPLATES = new String[]{
-            "您订制的【%s】已送达，快去坊市查看吧！",
-            "道友心心念念的【%s】现世了，速去坊市！",
-            "叮！您订制的【%s】上架啦，手慢无！",
-            "您的专属机缘【%s】已挂上坊市，快去抢购！",
-            "恭喜道友！【%s】已到货，莫要错过！"
+            "您订制的%s已送达，快去坊市查看吧！",
+            "道友心心念念的%s现世了，速去坊市！",
+            "叮！您订制的%s上架啦，手慢无！",
+            "您的专属机缘%s已挂上坊市，快去抢购！",
+            "恭喜道友！%s已到货，莫要错过！"
     };
     private static final String HELP_TEXT =
             "【专属提醒帮助】\n" +
@@ -67,17 +61,13 @@ public class BuyGoodsReminder {
                     "\n" +
                     "提醒效果示例：\n" +
                     "@你\n" +
-                    "您订制的【坐忘论】已送达，快去坊市查看吧！\n" +
-                    "物品：坐忘论\n" +
-                    "价格：8亿\n" +
-                    "页数：技能2\n" +
+                    "恭喜道友！『五指拳心剑』、『坐忘论』已到货，莫要错过！\n" +
+                    "物品：五指拳心剑（33.70亿）\n" +
+                    "物品：坐忘论（8亿）\n" +
                     "时间：10点11分";
     private static final Logger log = LoggerFactory.getLogger(BuyGoodsReminder.class);
 
     private final ExecutorService customPool = Executors.newCachedThreadPool();
-    /** 待回复的坊市查询，key 为 群号:发送者QQ，按发送顺序保存页码。 */
-    private final ConcurrentHashMap<String, ConcurrentLinkedDeque<PageRequest>> pendingPageMap =
-            new ConcurrentHashMap<>();
     /** 提醒去重，key 为 botId:用户QQ:物品名 */
     private final ConcurrentHashMap<String, Long> lastItemRemindTimeMap = new ConcurrentHashMap<>();
 
@@ -149,7 +139,7 @@ public class BuyGoodsReminder {
             return;
         }
         message = message.trim();
-        // 购买提醒消息末尾会@机器人并带有“发送【查看提醒帮助】”提示，
+        // 购买提醒消息末尾会@机器人并带有“发送『查看提醒帮助』”提示，
         // 这是机器人间的提醒内容，不应被当成用户命令再次触发。
         if (isGeneratedPurchaseReminder(message)) {
             return;
@@ -185,39 +175,17 @@ public class BuyGoodsReminder {
      */
     private boolean isGeneratedPurchaseReminder(String message) {
         return StringUtils.isNotBlank(message)
-                && message.contains("发送【查看提醒帮助】")
+                && (message.contains("发送『查看提醒帮助』") || message.contains("发送【查看提醒帮助】"))
                 && message.contains("也可以订制你的专属提醒");
-    }
-
-    @GroupMessageHandler(ignoreItself = IgnoreItselfEnum.NOT_IGNORE)
-    public void 记录商店页码(Bot bot, Group group, Member member,
-            MessageChain messageChain, String message, Integer messageId) {
-        long groupId = group.getGroupId();
-        if ((message.contains("@小小") || message.contains("@3889001741")) && (message.contains("查看坊市") || message.contains("坊市查看"))) {
-            String pageKey = extractPageKey(message);
-            if (pageKey != null && (pageKey.contains("技能") || pageKey.contains("装备") || pageKey.contains("丹药") || pageKey.contains("药材") || pageKey.contains("道具"))) {
-                long senderQQ = member == null ? bot.getBotId() : member.getUserId();
-                enqueuePageRequest(groupId, String.valueOf(senderQQ), pageKey);
-            }
-        }
     }
 
     @GroupMessageHandler(senderIds = {3889001741L})
     public void 坊市购买提醒(Bot bot, Group group, MessageChain messageChain,
             String message, Integer messageId) {
-        if (!message.contains("不鼓励不保障任何第三方交易行为")) {
+        if (!message.contains("不鼓励不保障任何第三方交易行为") || message.contains("下架")) {
             return;
         }
-
-        // 必须在异步提交前取出页码，避免下一次坊市查询先覆盖上下文。
-        String pageKey = resolvePageKey(bot, group, messageChain, message);
-
-        // 下架消息也要先消费对应请求，否则后续页码会整体错位。
-        if (message.contains("下架")) {
-            return;
-        }
-
-        customPool.submit(() -> processMarketMessage(bot, message, pageKey));
+        customPool.submit(() -> processMarketMessage(bot, message));
     }
 
     private void 设置提醒物品(Bot bot, Group group, Member member, String message, Integer messageId) {
@@ -317,7 +285,7 @@ public class BuyGoodsReminder {
         group.sendMessage(new MessageChain().text(text));
     }
 
-    private void processMarketMessage(Bot bot, String message, String pageKey) {
+    private void processMarketMessage(Bot bot, String message) {
         long now = System.currentTimeMillis();
         LocalTime nowTime = LocalTime.now();
         long remindIntervalMs = isNightTime(nowTime) ? NIGHT_REMIND_INTERVAL_MS : ITEM_REMIND_INTERVAL_MS;
@@ -326,7 +294,7 @@ public class BuyGoodsReminder {
         }
 
         // 同一物品在同一条消息内保留最低价
-        Map<String, MarketHit> hits = new HashMap<>();
+        Map<String, MarketHit> hits = new LinkedHashMap<>();
         for (String line : message.split("\n")) {
             if (!MARKET_PRICE_LINE.matcher(line).find() || !line.contains("mqqapi")) {
                 continue;
@@ -342,17 +310,18 @@ public class BuyGoodsReminder {
             double priceWan = extractPrice(line);
             MarketHit existing = hits.get(itemName);
             if (existing == null || priceWan < existing.priceWan) {
-                hits.put(itemName, new MarketHit(itemName, priceWan, pageKey));
+                hits.put(itemName, new MarketHit(itemName, priceWan));
             }
         }
         if (hits.isEmpty()) {
             return;
         }
 
+        // 同一条坊市消息按回发群汇总物品和用户，每个群只发送一条提醒。
+        Map<Long, RemindBatch> remindGroups = new LinkedHashMap<>();
+        Collection<UserRemindConfig> configs = groupManager.getUserRemindConfigs(bot.getBotId()).values();
         for (MarketHit hit : hits.values()) {
-            // 找出订阅了该物品且当前可提醒的用户，按回发群分组（同群用户合并到一条消息）
-            Map<Long, List<UserRemindConfig>> remindGroups = new LinkedHashMap<>();
-            for (UserRemindConfig config : groupManager.getUserRemindConfigs(bot.getBotId()).values()) {
+            for (UserRemindConfig config : configs) {
                 if (!config.isEnabled() || config.getGroupId() == null || config.getUserQq() == null) {
                     continue;
                 }
@@ -370,33 +339,39 @@ public class BuyGoodsReminder {
                 if (!allowAndUpdate(lastItemRemindTimeMap, dedupKey, now, remindIntervalMs)) {
                     continue;
                 }
-                remindGroups.computeIfAbsent(config.getGroupId(), k -> new ArrayList<>()).add(config);
+                RemindBatch batch = remindGroups.computeIfAbsent(config.getGroupId(), k -> new RemindBatch());
+                batch.userQQs.add(config.getUserQq());
+                batch.hits.putIfAbsent(hit.itemName, hit);
             }
+        }
 
-            for (Map.Entry<Long, List<UserRemindConfig>> entry : remindGroups.entrySet()) {
-                MessageChain chain = new MessageChain();
-                for (UserRemindConfig config : entry.getValue()) {
-                    chain.at(config.getUserQq() + "");
-                }
-                // 底部真实艾特机器人，让其他群友也能看出如何订制专属提醒
-                chain.text("\n" + buildRemindText(hit) + "\n")
-                        .at(bot.getBotId() + "")
-                        .text(" 发送【查看提醒帮助】，也可以订制你的专属提醒");
-                try {
-                    bot.sendGroupMessage(entry.getKey(), chain);
-                } catch (Exception ignored) {
-                }
+        for (Map.Entry<Long, RemindBatch> entry : remindGroups.entrySet()) {
+            RemindBatch batch = entry.getValue();
+            MessageChain chain = new MessageChain();
+            for (Long userQQ : batch.userQQs) {
+                chain.at(userQQ + "");
+            }
+            // 底部真实艾特机器人，让其他群友也能看出如何订制专属提醒
+            chain.text("\n" + buildRemindText(batch.hits.values()) + "\n")
+                    .at(bot.getBotId() + "")
+                    .text(" 发送『查看提醒帮助』，也可以订制你的专属提醒");
+            try {
+                bot.sendGroupMessage(entry.getKey(), chain);
+            } catch (Exception ignored) {
             }
         }
     }
 
-    private String buildRemindText(MarketHit hit) {
-        String head = String.format(REMIND_TEMPLATES[new Random().nextInt(REMIND_TEMPLATES.length)], hit.itemName);
-        return head + "\n"
-                + "物品：" + hit.itemName + "\n"
-                + "价格：" + formatPrice(hit.priceWan) + "\n"
-                + "页数：" + hit.pageKey + "\n"
-                + "时间：" + formatNowTime();
+    private String buildRemindText(Collection<MarketHit> hits) {
+        String names = hits.stream().map(hit -> "『" + hit.itemName + "』")
+                .collect(Collectors.joining("、"));
+        String head = String.format(REMIND_TEMPLATES[new Random().nextInt(REMIND_TEMPLATES.length)], names);
+        StringBuilder text = new StringBuilder(head).append("\n");
+        for (MarketHit hit : hits) {
+            text.append("物品：").append(hit.itemName).append("（")
+                    .append(formatPrice(hit.priceWan)).append("）\n");
+        }
+        return text.append("时间：").append(formatNowTime()).toString();
     }
 
     /**
@@ -494,170 +469,6 @@ public class BuyGoodsReminder {
         return bot.getBotConfig().getMasterQQ() == member.getUserId();
     }
 
-    private String resolvePageKey(Bot bot, Group group, MessageChain messageChain, String message) {
-        long groupId = group.getGroupId();
-        // 优先按消息里@的对象关联页码。
-        List<String> atQQs = extractAtQQs(messageChain);
-        for (String atQQ : atQQs) {
-            PageRequest request = takePageRequest(groupId, atQQ);
-            if (request != null) {
-                return request.pageKey;
-            }
-        }
-
-        // 兼容没有 @ 的旧格式：当前收到消息的机器人可能就是查询发起者。
-        PageRequest request = takePageRequest(groupId, String.valueOf(bot.getBotId()));
-        if (request != null) {
-            return request.pageKey;
-        }
-
-        // 群内只有一个待处理请求时可以安全关联，多个请求则不猜测。
-        request = takeUniquePageRequest(groupId);
-        if (request != null) {
-            return request.pageKey;
-        }
-
-        return extractPageKeyFromMarketMessage(message);
-    }
-
-    private String extractPageKeyFromMarketMessage(String message) {
-        String[] lines = message.split("\n");
-        for (int i = 0; i < Math.min(3, lines.length); i++) {
-            String line = lines[i];
-            if (!line.contains("坊市") && !line.contains("页")) {
-                continue;
-            }
-            Matcher matcher = PAGE_KEY.matcher(line);
-            if (matcher.find()) {
-                return matcher.group();
-            }
-        }
-        Matcher matcher = PAGE_KEY.matcher(message);
-        if (matcher.find()) {
-            return matcher.group();
-        }
-        return "未知";
-    }
-
-    private void enqueuePageRequest(long groupId, String senderQQ, String pageKey) {
-        String key = pageScope(groupId, senderQQ);
-        ConcurrentLinkedDeque<PageRequest> queue = pendingPageMap
-                .computeIfAbsent(key, k -> new ConcurrentLinkedDeque<>());
-
-        long now = System.currentTimeMillis();
-        removeExpiredRequests(queue, now);
-        queue.offerLast(new PageRequest(pageKey, now));
-
-        while (queue.size() > MAX_PENDING_PAGE_COUNT) {
-            queue.pollFirst();
-        }
-    }
-
-    private PageRequest takePageRequest(long groupId, String senderQQ) {
-        return takePageRequest(pageScope(groupId, senderQQ));
-    }
-
-    private PageRequest takePageRequest(String key) {
-        ConcurrentLinkedDeque<PageRequest> queue = pendingPageMap.get(key);
-        if (queue == null) {
-            return null;
-        }
-
-        long now = System.currentTimeMillis();
-        PageRequest request;
-        while ((request = queue.pollFirst()) != null) {
-            if (now - request.createdAt <= PAGE_REQUEST_TTL_MS) {
-                if (queue.isEmpty()) {
-                    pendingPageMap.remove(key, queue);
-                }
-                return request;
-            }
-        }
-
-        pendingPageMap.remove(key, queue);
-        return null;
-    }
-
-    private PageRequest takeUniquePageRequest(long groupId) {
-        String prefix = groupId + ":";
-        String matchedKey = null;
-        int matchedCount = 0;
-        long now = System.currentTimeMillis();
-
-        for (Map.Entry<String, ConcurrentLinkedDeque<PageRequest>> entry : pendingPageMap.entrySet()) {
-            if (!entry.getKey().startsWith(prefix)) {
-                continue;
-            }
-
-            ConcurrentLinkedDeque<PageRequest> queue = entry.getValue();
-            removeExpiredRequests(queue, now);
-            if (!queue.isEmpty()) {
-                matchedKey = entry.getKey();
-                matchedCount++;
-                if (matchedCount > 1) {
-                    return null;
-                }
-            }
-        }
-
-        return matchedKey == null ? null : takePageRequest(matchedKey);
-    }
-
-    private void removeExpiredRequests(ConcurrentLinkedDeque<PageRequest> queue, long now) {
-        while (true) {
-            PageRequest first = queue.peekFirst();
-            if (first == null || now - first.createdAt <= PAGE_REQUEST_TTL_MS) {
-                return;
-            }
-            queue.pollFirst();
-        }
-    }
-
-    private String pageScope(long groupId, String senderQQ) {
-        return groupId + ":" + senderQQ;
-    }
-
-    private List<String> extractAtQQs(MessageChain messageChain) {
-        if (messageChain == null) {
-            return Collections.emptyList();
-        }
-
-        List<AtMessage> atMessages = messageChain.getMessageByType(AtMessage.class);
-        if (atMessages == null || atMessages.isEmpty()) {
-            return Collections.emptyList();
-        }
-
-        List<String> result = new ArrayList<>();
-        for (AtMessage atMessage : atMessages) {
-            String qq = atMessage.getQq();
-            if (StringUtils.isNotBlank(qq) && StringUtils.isNumeric(qq)) {
-                result.add(qq);
-            }
-        }
-        return result;
-    }
-
-    @Scheduled(fixedDelay = 30000L, initialDelay = 30000L)
-    private void cleanExpiredPageRequests() {
-        long now = System.currentTimeMillis();
-        pendingPageMap.entrySet().removeIf(entry -> {
-            ConcurrentLinkedDeque<PageRequest> queue = entry.getValue();
-            removeExpiredRequests(queue, now);
-            return queue.isEmpty();
-        });
-    }
-
-    private String extractPageKey(String message) {
-        Matcher matcher = YEMA.matcher(message);
-        if (matcher.find()) {
-            String pageKey = matcher.group(2).trim();
-            if (!pageKey.isEmpty()) {
-                return pageKey;
-            }
-        }
-        return null;
-    }
-
     private double extractPrice(String message) {
         if (message.contains("万 [")) {
             return Double.parseDouble(message.split("价格:|万")[1]);
@@ -710,22 +521,15 @@ public class BuyGoodsReminder {
     private static class MarketHit {
         private final String itemName;
         private final double priceWan;
-        private final String pageKey;
 
-        private MarketHit(String itemName, double priceWan, String pageKey) {
+        private MarketHit(String itemName, double priceWan) {
             this.itemName = itemName;
             this.priceWan = priceWan;
-            this.pageKey = pageKey;
         }
     }
 
-    private static class PageRequest {
-        private final String pageKey;
-        private final long createdAt;
-
-        private PageRequest(String pageKey, long createdAt) {
-            this.pageKey = pageKey;
-            this.createdAt = createdAt;
-        }
+    private static class RemindBatch {
+        private final Set<Long> userQQs = new LinkedHashSet<>();
+        private final Map<String, MarketHit> hits = new LinkedHashMap<>();
     }
 }

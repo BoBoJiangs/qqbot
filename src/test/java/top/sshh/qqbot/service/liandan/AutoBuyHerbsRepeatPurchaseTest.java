@@ -1,15 +1,20 @@
 package top.sshh.qqbot.service.liandan;
 
+import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
+import com.zhuangxv.bot.message.MessageChain;
+import com.zhuangxv.bot.message.support.TextMessage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 import top.sshh.qqbot.constant.Constant;
 import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.ProductPrice;
+import top.sshh.qqbot.service.ProductPriceResponse;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -255,6 +260,91 @@ class AutoBuyHerbsRepeatPurchaseTest {
                 service, "canPurchaseHerb", BOT_ID, rule, "乌灵参", 90D, config)));
         assertFalse(Boolean.TRUE.equals(ReflectionTestUtils.invokeMethod(
                 service, "canPurchaseHerb", BOT_ID, rule, "乌灵参", 91D, config)));
+    }
+
+    @Test
+    void analysisSuggestsOrdinaryPricesForRepeatedHerbsWithoutChangingAnyConfig() throws Exception {
+        AutoBuyHerbs service = new AutoBuyHerbs();
+        enableRepeat(service, "玄冰花", 900);
+        repeatLimits(service).put("玄冰花", 30);
+        ReflectionTestUtils.invokeMethod(service, "saveRepeatBuyConfig", BOT_ID);
+        Path repeatFile = tempDir.resolve(String.valueOf(BOT_ID)).resolve("重复采购药材.txt");
+        String originalRepeatFile = Files.readString(repeatFile, StandardCharsets.UTF_8);
+        Map<String, ProductPrice> originalNormal = AutoBuyHerbs.AUTO_BUY_HERBS.put(BOT_ID,
+                Map.of("玄冰花", product("玄冰花", 950), "乌灵参", product("乌灵参", 100)));
+        try {
+            Map<Long, Map<String, ProductPrice>> packs = field(service, "herbPackMapMap");
+            ProductPrice repeated = product("玄冰花", 0);
+            repeated.setHerbCount(76);
+            ProductPrice ordinary = product("乌灵参", 0);
+            ordinary.setHerbCount(31);
+            packs.put(BOT_ID, Map.of("玄冰花", repeated, "乌灵参", ordinary));
+            Config config = new Config();
+            config.setLimitHerbsCount(30);
+            BotConfig botConfig = new BotConfig();
+            botConfig.setGroupId(771L);
+            Bot bot = org.mockito.Mockito.mock(Bot.class);
+            Group group = org.mockito.Mockito.mock(Group.class);
+            org.mockito.Mockito.when(bot.getBotId()).thenReturn(BOT_ID);
+            org.mockito.Mockito.when(bot.getBotConfig()).thenReturn(botConfig);
+            org.mockito.Mockito.when(bot.getGroup(771L)).thenReturn(group);
+            org.mockito.Mockito.when(group.sendMessage(org.mockito.ArgumentMatchers.any(MessageChain.class))).thenReturn(-1);
+            org.mockito.Mockito.when(group.sendGroupForwardMessage(org.mockito.ArgumentMatchers.anyList())).thenReturn(-2);
+            service.danCalculator = org.mockito.Mockito.mock(DanCalculator.class);
+            org.mockito.Mockito.when(service.danCalculator.getConfig(BOT_ID)).thenReturn(config);
+            ProductPriceResponse prices = org.mockito.Mockito.mock(ProductPriceResponse.class);
+            org.mockito.Mockito.when(prices.getFirstByNameOrderByTimeDesc("乌灵参")).thenReturn(product("乌灵参", 90));
+            org.mockito.Mockito.when(prices.getFirstByNameOrderByTimeDesc("玄冰花")).thenReturn(product("玄冰花", 80));
+            ReflectionTestUtils.setField(service, "productPriceResponse", prices);
+
+            ReflectionTestUtils.invokeMethod(service, "analyzeHerbCount", bot);
+
+            ArgumentCaptor<MessageChain> messages = ArgumentCaptor.forClass(MessageChain.class);
+            org.mockito.Mockito.verify(group, org.mockito.Mockito.times(2)).sendMessage(messages.capture());
+            String summary = ((TextMessage) messages.getAllValues().get(0).get(0)).getText();
+            String commands = ((TextMessage) messages.getAllValues().get(1).get(0)).getText();
+            assertTrue(summary.contains("检测到超限药材：2种"));
+            assertTrue(summary.contains("玄冰花 76/30"));
+            assertTrue(summary.contains("超限重复采购药材：1种（统一按普通采购规则建议）"));
+            assertTrue(summary.contains("价格：坊市价80万；普通采购价950万；重复采购价900万"));
+            assertTrue(commands.contains("采购药材乌灵参 90"));
+            assertTrue(commands.contains("采购药材玄冰花 80"));
+            assertFalse(commands.contains("重复采购药材"));
+            assertEquals(900, repeatPrices(service).get("玄冰花"));
+            assertEquals(30, repeatLimits(service).get("玄冰花"));
+            assertEquals(950, AutoBuyHerbs.AUTO_BUY_HERBS.get(BOT_ID).get("玄冰花").getPrice());
+            assertEquals(100, AutoBuyHerbs.AUTO_BUY_HERBS.get(BOT_ID).get("乌灵参").getPrice());
+            assertEquals(originalRepeatFile, Files.readString(repeatFile, StandardCharsets.UTF_8));
+        } finally {
+            if (originalNormal == null) AutoBuyHerbs.AUTO_BUY_HERBS.remove(BOT_ID);
+            else AutoBuyHerbs.AUTO_BUY_HERBS.put(BOT_ID, originalNormal);
+            ((java.util.concurrent.ExecutorService) ReflectionTestUtils.getField(service, "customPool")).shutdownNow();
+        }
+    }
+
+    @Test
+    void manuallyApplyingOrdinaryAdviceDoesNotChangeRepeatPriceOrLimit() throws Exception {
+        AutoBuyHerbs service = new AutoBuyHerbs();
+        enableRepeat(service, "玄冰花", 900);
+        repeatLimits(service).put("玄冰花", 30);
+        ReflectionTestUtils.invokeMethod(service, "saveRepeatBuyConfig", BOT_ID);
+        Path repeatFile = tempDir.resolve(String.valueOf(BOT_ID)).resolve("重复采购药材.txt");
+        String originalRepeatFile = Files.readString(repeatFile, StandardCharsets.UTF_8);
+        Bot bot = org.mockito.Mockito.mock(Bot.class);
+        Group group = org.mockito.Mockito.mock(Group.class);
+        org.mockito.Mockito.when(bot.getBotId()).thenReturn(BOT_ID);
+        Map<String, ProductPrice> normalRules = new java.util.concurrent.ConcurrentHashMap<>();
+        normalRules.put("玄冰花", product("玄冰花", 950));
+
+        ReflectionTestUtils.invokeMethod(service, "addProductsToMap", bot, group,
+                "采购药材玄冰花 80", 1, normalRules, false);
+
+        assertEquals(80, normalRules.get("玄冰花").getPrice());
+        assertTrue(Files.readString(tempDir.resolve(String.valueOf(BOT_ID)).resolve("药材价格.txt"),
+                StandardCharsets.UTF_8).contains("80 玄冰花"));
+        assertEquals(900, repeatPrices(service).get("玄冰花"));
+        assertEquals(30, repeatLimits(service).get("玄冰花"));
+        assertEquals(originalRepeatFile, Files.readString(repeatFile, StandardCharsets.UTF_8));
     }
 
     private Set<String> repeatHerbs(AutoBuyHerbs service) {

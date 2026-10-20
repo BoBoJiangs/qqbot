@@ -27,6 +27,7 @@ import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.RecognitionResult;
 import top.sshh.qqbot.service.GroupManager;
 import top.sshh.qqbot.service.TestService;
+import top.sshh.qqbot.service.utils.CaptchaReminderSender;
 import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PostConstruct;
@@ -51,6 +52,7 @@ import static top.sshh.qqbot.service.GroupManager.customPool;
 // matchIfMissing = false)
 public class RemoteVerifyCode {
     private static final Logger logger = LoggerFactory.getLogger(RemoteVerifyCode.class);
+    private static final long CLICK_RETRY_DELAY_MS = 1000L;
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
     // 用来判断其他QQ是否出现相同验证码，用来判断是否验证失败
@@ -64,6 +66,7 @@ public class RemoteVerifyCode {
     public Map<Long, Buttons> botButtonMap = new ConcurrentHashMap();
     public Map<Long, Integer> lastClickIndex = new ConcurrentHashMap();
     private final Map<Long, Long> lastServiceWarnAt = new ConcurrentHashMap<>();
+    private final Random fallbackButtonRandom = new Random();
     private static final Map<String, Integer> CHINESE_NUMBERS = new HashMap<>();
 
     static {
@@ -225,9 +228,8 @@ public class RemoteVerifyCode {
                         if (!buttons.getButtonList().isEmpty()) {
                             if (Integer.parseInt(text) <= buttons.getButtonList().size()) {
                                 Button button = buttons.getButtonList().get(Integer.parseInt(text) - 1);
+                                clickCaptchaButtonWithRetry(bot, group, buttons, button);
                                 isSuccess = true;
-                                bot.clickKeyboardButton(group.getGroupId(), buttons.getBotAppid(), button.getId(),
-                                        button.getData(), buttons.getMsgSeq());
 
                             }
                         }
@@ -238,12 +240,7 @@ public class RemoteVerifyCode {
 
                     for (Button button : buttons.getButtonList()) {
                         if (matchText.equals(button.getLabel()) || text.equals(button.getLabel())) {
-                            bot.clickKeyboardButton(
-                                    group.getGroupId(),
-                                    buttons.getBotAppid(),
-                                    button.getId(),
-                                    button.getData(),
-                                    buttons.getMsgSeq());
+                            clickCaptchaButtonWithRetry(bot, group, buttons, button);
                             isSuccess = true;
                             break;
                         }
@@ -261,12 +258,54 @@ public class RemoteVerifyCode {
                 groupManager.verifyCount.addCorrect();
             }
         } catch (Exception e) {
+            if (Thread.currentThread().isInterrupted()) {
+                logger.warn("验证码点击已中断，停止本次验证 botId={} groupId={}", bot.getBotId(), group.getGroupId());
+                return;
+            }
+            logger.error("自动验证异常 botId={} groupId={}", bot.getBotId(), group.getGroupId(), e);
             RecognitionResult codeData = codeUrlMap.get(bot.getBotId());
             if (codeData != null) {
                 saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getResult(), bot.getBotId());
             }
             testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
-            e.printStackTrace();
+        }
+    }
+
+    /** 模式2的点击接口异常最多重试一次，始终复用原按钮和原消息参数。 */
+    private void clickCaptchaButtonWithRetry(Bot bot, Group group, Buttons buttons, Button button) {
+        long groupId = group.getGroupId();
+        String botAppid = buttons.getBotAppid();
+        String buttonId = button.getId();
+        String callbackData = button.getData();
+        String msgSeq = buttons.getMsgSeq();
+        try {
+            bot.clickKeyboardButton(groupId, botAppid, buttonId, callbackData, msgSeq);
+        } catch (Exception firstFailure) {
+            if (bot.getBotConfig().getAutoVerifyModel() != 2) {
+                throw firstFailure;
+            }
+            logger.warn("验证码点击失败，1秒后重试一次 botId={} groupId={} msgSeq={} buttonId={}",
+                    bot.getBotId(), groupId, msgSeq, buttonId, firstFailure);
+            try {
+                Thread.sleep(CLICK_RETRY_DELAY_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("验证码点击重试等待被中断", e);
+            }
+            // 等待期间切换到手动或半自动模式后，不再自动重试。
+            if (bot.getBotConfig().getAutoVerifyModel() != 2) {
+                throw new IllegalStateException("验证模式已变更，取消验证码点击重试", firstFailure);
+            }
+            try {
+                bot.clickKeyboardButton(groupId, botAppid, buttonId, callbackData, msgSeq);
+            } catch (Exception retryFailure) {
+                if (retryFailure != firstFailure) {
+                    retryFailure.addSuppressed(firstFailure);
+                }
+                throw retryFailure;
+            }
+            logger.info("验证码点击重试成功 botId={} groupId={} msgSeq={} buttonId={}",
+                    bot.getBotId(), groupId, msgSeq, buttonId);
         }
     }
 
@@ -274,7 +313,11 @@ public class RemoteVerifyCode {
      * 识别错误后尝试随机点击一个按钮
      */
     private void errorClickButton(Buttons buttons, Bot bot, Group group, RecognitionResult result) {
-        String resultText = result.getResult();
+        if (bot.getBotConfig().getAutoVerifyModel() != 2 || buttons == null
+                || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
+            return;
+        }
+        String resultText = result == null ? "" : StringUtils.defaultString(result.getResult());
         if (resultText.contains("加") && (resultText.length() == 11 || resultText.length() == 10)) {
             Button maxNumberButton = null;
             for (Button button : buttons.getButtonList()) {
@@ -291,41 +334,17 @@ public class RemoteVerifyCode {
             }
             if (maxNumberButton != null) {
                 logger.info("点击最大数字按钮：" + maxNumberButton.getLabel());
-                bot.clickKeyboardButton(
-                        group.getGroupId(),
-                        buttons.getBotAppid(),
-                        maxNumberButton.getId(),
-                        maxNumberButton.getData(),
-                        buttons.getMsgSeq());
-
+                clickCaptchaButtonWithRetry(bot, group, buttons, maxNumberButton);
+                return;
             }
-
-        } else if (!result.getEmojiList().isEmpty() && result.getEmojiList().size() > 1) {
-            List<Button> buttonList = buttons.getButtonList();
-            if (buttonList != null && !buttonList.isEmpty()) {
-                Random random = new Random();
-                int randomIndex = random.nextInt(buttonList.size()); // 使用按钮列表的大小
-                Button button = buttonList.get(randomIndex);
-                // 使用这个随机按钮
-                bot.clickKeyboardButton(
-                        group.getGroupId(),
-                        buttons.getBotAppid(),
-                        button.getId(),
-                        button.getData(),
-                        buttons.getMsgSeq());
-            }
-        } else {
-            if (bot.getBotConfig().getAutoVerifyModel() == 2) {
-                bot.clickKeyboardButton(
-                        group.getGroupId(),
-                        buttons.getBotAppid(),
-                        buttons.getButtonList().get(0).getId(),
-                        buttons.getButtonList().get(0).getData(),
-                        buttons.getMsgSeq());
-            }
-
         }
-
+        // 模式2即使没有识别出任何表情，也随机选择实际按钮，不能固定点第一个或因空列表抛异常。
+        List<Button> buttonList = buttons.getButtonList();
+        int randomIndex = fallbackButtonRandom.nextInt(buttonList.size());
+        Button button = buttonList.get(randomIndex);
+        logger.info("自动验证未匹配答案，随机点击按钮 botId={} groupId={} index={} label={}",
+                bot.getBotId(), group.getGroupId(), randomIndex + 1, button.getLabel());
+        clickCaptchaButtonWithRetry(bot, group, buttons, button);
     }
 
     public RecognitionResult recognizeVerifyCode(String imageUrl, String title, Bot bot) {
@@ -578,10 +597,10 @@ public class RemoteVerifyCode {
                 } else {
                     sendFailMessage(bot, message, buttons, messageChain, recognitionResult);
                 }
-                Utils.sendGroupMessage(bot, xxGroupId,
+                CaptchaReminderSender.send(bot, xxGroupId,
                         (new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
             } else {
-                Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(),
+                CaptchaReminderSender.send(bot, bot.getBotConfig().getGroupId(),
                         (new MessageChain()).at(bot.getBotConfig().getMasterQQ() + "").text("自动验证失败，请手动验证"));
             }
         } else {
@@ -589,7 +608,10 @@ public class RemoteVerifyCode {
         }
 
         RecognitionResult codeData = codeUrlMap.get(bot.getBotId());
-        saveErrorImage(codeData.getUrl(), codeData.getTitle(), codeData.getEmojiList().toString(), bot.getBotId());
+        if (codeData != null) {
+            saveErrorImage(codeData.getUrl(), codeData.getTitle(), Objects.toString(codeData.getEmojiList(), "[]"),
+                    bot.getBotId());
+        }
 
     }
 
@@ -614,7 +636,7 @@ public class RemoteVerifyCode {
             MessageChain messageChain1 = new MessageChain();
             messageChain1.text("\n").image(buttons.getImageUrl()).text(stringBuilder.toString());
             // bot.sendPrivateMessage(bot.getBotId(), messageChain1);
-            Utils.sendGroupMessage(bot, xxGroupId, messageChain1);
+            CaptchaReminderSender.send(bot, xxGroupId, messageChain1);
         }
     }
 

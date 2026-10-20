@@ -50,6 +50,7 @@ import top.sshh.qqbot.data.QQBotConfig;
 @Component
 public class XiaoBeiService {
     private static final Logger log = LoggerFactory.getLogger(XiaoBeiService.class);
+    private static final Pattern WORLD_BOSS_SHORTCUT_PATTERN = Pattern.compile("/([0-9]+)");
     @Autowired
     private ProductPriceResponse productPriceResponse;
     private static final ForkJoinPool customPool = new ForkJoinPool(20);
@@ -210,8 +211,8 @@ public class XiaoBeiService {
                 }
             }
 
-            if (message.startsWith("/")) {
-                String number = message.substring(message.indexOf("/") + 1).trim();
+            String number = extractWorldBossNumber(messageChain);
+            if (number != null) {
                 group.sendMessage((new MessageChain()).at("3889029313").text("查询世界BOSS " + number));
             }
 
@@ -288,6 +289,25 @@ public class XiaoBeiService {
             }
         }
 
+    }
+
+    /** 仅接受纯文本 /数字，避免合并转发等非文本消息的资源 ID 被当作快捷指令。 */
+    private String extractWorldBossNumber(MessageChain messageChain) {
+        if (messageChain == null || messageChain.isEmpty()) {
+            return null;
+        }
+        StringBuilder text = new StringBuilder();
+        for (Message segment : messageChain) {
+            if (!(segment instanceof TextMessage)) {
+                return null;
+            }
+            String part = ((TextMessage) segment).getText();
+            if (part != null) {
+                text.append(part);
+            }
+        }
+        Matcher matcher = WORLD_BOSS_SHORTCUT_PATTERN.matcher(text.toString().trim());
+        return matcher.matches() ? matcher.group(1) : null;
     }
 
     @Scheduled(

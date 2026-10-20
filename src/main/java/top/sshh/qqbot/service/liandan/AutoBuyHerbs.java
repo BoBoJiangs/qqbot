@@ -16,6 +16,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.Config;
@@ -53,6 +54,8 @@ public class AutoBuyHerbs {
     private static final String REPEAT_BUY_COMMAND = "重复采购药材";
     private static final String REPEAT_BUY_CONFIG_FILE = "重复采购药材.txt";
     private static final long NORMAL_BUY_CODE_COOLDOWN_MS = 12000L;
+    @Value("${captcha.purchase-recovery-timeout-ms:300000}")
+    private long captchaRecoveryTimeoutMs = 300000L;
 
     /** 保持原有的按 botId 隔离的采购价格表 */
     public static final Map<Long, Map<String, ProductPrice>> AUTO_BUY_HERBS = new ConcurrentHashMap<>();
@@ -94,6 +97,8 @@ public class AutoBuyHerbs {
     private final Map<Long, Object> purchaseLockMap = new ConcurrentHashMap<>();
     private final Map<Long, ProductPrice> inFlightPurchaseMap = new ConcurrentHashMap<>();
     private final Map<Long, Map<String, Long>> recentNormalBuyCodeMap = new ConcurrentHashMap<>();
+    /** 只记录采购执行群中发给当前机器人的验证码，不能用通用 stop 标记推断暂停原因。 */
+    private final Map<Long, Long> captchaWaitUntilMap = new ConcurrentHashMap<>();
 
     private Object purchaseLock(long botId) {
         return purchaseLockMap.computeIfAbsent(botId, k -> new Object());
@@ -190,6 +195,8 @@ public class AutoBuyHerbs {
 
     private void resetPurchaseState(Bot bot, BotConfig botConfig) {
         long botId = bot.getBotId();
+        captchaWaitUntilMap.remove(botId);
+        marketRefreshScheduledFlagMap.remove(botId);
         inFlightPurchaseMap.remove(botId);
         recentNormalBuyCodeMap.remove(botId);
         purchaseDelayTaskMap.remove(botId);
@@ -692,15 +699,24 @@ public class AutoBuyHerbs {
             senderIds = {3889001741L}
     )
     public void 验证码判断(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId) {
-        if (message.contains("https") && message.contains("qqbot")  && message.contains("" + bot.getBotId())) {
+        if (message == null || !isAutoBuyGroup(group, bot.getBotConfig()) || !Utils.isAtSelf(bot, message)) {
+            return;
+        }
+        synchronized (purchaseLock(bot.getBotId())) {
             BotConfig botConfig = bot.getBotConfig();
-            boolean isGroup = isAutoBuyGroup(group, botConfig);
-            //出验证码跳过本页购买
-//            if(botConfig.getAutoBuyHerbsMode()!=0 && isGroup){
-//                autoBuyListMap.computeIfAbsent(bot.getBotId(), k -> new CopyOnWriteArrayList<>()).clear();
-//
-//            }
-
+            long botId = bot.getBotId();
+            if (message.contains("请点击") && message.contains("表情") && botConfig.getAutoBuyHerbsMode() != 0) {
+                long timeoutMs = Math.max(5000L, captchaRecoveryTimeoutMs);
+                // 重复推送验证码不能不断延长等待，否则持续点击失败时仍会永久暂停。
+                captchaWaitUntilMap.putIfAbsent(botId, System.currentTimeMillis() + timeoutMs);
+                botConfig.setStop(true);
+                // 取消已排队的发送，验证码等待期间不能继续购买或翻页。
+                purchaseDelayTaskMap.remove(botId);
+                marketRefreshScheduledFlagMap.remove(botId);
+            } else if ((message.contains("奖励") && message.contains("灵石")) || message.contains("不需要验证")
+                    || message.contains("验证码已过期") || message.contains("验证码不正确") || message.contains("解除限制")) {
+                captchaWaitUntilMap.remove(botId);
+            }
         }
     }
 
@@ -820,12 +836,13 @@ public class AutoBuyHerbs {
 
     private void stopAutoBuyHerbs(Bot bot, BotConfig botConfig) {
         long botId = bot.getBotId();
+        captchaWaitUntilMap.remove(botId);
         inFlightPurchaseMap.remove(botId);
         botConfig.setStartAuto(false);
         botConfig.setAutoBuyHerbsMode(0);
         autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
         noQueriedCountMap.put(botId, 0);
-        AtomicBoolean scheduledFlag = marketRefreshScheduledFlagMap.get(botId);
+        AtomicBoolean scheduledFlag = marketRefreshScheduledFlagMap.remove(botId);
         if (scheduledFlag != null) {
             scheduledFlag.set(false);
         }
@@ -859,7 +876,8 @@ public class AutoBuyHerbs {
     private void processMarketMessageLocked(Bot bot, Group group, String message) {
         long botId = bot.getBotId();
         BotConfig botConfig = bot.getBotConfig();
-        if (botConfig.getAutoBuyHerbsMode() == 0 || !isAutoBuyGroup(group, botConfig)) {
+        if (botConfig.getAutoBuyHerbsMode() == 0 || botConfig.isStop()
+                || captchaWaitUntilMap.containsKey(botId) || !isAutoBuyGroup(group, botConfig)) {
             return;
         }
         String[] split = message.split("\n");
@@ -1070,10 +1088,12 @@ public class AutoBuyHerbs {
                 if (delayMs > 0) {
                     Thread.sleep(delayMs);
                 }
-                if (bot.getBotConfig().getAutoBuyHerbsMode() == 0) {
-                    return;
+                synchronized (purchaseLock(botId)) {
+                    if (marketRefreshScheduledFlagMap.get(botId) != scheduledFlag) {
+                        return;
+                    }
+                    refreshHerbsIndex(bot);
                 }
-                refreshHerbsIndex(bot);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
@@ -1114,7 +1134,8 @@ public class AutoBuyHerbs {
         long botId = bot.getBotId();
         synchronized (purchaseLock(botId)) {
             BotConfig botConfig = bot.getBotConfig();
-            if (botConfig.getAutoBuyHerbsMode() == 0 || inFlightPurchaseMap.containsKey(botId)
+            if (botConfig.getAutoBuyHerbsMode() == 0 || botConfig.isStop()
+                    || captchaWaitUntilMap.containsKey(botId) || inFlightPurchaseMap.containsKey(botId)
                     || purchaseDelayTaskMap.containsKey(botId)) {
                 return;
             }
@@ -1183,31 +1204,57 @@ public class AutoBuyHerbs {
     @Scheduled(fixedDelay = 5000L, initialDelay = 30000L)
     public void 定时查询坊市() {
         BotFactory.getBots().values().forEach((bot) -> {
-            synchronized (purchaseLock(bot.getBotId())) {
-                BotConfig botConfig = bot.getBotConfig();
-                long botId = bot.getBotId();
-                if (botConfig.getAutoBuyHerbsMode() != 0 && !botConfig.isStop()) {
-                    Config config = danCalculator.getConfig(botId);
-                    long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
-                    long thresholdMs = Math.max(10000L, maxDelayMs + 2000L);
-
-                    if (System.currentTimeMillis() - botConfig.getAutoTaskRefreshTime() > thresholdMs) {
-                        autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
-                        inFlightPurchaseMap.remove(botId);
-                        purchaseDelayTaskMap.remove(botId);
-                        botConfig.setStop(false);
-                        botConfig.setAutoTaskRefreshTime(System.currentTimeMillis());
-                        this.refreshHerbsIndexByInterval(bot, config);
-                    }
-                }
+            try {
+                checkPurchaseTimeout(bot, System.currentTimeMillis());
+            } catch (Exception e) {
+                logger.error("检查药材采购超时失败 botId={}", bot.getBotId(), e);
             }
         });
+    }
+
+    private void checkPurchaseTimeout(Bot bot, long now) {
+        synchronized (purchaseLock(bot.getBotId())) {
+            BotConfig botConfig = bot.getBotConfig();
+            long botId = bot.getBotId();
+            if (botConfig.getAutoBuyHerbsMode() == 0) {
+                captchaWaitUntilMap.remove(botId);
+                return;
+            }
+            Long captchaWaitUntil = captchaWaitUntilMap.get(botId);
+            boolean captchaTimedOut = captchaWaitUntil != null && now >= captchaWaitUntil;
+            if (captchaWaitUntil != null) {
+                // 仅全自动验证（模式2）允许超时恢复；手动、半自动模式继续等待人工处理。
+                if (botConfig.getAutoVerifyModel() != 2 || !captchaTimedOut) {
+                    return;
+                }
+                captchaWaitUntilMap.remove(botId);
+                botConfig.setStop(false);
+                botConfig.setVerificationStatus("失败");
+                logger.warn("验证码等待超时，清理旧购买状态并恢复查询坊市 botId={} groupId={}",
+                        botId, botConfig.getGroupId());
+            }
+            if (botConfig.isStop()) {
+                return;
+            }
+            Config config = danCalculator.getConfig(botId);
+            long maxDelayMs = Math.max(config == null ? 0 : config.getRandomDelay(), 0) * 1000L;
+            long thresholdMs = Math.max(10000L, maxDelayMs + 2000L);
+            if (captchaTimedOut || now - botConfig.getAutoTaskRefreshTime() > thresholdMs) {
+                autoBuyListMap.computeIfAbsent(botId, k -> new CopyOnWriteArrayList<>()).clear();
+                inFlightPurchaseMap.remove(botId);
+                purchaseDelayTaskMap.remove(botId);
+                marketRefreshScheduledFlagMap.remove(botId);
+                botConfig.setAutoTaskRefreshTime(now);
+                this.refreshHerbsIndexByInterval(bot, config);
+            }
+        }
     }
 
     private void refreshHerbsIndex(Bot bot) {
         BotConfig botConfig = bot.getBotConfig();
         long botId = bot.getBotId();
-        if (botConfig.getAutoBuyHerbsMode() != 0) {
+        if (botConfig.getAutoBuyHerbsMode() != 0 && !botConfig.isStop()
+                && !captchaWaitUntilMap.containsKey(botId)) {
             long groupId = botConfig.getGroupId();
             List<Integer> makeDrugIndexList = makeDrugIndexListMap.computeIfAbsent(botId, k -> new ArrayList<>());
             if(!makeDrugIndexList.isEmpty()){
@@ -1251,22 +1298,15 @@ public class AutoBuyHerbs {
         Map<String, ProductPrice> herbPackMap = herbPackMapMap.getOrDefault(botId, new ConcurrentHashMap<>());
         Map<String, ProductPrice> runtimePurchaseMap = new HashMap<>(
                 AUTO_BUY_HERBS.getOrDefault(botId, Collections.emptyMap()));
-        // 重复采购规则才是实际优先使用的价格，分析时必须覆盖普通采购价。
-        getRepeatBuyPrices(botId).forEach((herbName, price) -> {
-            if (price != null && price > 0) {
-                ProductPrice productPrice = new ProductPrice();
-                productPrice.setName(herbName);
-                productPrice.setPrice(price);
-                runtimePurchaseMap.put(herbName, productPrice);
-            }
-        });
+        // 重复采购价仅展示对比；所有药材统一按普通采购价分析并生成参考命令，不改动采购配置。
+        Map<String, Integer> repeatPurchasePrices = new HashMap<>(getRepeatBuyPrices(botId));
         try {
             HerbBacklogAnalyzer analyzer = new HerbBacklogAnalyzer(Paths.get(targetDir));
-            String message = analyzer.analyze(botId, config, herbPackMap, runtimePurchaseMap, herbName -> {
+            String message = analyzer.analyze(botId, config, herbPackMap, runtimePurchaseMap, repeatPurchasePrices, herbName -> {
                 ProductPrice first = this.productPriceResponse.getFirstByNameOrderByTimeDesc(herbName.trim());
                 return first == null ? null : first.getPrice();
             });
-            Utils.sendGroupMessage(bot, botConfig.getGroupId(), new MessageChain().text(message));
+            HerbAnalysisMessageSender.send(bot, botConfig.getGroupId(), HerbAnalysisMessageFormatter.format(message));
         } catch (Exception e) {
             logger.error("分析背包药材失败 botId={}", botId, e);
             Utils.sendGroupMessage(bot, botConfig.getGroupId(), new MessageChain().text("分析背包药材失败：" + e.getMessage()));
@@ -1274,4 +1314,5 @@ public class AutoBuyHerbs {
 
         medicinalListMap.put(botId, new ArrayList<>());
     }
+
 }
