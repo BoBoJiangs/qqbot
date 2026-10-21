@@ -2430,6 +2430,11 @@ public class TestService {
             if (verified) {
                 resumeMarketRefreshAfterCaptcha(bot, group);
             }
+            // 药材批量队列自行处理验证结果；不需要验证/验证失败也不能清掉它的任务标记。
+            if ("批量上架药材".equals(bot.getBotConfig().getCommand())) {
+                bot.getBotConfig().setVerificationStatus(verified ? "" : "失败");
+                return;
+            }
             if (message.contains("奖励") && message.contains("灵石")
                     && StringUtils.isNotBlank(bot.getBotConfig().getCommand())) {
                 bot.getBotConfig().setVerificationStatus("");

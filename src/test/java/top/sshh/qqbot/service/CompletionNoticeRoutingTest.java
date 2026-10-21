@@ -153,7 +153,18 @@ class CompletionNoticeRoutingTest {
                 sell.成功炼金丹药(bot, ownGroup, null, new MessageChain(), "炼金成功", 1);
                 break;
             default:
-                sell.成功上架药材(bot, ownGroup, null, new MessageChain(), "物品成功上架坊市", 1);
+                ProductPrice item = queue.get(BOT_ID).get(0);
+                item.setName("离火梧桐芝");
+                item.setHerbCount(1);
+                ProductPrice price = new ProductPrice();
+                price.setName(item.getName());
+                price.setPrice(980);
+                ProductPriceResponse prices = mock(ProductPriceResponse.class);
+                when(prices.getFirstByNameOrderByTimeDesc(item.getName())).thenReturn(price);
+                ReflectionTestUtils.setField(sell, "productPriceResponse", prices);
+                ReflectionTestUtils.invokeMethod(sell, "buyHerbs", queue.get(BOT_ID), ownGroup, config);
+                sell.成功上架药材(bot, ownGroup, null, new MessageChain().at(String.valueOf(BOT_ID)),
+                        "物品成功上架坊市", 1);
         }
         assertTrue(queue.get(BOT_ID).isEmpty());
     }
