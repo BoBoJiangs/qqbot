@@ -5,6 +5,8 @@
 
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONReader;
 import com.alibaba.fastjson2.TypeReference;
@@ -335,7 +337,7 @@ public class XiaoBeiService {
         Path configFile = Paths.get(Constant.targetDir + "xb_bot_config_map.json");
 
         try {
-            if (Files.exists(configFile, new LinkOption[0])) {
+            if (LocalDataFiles.exists(configFile, new LinkOption[0])) {
                 Map<String, QQBotConfig> loadedConfigMap = this.loadMapFromFile();
                 this.botConfigMap = loadedConfigMap != null ? loadedConfigMap : new ConcurrentHashMap();
             } else if (this.botConfigMap == null) {
@@ -353,7 +355,7 @@ public class XiaoBeiService {
     public void saveMapToFile() {
         try {
             String jsonStr = JSON.toJSONString(this.botConfigMap);
-            Files.write(Paths.get("xb_bot_config_map.json"), jsonStr.getBytes(), new OpenOption[0]);
+            LocalDataFiles.write(Paths.get("xb_bot_config_map.json"), jsonStr.getBytes(), new OpenOption[0]);
         } catch (Exception var2) {
             var2.printStackTrace();
         }
@@ -363,8 +365,8 @@ public class XiaoBeiService {
     public Map<String, QQBotConfig> loadMapFromFile() {
         try {
             Path path = Paths.get("xb_bot_config_map.json");
-            if (Files.exists(path, new LinkOption[0])) {
-                String jsonStr = new String(Files.readAllBytes(path));
+            if (LocalDataFiles.exists(path, new LinkOption[0])) {
+                String jsonStr = new String(LocalDataFiles.readAllBytes(path));
                 Map<String, QQBotConfig> parsedMap = (Map)JSON.parseObject(jsonStr, new TypeReference<ConcurrentHashMap<String, QQBotConfig>>() {
                 }, new JSONReader.Feature[0]);
                 return parsedMap != null ? parsedMap : new ConcurrentHashMap();

@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.ProductPrice;
 
@@ -590,12 +592,12 @@ public class HerbBacklogAnalyzer {
 
     private List<Recipe> loadRecipes(long botId) throws IOException {
         Path recipePath = resolveBotFile(botId, "炼丹配方.txt");
-        if (!Files.exists(recipePath)) {
+        if (!LocalDataFiles.exists(recipePath)) {
             return Collections.emptyList();
         }
 
         List<Recipe> recipes = new ArrayList<>();
-        try (BufferedReader reader = Files.newBufferedReader(recipePath, StandardCharsets.UTF_8)) {
+        try (BufferedReader reader = LocalDataFiles.newBufferedReader(recipePath, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
                 Recipe recipe = parseRecipe(line);
@@ -655,12 +657,12 @@ public class HerbBacklogAnalyzer {
 
     private Map<String, Integer> loadPurchasePrices(long botId) throws IOException {
         Path pricePath = resolveBotFile(botId, "药材价格.txt");
-        if (!Files.exists(pricePath)) {
+        if (!LocalDataFiles.exists(pricePath)) {
             return new LinkedHashMap<>();
         }
 
         Map<String, Integer> prices = new LinkedHashMap<>();
-        try (BufferedReader reader = Files.newBufferedReader(pricePath, StandardCharsets.UTF_8)) {
+        try (BufferedReader reader = LocalDataFiles.newBufferedReader(pricePath, StandardCharsets.UTF_8)) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] parts = line.trim().split("\\s+", 2);

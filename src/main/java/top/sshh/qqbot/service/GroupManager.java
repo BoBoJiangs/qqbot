@@ -5,6 +5,8 @@
 
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.alibaba.fastjson2.TypeReference;
@@ -384,7 +386,7 @@ public class GroupManager {
             data.put("打怪记录", this.monsterKillingRecords);
             data.put("令牌奖励时间", this.tokenRewardTimeMap);
             // 直接写入JSON字节（UTF-8编码）
-            Files.write(Paths.get(FILE_PATH),
+            LocalDataFiles.write(Paths.get(FILE_PATH),
                     JSON.toJSONString(data).getBytes(StandardCharsets.UTF_8));
 
         } catch (Throwable e) {
@@ -397,7 +399,7 @@ public class GroupManager {
     public synchronized void loadTasksFromFile() {
         try {
             // 读取JSON文件
-            byte[] jsonBytes = Files.readAllBytes(Paths.get(FILE_PATH));
+            byte[] jsonBytes = LocalDataFiles.readAllBytes(Paths.get(FILE_PATH));
             String jsonStr = new String(jsonBytes, StandardCharsets.UTF_8);
 
             // 解析JSON（使用TypeReference处理复杂泛型）

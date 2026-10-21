@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import org.springframework.stereotype.Component;
@@ -159,9 +161,9 @@ public class LingShiGiftStore {
         if (loaded) {
             return;
         }
-        if (Files.exists(path)) {
+        if (LocalDataFiles.exists(path)) {
             try {
-                JSONObject saved = JSON.parseObject(Files.readString(path, StandardCharsets.UTF_8));
+                JSONObject saved = JSON.parseObject(LocalDataFiles.readString(path, StandardCharsets.UTF_8));
                 if (saved == null || saved.getJSONObject("recipients") == null
                         || saved.getJSONObject("totals") == null) {
                     throw new IOException("新模式灵石赠送配置格式无效");
@@ -251,23 +253,7 @@ public class LingShiGiftStore {
         saved.put("totals", groupTotals);
         saved.put("codes", codeHistory);
         saved.put("receipts", receiptHistory);
-        Path target = path.toAbsolutePath();
-        Files.createDirectories(target.getParent());
-        if (legacyFormat && Files.exists(target)) {
-            Path backup = Files.createTempFile(target.getParent(), target.getFileName() + ".v1-", ".bak");
-            Files.copy(target, backup, StandardCopyOption.REPLACE_EXISTING);
-        }
-        Path temporary = Files.createTempFile(target.getParent(), "ling-shi-gifts-", ".tmp");
-        try {
-            Files.writeString(temporary, JSON.toJSONString(saved), StandardCharsets.UTF_8);
-            try {
-                Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
-            }
-            legacyFormat = false;
-        } finally {
-            Files.deleteIfExists(temporary);
-        }
+        LocalDataFiles.writeString(path, JSON.toJSONString(saved), StandardCharsets.UTF_8);
+        legacyFormat = false;
     }
 }

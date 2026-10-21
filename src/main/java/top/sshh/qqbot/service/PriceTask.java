@@ -29,11 +29,17 @@ import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.utils.HerbBackpackParser;
+import top.sshh.qqbot.service.utils.MarketPriceUtils;
 import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PostConstruct;
 import java.io.*;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,6 +61,9 @@ public class PriceTask {
     private GroupManager groupManager;
     /** 最近已处理的悬赏令价格查询消息，避免 NapCat 重复投递导致重复回复。 */
     private final Map<String, Long> processedXslPriceMessageMap = new ConcurrentHashMap<>();
+    private final Object productPriceUpdateLock = new Object();
+    @Autowired
+    private MarketLimitRefreshService marketLimitRefreshService;
 
     public PriceTask() {
 
@@ -65,15 +74,6 @@ public class PriceTask {
         this.readPrice();
     }
 
-    @Scheduled(
-            initialDelay = 60 * 1000,  // 首次延迟1分钟
-            fixedRate = 2 * 60 * 60 * 1000   // 后续每6小时执行一次（21,600,000毫秒）
-    )
-    public void autoSaveTasks() {
-        this.savePrice();
-        logger.debug("同步坊市价格成功");
-    }
-
     @GroupMessageHandler(
             ignoreItself = IgnoreItselfEnum.ONLY_ITSELF
     )
@@ -82,61 +82,66 @@ public class PriceTask {
         message = message.trim();
         if (message.equals("同步坊市价格") || message.equals("同步数据") || message.equals("同步坊市数据")) {
             this.savePrice();
-            group.sendMessage((new MessageChain()).text("同步坊市价格成功"));
+            group.sendMessage((new MessageChain()).text("坊市价格已实时保存至SQLite，本次已导出价格备份"));
         }
 
     }
 
     public void readPrice() {
-        try {
-            BufferedReader reader = new BufferedReader(new FileReader(targetDir + "properties/坊市价格.txt"));
-
-            try {
-                StringBuilder jsonStr = new StringBuilder();
-
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    jsonStr.append(line);
-                }
-
-                List<ProductPrice> personList = JSON.parseObject(jsonStr.toString(), new TypeReference<List<ProductPrice>>() {
-                }, new JSONReader.Feature[0]);
-                if (this.productPriceResponse != null) {
-
-                    this.productPriceResponse.saveAll(personList);
-                    logger.info("坊市价格读取成功！{}", personList.size());
-                }
-            } catch (Throwable var5) {
-            }
-
-            reader.close();
-        } catch (Exception e) {
-            System.err.println("读取配置文件失败: " + e.getMessage());
+        // SQLite 为权威来源，旧快照仅在空库时导入，防止重启覆盖新价格和限价。
+        if (productPriceResponse.count() > 0) {
+            repairStoredMarketNames();
+            return;
         }
+        Path legacy = Paths.get(targetDir, "properties", "坊市价格.txt");
+        if (!Files.isRegularFile(legacy)) return;
+        try {
+            List<ProductPrice> prices = JSON.parseObject(Files.readString(legacy, StandardCharsets.UTF_8),
+                    new TypeReference<List<ProductPrice>>() { });
+            if (prices != null && !prices.isEmpty()) {
+                // saveAll 自带事务，导入失败时整批回滚，避免留下部分迁移的数据。
+                productPriceResponse.saveAll(prices);
+                logger.info("已将 {} 条旧坊市价格迁入SQLite", prices.size());
+                repairStoredMarketNames();
+            }
+        } catch (Exception e) {
+            throw new IllegalStateException("迁移旧坊市价格失败，原文件已保留", e);
+        }
+    }
 
+    private void repairStoredMarketNames() {
+        List<ProductPrice> repaired = new ArrayList<>();
+        for (ProductPrice product : productPriceResponse.findAll()) {
+            if (product.getMarketMinPrice() == null && product.getMarketMaxPrice() == null) continue;
+            String normalized = MarketPriceUtils.normalizeStoredMarketName(product.getName());
+            if (!Objects.equals(normalized, product.getName())) {
+                product.setName(normalized);
+                repaired.add(product);
+            }
+        }
+        if (!repaired.isEmpty()) {
+            productPriceResponse.saveAll(repaired);
+            logger.info("已修复 {} 条带卡片图片标题的坊市物品名称，价格与限价已保留", repaired.size());
+        }
     }
 
     public void savePrice() {
+        // 仅作为用户主动导出的备份，运行时保存不再依赖此文件。
+        Path target = Paths.get(targetDir, "properties", "坊市价格.txt");
         try {
-            BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(targetDir + "properties/坊市价格.txt"), StandardCharsets.UTF_8));
-
+            List<ProductPrice> prices = new ArrayList<>();
+            productPriceResponse.findAll().forEach(prices::add);
+            Files.createDirectories(target.toAbsolutePath().getParent());
+            Path temporary = Files.createTempFile(target.toAbsolutePath().getParent(), "prices-", ".tmp");
             try {
-                List<ProductPrice> personList = (List) this.productPriceResponse.findAll();
-                if (!personList.isEmpty()) {
-                    String jsonStr = JSON.toJSONString(personList);
-                    writer.write(jsonStr);
-                    writer.flush();
-
-                    System.out.println("同步坊市价格成功！");
-                }
-            } catch (Throwable var5) {
+                Files.writeString(temporary, JSON.toJSONString(prices), StandardCharsets.UTF_8);
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            } finally {
+                Files.deleteIfExists(temporary);
             }
-
-            writer.close();
-        } catch (Exception var6) {
-            System.err.println("同步坊市价格失败: ");
+        } catch (IOException e) {
+            throw new UncheckedIOException("导出价格备份失败", e);
         }
-
     }
 
     @GroupMessageHandler(
@@ -518,6 +523,7 @@ public class PriceTask {
 
     // 辅助方法类
     private class PriceCalculationResult {
+        // 金额统一使用灵石，避免小数万的限价在生成命令或汇总时被截断。
         long count = 0L;
         long totalFee = 0L;
         boolean protectedItemSkipped;
@@ -658,7 +664,7 @@ public class PriceTask {
         int price = ProductLowPrice.getLowPrice(name);
         if (price > 0) {
             long totalPrice = (long) price * quantity;
-            result.count += totalPrice;
+            result.count += totalPrice * 10000L;
             result.stringBuilder.append("炼金 ")
                     .append(name).append(" ")
                     .append(quantity).append(" 总价:")
@@ -669,14 +675,13 @@ public class PriceTask {
     // 处理市场物品
     private void processMarketItem(String name, int quantity, PriceCalculationResult result) {
         ProductPrice product = productPriceResponse.getFirstByNameOrderByTimeDesc(name);
-        if (product != null) {
-            int adjustedPrice = calculateAdjustedPrice(product.getPrice());
+        if (product != null && product.getPrice() > 0) {
+            long adjustedPrice = calculateListingPrice(product);
             double feeRate = calculateFeeRate(adjustedPrice);
             long itemFee = (long) (adjustedPrice * feeRate * quantity);
 
             result.totalFee += itemFee;
-            adjustedPrice = applyPriceAdjustments(adjustedPrice);
-            result.count += (long) adjustedPrice * quantity;
+            result.count += adjustedPrice * quantity;
 
             generateMarketListingCommands(result.stringBuilder, product.getName(), adjustedPrice, quantity);
         }
@@ -687,9 +692,19 @@ public class PriceTask {
         return originalPrice - 10; // 基础调整
     }
 
+    private long calculateListingPrice(ProductPrice product) {
+        int adjustedPrice = applyPriceAdjustments(calculateAdjustedPrice(product.getPrice()));
+        return MarketPriceUtils.limitListingPrice(product, (long) adjustedPrice * 10000L);
+    }
+
     // 计算手续费率
-    private double calculateFeeRate(int price) {
-        return Utils.calculateFeeRate(price);
+    private double calculateFeeRate(long price) {
+        // 按最终上架价所属税档计算，保留限价的小数万精度。
+        if (price <= 500L * 10000L) return 0.05;
+        if (price <= 1000L * 10000L) return 0.1;
+        if (price <= 1500L * 10000L) return 0.15;
+        if (price <= 2000L * 10000L) return 0.2;
+        return 0.3;
     }
 
     // 应用价格调整规则
@@ -712,7 +727,7 @@ public class PriceTask {
     }
 
     // 生成市场上市命令
-    private void generateMarketListingCommands(StringBuilder sb, String name, int price, int quantity) {
+    private void generateMarketListingCommands(StringBuilder sb, String name, long price, int quantity) {
         if (quantity > 10 && quantity < 50) {
             int batches = quantity / 10;
             int remainder = quantity % 10;
@@ -720,20 +735,20 @@ public class PriceTask {
             for (int j = 0; j < batches; j++) {
                 sb.append("确认坊市上架 ")
                         .append(name).append(" ")
-                        .append((long) price * 10000L).append(" ")
+                        .append(price).append(" ")
                         .append(10).append("\n");
             }
 
             if (remainder > 0) {
                 sb.append("确认坊市上架 ")
                         .append(name).append(" ")
-                        .append((long) price * 10000L).append(" ")
+                        .append(price).append(" ")
                         .append(remainder).append("\n");
             }
         } else {
             sb.append("确认坊市上架 ")
                     .append(name).append(" ")
-                    .append((long) price * 10000L).append(" ")
+                    .append(price).append(" ")
                     .append(quantity).append("\n");
         }
     }
@@ -741,7 +756,7 @@ public class PriceTask {
     // 添加摘要信息
     private void addSummaryInfo(String originalMessage, PriceCalculationResult result) {
         if (!originalMessage.contains("炼金")) {
-            result.stringBuilder.append("\n使用前请先@小小查看坊市药材\n自动生成坊市价格-10w\n已为您适配最优上架价格\n");
+            result.stringBuilder.append("\n使用前请先@小小查看坊市药材\n自动生成坊市价格-10w\n已为您适配最优上架价格，并按已采集的市场限价调整\n");
         } else {
             result.stringBuilder.append("\n");
         }
@@ -763,17 +778,16 @@ public class PriceTask {
     // 处理单个查询物品
     private void processSingleQueryItem(String itemName, PriceCalculationResult result) {
         ProductPrice product = productPriceResponse.getFirstByNameOrderByTimeDesc(itemName);
-        if (product != null) {
-            int adjustedPrice = calculateAdjustedPrice(product.getPrice());
+        if (product != null && product.getPrice() > 0) {
+            long adjustedPrice = calculateListingPrice(product);
             double feeRate = calculateFeeRate(adjustedPrice);
 
             result.totalFee += (long) (adjustedPrice * feeRate);
-            adjustedPrice = applyPriceAdjustments(adjustedPrice);
             result.count += adjustedPrice;
 
             result.stringBuilder.append("\n确认坊市上架 ")
                     .append(product.getName()).append(" ")
-                    .append((long) adjustedPrice * 10000L);
+                    .append(adjustedPrice);
         }
     }
 
@@ -799,9 +813,9 @@ public class PriceTask {
 
     // 格式化金额显示
     private String formatAmount(long amount, String prefix) {
-        return amount > 10000L ?
-                String.format("%s：%.2f 亿", prefix, amount / 10000.0) :
-                String.format("%s：%d 万", prefix, amount);
+        return amount > 100000000L ?
+                String.format("%s：%.2f 亿", prefix, amount / 100000000.0) :
+                prefix + "：" + BigDecimal.valueOf(amount, 4).stripTrailingZeros().toPlainString() + " 万";
     }
 
     @GroupMessageHandler(
@@ -947,6 +961,39 @@ public class PriceTask {
     @GroupMessageHandler(
             senderIds = {3889001741L}
     )
+    public void 保存市场限价(Bot bot, Group group, MessageChain messageChain, String message, Integer messageId) {
+        ProductPrice quote = MarketPriceUtils.parseMarketInfo(Utils.getMessageText(messageChain));
+        if (quote == null) {
+            quote = MarketPriceUtils.parseMarketInfo(message);
+        }
+        if (quote == null) {
+            return;
+        }
+        synchronized (productPriceUpdateLock) {
+            ProductPrice latest = productPriceResponse.getFirstByNameOrderByTimeDesc(quote.getName());
+            if (latest == null) {
+                latest = quote;
+                latest.setTime(LocalDateTime.now());
+            } else {
+                latest.setMarketMinPrice(quote.getMarketMinPrice());
+                latest.setMarketMaxPrice(quote.getMarketMaxPrice());
+                if (StringUtils.isNotBlank(quote.getCategory())) {
+                    latest.setCategory(quote.getCategory());
+                }
+                if (quote.getPrice() > 0 && latest.getPrice() != quote.getPrice()) {
+                    latest.setPrice(quote.getPrice());
+                    latest.setTime(LocalDateTime.now());
+                }
+            }
+            productPriceResponse.save(latest);
+        }
+        // 仅在数据库提交成功后推进批量查询，避免查询先前进而限价未保存。
+        if (marketLimitRefreshService != null) {
+            marketLimitRefreshService.onQuoteSaved(bot, group, messageChain, quote);
+        }
+    }
+
+    @GroupMessageHandler(senderIds = {3889001741L})
     public void 保存商品价格(Bot bot, Group group, String message, Integer messageId) throws InterruptedException {
         if (message.contains("不鼓励不保障任何第三方交易行为") && !message.contains("下架")) {
             String[] split = message.split("\n");
@@ -1003,21 +1050,17 @@ public class PriceTask {
                         productPrice.setTime(now);
 
 
-                        // 查询数据库最新记录（按 code）
-//                        ProductPrice latest = this.productPriceResponse.findTopByCodeOrderByTimeDesc(code);
-                        ProductPrice latest = this.productPriceResponse.getFirstByNameOrderByTimeDesc(productPrice.getName());
-
-                        // 如果数据库没有，直接保存
-                        if (latest == null) {
-                            this.productPriceResponse.save(productPrice);
-                        } else {
-                            if (latest.getPrice() != (int) price) {
-                                latest.setPrice((int)price);
+                        // 与限价采集共用锁，避免并发保存行情时覆盖刚更新的限价。
+                        synchronized (productPriceUpdateLock) {
+                            ProductPrice latest = this.productPriceResponse.getFirstByNameOrderByTimeDesc(productPrice.getName());
+                            if (latest == null) {
+                                this.productPriceResponse.save(productPrice);
+                            } else if (latest.getPrice() != (int) price) {
+                                latest.setPrice((int) price);
                                 latest.setCode(code);
                                 latest.setTime(LocalDateTime.now());
                                 this.productPriceResponse.save(latest);
                             }
-                            // 如果价格没变，就跳过，不保存
                         }
                     }
                 }

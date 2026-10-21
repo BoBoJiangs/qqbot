@@ -1,5 +1,7 @@
 package top.sshh.qqbot.verifycode;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
@@ -154,9 +156,9 @@ public class RemoteVerifyCode {
     private synchronized void saveEmojiToFile(List<Button> buttonList) {
         File emojiFile = new File("emoji_records.txt");
         Set<String> existingEmojis = new HashSet();
-        if (emojiFile.exists()) {
+        if (LocalDataFiles.exists(emojiFile.toPath())) {
             String line;
-            try (BufferedReader reader = new BufferedReader(new FileReader(emojiFile))) {
+            try (BufferedReader reader = LocalDataFiles.newBufferedReader(emojiFile.toPath())) {
                 while ((line = reader.readLine()) != null) {
                     existingEmojis.add(line.trim());
                 }
@@ -165,7 +167,7 @@ public class RemoteVerifyCode {
             }
         }
 
-        try (FileWriter writer = new FileWriter(emojiFile, true)) {
+        try (BufferedWriter writer = LocalDataFiles.newBufferedWriter(emojiFile.toPath(), java.nio.file.StandardOpenOption.APPEND)) {
             // System.out.println("分割后标签数量: " + emojiCandidates.length);
 
             for (Button button : buttonList) {

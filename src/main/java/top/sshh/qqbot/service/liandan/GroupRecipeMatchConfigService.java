@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import org.slf4j.Logger;
@@ -36,16 +38,16 @@ public class GroupRecipeMatchConfigService {
 
     @PostConstruct
     void load() {
-        if (!Files.exists(configPath)) {
+        if (!LocalDataFiles.exists(configPath)) {
             return;
         }
         try {
             Map<String, Boolean> saved = JSON.parseObject(
-                    Utils.readString(configPath),
+                    LocalDataFiles.readString(configPath),
                     new TypeReference<Map<String, Boolean>>() {
                     });
             if (saved == null || saved.isEmpty()) {
-                Files.deleteIfExists(configPath);
+                LocalDataFiles.deleteIfExists(configPath);
                 return;
             }
 
@@ -66,7 +68,7 @@ public class GroupRecipeMatchConfigService {
                 migratedCount++;
             }
             if (migrated) {
-                Files.deleteIfExists(configPath);
+                LocalDataFiles.deleteIfExists(configPath);
                 logger.info("已将 {} 个群丹方匹配开关迁入对应机器人配置", migratedCount);
             } else {
                 logger.error("群丹方配置未能全部迁移，旧文件保留并会在下次启动时重试");

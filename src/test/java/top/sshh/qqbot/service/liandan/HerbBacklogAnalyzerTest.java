@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -65,7 +67,7 @@ public class HerbBacklogAnalyzerTest {
                 "主药天问花-1&100 药引搭配草-1&50 辅药辅草-1&50 花费200 炼金收益60 6丹 甲丹",
                 "100 天问花"
         );
-        Files.write(tempDir.resolve(String.valueOf(BOT_ID)).resolve("炼丹配方.txt"),
+        LocalDataFiles.write(tempDir.resolve(String.valueOf(BOT_ID)).resolve("炼丹配方.txt"),
                 Collections.singletonList("主药天问花-1&100 药引灵草-1&40 辅药灵木-1&40 花费180 炼金收益55 6丹 乙丹"),
                 StandardCharsets.UTF_8, StandardOpenOption.APPEND);
 
@@ -538,15 +540,15 @@ public class HerbBacklogAnalyzerTest {
     }
 
     private void appendRecipe(String recipe) throws Exception {
-        Files.write(tempDir.resolve(String.valueOf(BOT_ID)).resolve("炼丹配方.txt"),
+        LocalDataFiles.write(tempDir.resolve(String.valueOf(BOT_ID)).resolve("炼丹配方.txt"),
                 Collections.singletonList(recipe), StandardCharsets.UTF_8, StandardOpenOption.APPEND);
     }
 
     private void writeBotFiles(String recipeHeader, String recipeLine, String... priceLines) throws Exception {
         Path botDir = tempDir.resolve(String.valueOf(BOT_ID));
         Files.createDirectories(botDir);
-        Files.write(botDir.resolve("炼丹配方.txt"), Arrays.asList(recipeHeader, recipeLine), StandardCharsets.UTF_8);
-        Files.write(botDir.resolve("药材价格.txt"), Arrays.asList(priceLines), StandardCharsets.UTF_8);
+        LocalDataFiles.write(botDir.resolve("炼丹配方.txt"), Arrays.asList(recipeHeader, recipeLine), StandardCharsets.UTF_8);
+        LocalDataFiles.write(botDir.resolve("药材价格.txt"), Arrays.asList(priceLines), StandardCharsets.UTF_8);
     }
 
     private Config config() {

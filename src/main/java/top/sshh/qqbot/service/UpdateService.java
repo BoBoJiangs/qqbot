@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;
@@ -457,7 +459,7 @@ public class UpdateService {
             payload.put("force", manifest == null ? null : manifest.getForce());
             payload.put("sent", false);
             String json = JSON.toJSONString(payload);
-            Files.write(file, json.getBytes(StandardCharsets.UTF_8));
+            LocalDataFiles.write(file, json.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             logger.warn("保存更新通知失败：{}", e.getMessage());
         }
@@ -468,8 +470,8 @@ public class UpdateService {
             Path workDir = Paths.get(System.getProperty("user.dir"));
             if (Files.exists(workDir.resolve("bot.jar.new"))) return;
             Path file = workDir.resolve("update").resolve(NOTICE_FILE_NAME);
-            if (!Files.exists(file)) return;
-            String json = Files.readString(file, StandardCharsets.UTF_8);
+            if (!LocalDataFiles.exists(file)) return;
+            String json = LocalDataFiles.readString(file, StandardCharsets.UTF_8);
             if (StringUtils.isBlank(json)) return;
             Map<String, Object> payload = JSON.parseObject(json, Map.class);
             if (payload == null) return;
@@ -514,7 +516,7 @@ public class UpdateService {
             if (StringUtils.isBlank(applied)) return;
             if (compareVersion(applied, targetVersion) >= 0) {
                 Path file = workDir.resolve("update").resolve(APPLIED_VERSION_FILE_NAME);
-                Files.deleteIfExists(file);
+                LocalDataFiles.deleteIfExists(file);
             }
         } catch (Exception ignored) {
         }
@@ -523,8 +525,8 @@ public class UpdateService {
     private boolean trySendPendingNoticeOnce() {
         try {
             Path file = Paths.get(System.getProperty("user.dir")).resolve("update").resolve(NOTICE_FILE_NAME);
-            if (!Files.exists(file)) return false;
-            String json = Files.readString(file, StandardCharsets.UTF_8);
+            if (!LocalDataFiles.exists(file)) return false;
+            String json = LocalDataFiles.readString(file, StandardCharsets.UTF_8);
             if (StringUtils.isBlank(json)) return false;
             Map<String, Object> payload = JSON.parseObject(json, Map.class);
             if (payload == null) return false;
@@ -548,7 +550,7 @@ public class UpdateService {
             boolean ok = sendToAllMasters(message);
             if (ok) {
                 payload.put("sent", true);
-                Files.write(file, JSON.toJSONString(payload).getBytes(StandardCharsets.UTF_8));
+                LocalDataFiles.write(file, JSON.toJSONString(payload).getBytes(StandardCharsets.UTF_8));
                 return true;
             }
             return false;
@@ -680,8 +682,8 @@ public class UpdateService {
     private String readAppliedVersion() {
         try {
             Path file = Paths.get(System.getProperty("user.dir")).resolve("update").resolve(APPLIED_VERSION_FILE_NAME);
-            if (!Files.exists(file)) return null;
-            String v = Files.readString(file, StandardCharsets.UTF_8);
+            if (!LocalDataFiles.exists(file)) return null;
+            String v = LocalDataFiles.readString(file, StandardCharsets.UTF_8);
             if (v == null) return null;
             v = v.trim();
             return StringUtils.isBlank(v) ? null : v;
@@ -696,7 +698,7 @@ public class UpdateService {
             Path dir = Paths.get(System.getProperty("user.dir")).resolve("update");
             Files.createDirectories(dir);
             Path file = dir.resolve(APPLIED_VERSION_FILE_NAME);
-            Files.write(file, version.trim().getBytes(StandardCharsets.UTF_8));
+            LocalDataFiles.write(file, version.trim().getBytes(StandardCharsets.UTF_8));
         } catch (Exception ignored) {
         }
     }

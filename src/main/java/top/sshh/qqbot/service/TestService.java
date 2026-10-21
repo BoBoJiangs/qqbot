@@ -5,6 +5,8 @@
 
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
@@ -62,6 +64,7 @@ import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.data.UpdateManifest;
 import top.sshh.qqbot.service.liandan.DanCalculator;
 import top.sshh.qqbot.service.utils.CaptchaReminderSender;
+import top.sshh.qqbot.service.utils.MarketPriceUtils;
 import top.sshh.qqbot.service.utils.Utils;
 
 @Component
@@ -936,7 +939,7 @@ public class TestService {
             } else {
                 Path path = Paths.get("./config/bot-" + bot.getBotId() + ".json");
                 Files.createDirectories(path.getParent());
-                Files.write(path,
+                LocalDataFiles.write(path,
                         JSON.toJSONString(persist).getBytes(StandardCharsets.UTF_8),
                         StandardOpenOption.CREATE,
                         StandardOpenOption.TRUNCATE_EXISTING);
@@ -949,10 +952,10 @@ public class TestService {
     public void loadBotConfig(Bot bot) {
         try {
             Path path = Paths.get("./config/bot-" + bot.getBotId() + ".json");
-            if (!Files.exists(path))
+            if (!LocalDataFiles.exists(path))
                 return;
 
-            String content = Utils.readString(path);
+            String content = LocalDataFiles.readString(path);
             BotConfigPersist persist = JSON.parseObject(content, BotConfigPersist.class);
             BotConfig botConfig = bot.getBotConfig();
             botConfig.setGroupQQ(persist.getGroupQQ());
@@ -1411,7 +1414,7 @@ public class TestService {
                                     } else {
                                         ProductPrice first = this.productPriceResponse
                                                 .getFirstByNameOrderByTimeDesc(name.trim());
-                                        if (first != null) {
+                                        if (first != null && first.getPrice() > 0) {
                                             if ((double) first.getPrice() < (double) ProductLowPrice.getLowPrice(name)
                                                     * 1.1) {
                                                 group.sendMessage((new MessageChain()).text(
@@ -1428,17 +1431,15 @@ public class TestService {
                                                     }
 
                                                     int batchSize = Math.min(10, remaining);
+                                                    long listingPrice = ((long) first.getPrice() - 10L) * 10000L;
                                                     if (first.getPrice() > 1000 && (double) (first.getPrice() - 10)
                                                             * 0.85 < (double) 900.0F) {
-                                                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741")
-                                                                .text("确认坊市上架 " + first.getName() + " " + 10000000 + " "
-                                                                        + batchSize));
-                                                    } else {
-                                                        Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741")
-                                                                .text("确认坊市上架 " + first.getName() + " "
-                                                                        + (first.getPrice() - 10) * 10000 + " "
-                                                                        + batchSize));
+                                                        listingPrice = 10000000L;
                                                     }
+                                                    listingPrice = MarketPriceUtils.limitListingPrice(first, listingPrice);
+                                                    Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741")
+                                                            .text("确认坊市上架 " + first.getName() + " " + listingPrice + " "
+                                                                    + batchSize));
 
                                                     remaining -= batchSize;
 

@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
 import com.zhuangxv.bot.message.MessageChain;
@@ -833,10 +835,10 @@ public class DanRecipeQueryService {
 
         static BotHerbPriceCache load(long botId) throws IOException {
             Path p = Paths.get(String.valueOf(botId), "药材价格.txt");
-            if (!Files.exists(p)) return empty(botId);
+            if (!LocalDataFiles.exists(p)) return empty(botId);
 
             Map<String, Integer> map = new HashMap<>();
-            try (BufferedReader br = Files.newBufferedReader(p, StandardCharsets.UTF_8)) {
+            try (BufferedReader br = LocalDataFiles.newBufferedReader(p, StandardCharsets.UTF_8)) {
                 String line;
                 while ((line = br.readLine()) != null) {
                     if (StringUtils.isBlank(line)) continue;
@@ -847,12 +849,12 @@ public class DanRecipeQueryService {
                     map.put(name, price);
                 }
             }
-            return new BotHerbPriceCache(botId, map, p, Files.getLastModifiedTime(p));
+            return new BotHerbPriceCache(botId, map, p, LocalDataFiles.getLastModifiedTime(p));
         }
 
         boolean isStale() throws IOException {
-            if (!Files.exists(filePath)) return !herbPrices.isEmpty();
-            return !Objects.equals(Files.getLastModifiedTime(filePath), lastModified);
+            if (!LocalDataFiles.exists(filePath)) return !herbPrices.isEmpty();
+            return !Objects.equals(LocalDataFiles.getLastModifiedTime(filePath), lastModified);
         }
 
         Optional<Integer> getPrice(String herbName) {

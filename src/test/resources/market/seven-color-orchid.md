@@ -1,0 +1,3 @@
+[](%7B%22version%22%3A2%7D)
+[@道友](mqqapi://markdown/mention?at_type=1&at_tinyid=1001)
+![物品价格 #3321px #1724px](https://qqbot.ugcimg.cn/example/card)[七彩月兰](mqqapi://aio/inlinecmd?command=查看效果七彩月兰&enter=false&reply=false) 所在位置：坊市第1页\n分类：[药材](mqqapi://aio/inlinecmd?command=坊市查看药材&enter=false&reply=false)\n统计信息（每小时刷新）\n当前价格: 580万 [点击上架](mqqapi://aio/inlinecmd?command=确认坊市上架七彩月兰&enter=false&reply=false) | [点击购买](mqqapi://aio/inlinecmd?command=坊市购买&enter=false&reply=false)\n>万宝楼每100积分收购价：381万\n\n平均价格: 420万 点击上架\n最高价格: 560万\n最低价格: 350万\n市场限价：[380.00万](mqqapi://aio/inlinecmd?command=确认坊市上架七彩月兰3800000&enter=false&reply=false) ~ [460.00万](mqqapi://aio/inlinecmd?command=确认坊市上架七彩月兰4600000&enter=false&reply=false) | 🔺\n收藏此物品 | 我的收藏

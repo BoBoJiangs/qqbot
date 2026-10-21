@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
 import org.springframework.stereotype.Service;
@@ -71,10 +73,10 @@ public class AdminAuthService {
     private void loadOrInit() {
         Path path = authFilePath();
         try {
-            if (!Files.exists(path)) {
+            if (!LocalDataFiles.exists(path)) {
                 initDefault(path);
             }
-            String content = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+            String content = new String(LocalDataFiles.readAllBytes(path), StandardCharsets.UTF_8);
             JSONObject obj = JSON.parseObject(content);
             AuthRecord loaded = new AuthRecord(
                     obj.getString("username"),
@@ -119,7 +121,7 @@ public class AdminAuthService {
             obj.put("iterations", record.iterations);
             obj.put("keyLengthBits", record.keyLengthBits);
             obj.put("algorithm", record.algorithm);
-            Files.write(path,
+            LocalDataFiles.write(path,
                     JSON.toJSONString(obj).getBytes(StandardCharsets.UTF_8),
                     StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING);

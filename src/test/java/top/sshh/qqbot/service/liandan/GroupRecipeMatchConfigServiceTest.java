@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -61,9 +63,9 @@ class GroupRecipeMatchConfigServiceTest {
 
         assertTrue(service.isEnabled(1001L, 2001L));
         assertTrue(service.isEnabled(1002L, 2002L));
-        assertFalse(Files.exists(legacyConfigFile));
+        assertFalse(LocalDataFiles.exists(legacyConfigFile));
         BotConfigPersist firstBotConfig = JSON.parseObject(
-                Files.readString(configDirectory.resolve("bot-1001.json")), BotConfigPersist.class);
+                LocalDataFiles.readString(configDirectory.resolve("bot-1001.json")), BotConfigPersist.class);
         assertEquals(Boolean.TRUE, firstBotConfig.getGroupRecipeMatchEnabled().get(2001L));
     }
 
@@ -86,6 +88,6 @@ class GroupRecipeMatchConfigServiceTest {
         service.load();
 
         assertFalse(service.isEnabled(1001L, 2001L));
-        assertFalse(Files.exists(legacyConfigFile));
+        assertFalse(LocalDataFiles.exists(legacyConfigFile));
     }
 }

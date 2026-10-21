@@ -1,0 +1,73 @@
+# SQLite 本地存储
+
+默认数据库为启动工作目录下的 `config/qqbot.db`。无需单独安装数据库服务。
+设置环境变量或 JVM 系统属性 `QQBOT_DATABASE` 可以指定其他文件路径，JPA 行情表和其他运行时数据使用同一个文件。
+
+```powershell
+$env:QQBOT_DATABASE = 'D:/Java/qqbot/config/qqbot.db'
+java -jar bot.jar
+```
+
+启动时会兼容外部 application 中遗留的 H2 URL、驱动和 H2Dialect：在连接池与 JPA 配置绑定前统一切换到 SQLite，避免旧的 `spring.datasource.hikari.jdbc-url` 覆盖新版地址。旧文件无需删除；也可以将外部配置同步改为项目中的 SQLite 配置。
+
+## 已迁移的数据
+
+| 原存储 | SQLite 中的存储与迁移方式 |
+| --- | --- |
+| H2 的 ProductPrice、`properties/坊市价格.txt` | `product_price` 表。新价格和市场上下限随数据库事务提交；仅空表首次启动时导入旧价格文件。 |
+| `config/bot-*.json` | 机器人配置，包括秘域路线、群丹方匹配开关等。 |
+| `config/admin-auth.json` | 管理员认证配置，保留原密码哈希和盐。 |
+| `config/ling-shi-gifts.json` | 灵石赠送绑定、累计和回执去重记录。 |
+| `cache/task_data.json` | 群任务、发言及任务统计、提醒、购买规则、炼金与上架排除项等。 |
+| `cache/time_tasks.json` | 定时任务及执行状态。 |
+| `cache/field_remind_data.ser` | 灵田提醒，兼容原序列化内容。 |
+| `xb_bot_config_map.json` | 小北机器人配置。 |
+| `<机器人QQ>/炼丹配置.txt`、`药材价格.txt`、`重复采购药材.txt` | 炼丹设置、采购价格和重复采购规则。 |
+| `<机器人QQ>/背包药材.txt`、`炼丹配方.txt` | 背包和计算得到的丹方。 |
+| `emoji_records.txt` | 验证码表情收集记录。 |
+| `update/last_update_notice.json`、`applied_version.txt` | 更新通知和版本状态。 |
+
+除行情表外，原有文档的数据结构保持兼容，统一存入 `app_document` 表。`document_key` 为原路径相对于启动目录的规范化名称，`content` 为原始内容，`updated_at` 为更新时间。可以使用 SQLite 工具查看，例如：
+
+```sql
+SELECT document_key, CAST(content AS TEXT), updated_at FROM app_document;
+SELECT name, price, market_min_price, market_max_price FROM product_price;
+```
+
+行情单价 `price` 继续使用“万”；市场上下限字段使用“灵石”，保留小数万的精度。
+
+## 首次启动与后续保存
+
+切换前先在旧程序执行一次“同步坊市价格”，确保导入的是最新内存行情，然后停止旧程序并使用新包启动。
+
+新程序会扫描已有运行时文档并导入。原文件保留作为备份。后续保存只提交 SQLite；已存在的数据库记录优先，不会被旧文件覆盖。删除过的文档有删除标记，避免旧文件在重启后使其复活。
+
+价格文件整批导入使用事务；导入异常会使启动失败并保留旧文件，修复后可重试。其他文档按文档导入，可重复执行，已成功导入的文档不会重复覆盖。
+
+各业务仍在原有保存触发点写入数据库；药材限价在收到有效行情卡片后立即更新提交。数据库不能恢复从未触发过保存的纯内存状态。
+
+“同步坊市价格”命令现在用于导出 JSON 备份。上传丹方、药材价格到 QQ 群时，会从数据库生成最新的物理导出文件。
+
+## 批量更新坊市限价
+
+机器人自身在查询群发送“开始更新坊市限价”，会从数据库提取药材名称并去重，立即向小小（3889001741）发送第一条 `坊市数据<药材名称>`。只有当前药材在同一群返回有效限价、成功保存到 SQLite 后，才等待两秒发送下一条；一轮结束后发送完成通知。
+
+发送“停止更新坊市限价”会取消尚未发送的延迟查询。重复开始不会启动重叠任务，各机器人独立维护进度。没有收到有效回复时保持等待，可使用停止命令结束；重启后不会自动续跑。
+
+新行情卡片的“分类”会一同保存；旧记录没有分类时，使用现有药材目录识别，只查询数据库中已经存在的药材。
+
+行情解析会先移除卡片图片，再提取物品名称，兼容 SnowLuma 的换行转义。启动时会自动修复旧解析器写入的图片标题前缀，保留原记录的价格、限价、时间和历史。查询发送与保存进度会写入日志。
+
+## 继续使用文件的内容
+
+Spring 启动配置、Docker/NapCat 配置、内置游戏资料（丹方基础库、性平药材等）、日志、图片、更新 JAR 和重启脚本继续采用文件。它们用于启动、资源加载或与外部程序交换数据。
+
+## 备份与部署
+
+SQLite 使用 WAL 和同步提交，连接配置了锁等待；JPA 连接池使用一个连接，事务使用 IMMEDIATE 模式，适配此项目的单实例运行方式。
+
+正常停止程序、等待数据库连接关闭后，复制 `config/qqbot.db` 即可备份。在线备份使用 SQLite 备份工具；不要只复制活动数据库的主文件而遗漏尚未合并的 `-wal`。Docker 部署时，将 `config` 目录挂载到持久卷，或通过 `QQBOT_DATABASE` 指向已有持久目录。
+
+测试 JVM 的 `QQBOT_DATABASE` 指向 `target/test-data/qqbot.db`，不会写入运行中的生产数据库。
+
+参考：[SQLite 适用场景](https://www.sqlite.org/whentouse.html)、[WAL 与备份注意事项](https://www.sqlite.org/wal.html)、[Hibernate 5 SQLite 方言](https://github.com/gwenn/sqlite-dialect)。

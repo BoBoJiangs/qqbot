@@ -20,7 +20,12 @@ public class ProductPrice {
     private Long id;
     private int price;
 
+    /** 市场允许的上架单价范围，单位为灵石；null 表示尚未采集限价。 */
+    private Long marketMinPrice;
+    private Long marketMaxPrice;
+
     private String name;
+    private String category;
     private String code;
     private LocalDateTime time;
     @Transient
@@ -79,8 +84,32 @@ public class ProductPrice {
         return this.price;
     }
 
+    public Long getMarketMinPrice() {
+        return marketMinPrice;
+    }
+
+    public void setMarketMinPrice(Long marketMinPrice) {
+        this.marketMinPrice = marketMinPrice;
+    }
+
+    public Long getMarketMaxPrice() {
+        return marketMaxPrice;
+    }
+
+    public void setMarketMaxPrice(Long marketMaxPrice) {
+        this.marketMaxPrice = marketMaxPrice;
+    }
+
     public String getName() {
         return this.name;
+    }
+
+    public String getCategory() {
+        return category;
+    }
+
+    public void setCategory(String category) {
+        this.category = category;
     }
 
     public String getCode() {

@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.zhuangxv.bot.annotation.OnQQConnected;
 import com.zhuangxv.bot.config.BotConfig;
@@ -72,7 +74,7 @@ public class DanCalculator {
     public void loadOrCreateConfig(Long botId) {
         Path configFile = Paths.get(String.valueOf(botId), "炼丹配置.txt");
         try {
-            if (Files.exists(configFile)) {
+            if (LocalDataFiles.exists(configFile)) {
                 logger.info("配置文件存在，正在读取...");
                 readConfig(botId);
             } else {
@@ -88,7 +90,7 @@ public class DanCalculator {
 
     private void readConfig(Long botId) {
         Path configFile = Paths.get(String.valueOf(botId), "炼丹配置.txt");
-        try (BufferedReader reader = Files.newBufferedReader(configFile, StandardCharsets.UTF_8)) {
+        try (BufferedReader reader = LocalDataFiles.newBufferedReader(configFile, StandardCharsets.UTF_8)) {
             String jsonStr = reader.lines().collect(Collectors.joining());
             if (StringUtils.isNotBlank(jsonStr)) {
                 Config config = JSON.parseObject(jsonStr, Config.class);
@@ -106,7 +108,7 @@ public class DanCalculator {
         Path filePath = Paths.get(String.valueOf(botId), "炼丹配置.txt");
         try {
             Files.createDirectories(filePath.getParent());
-            try (BufferedWriter writer = Files.newBufferedWriter(filePath, StandardCharsets.UTF_8)) {
+            try (BufferedWriter writer = LocalDataFiles.newBufferedWriter(filePath, StandardCharsets.UTF_8)) {
                 writer.write(JSON.toJSONString(config));
                 logger.info("配置保存成功！");
             }
@@ -128,9 +130,9 @@ public class DanCalculator {
                 .computeIfAbsent(config.getAlchemyQQ(), k -> new ConcurrentHashMap<>());
 
         Path filePath = Paths.get(String.valueOf(botId), "药材价格.txt");
-        if (!Files.exists(filePath)) return;
+        if (!LocalDataFiles.exists(filePath)) return;
 
-        try (BufferedReader reader = Files.newBufferedReader(filePath, StandardCharsets.UTF_8)) {
+        try (BufferedReader reader = LocalDataFiles.newBufferedReader(filePath, StandardCharsets.UTF_8)) {
             String line;
             int id = 0;
             while ((line = reader.readLine()) != null) {
@@ -308,8 +310,9 @@ public class DanCalculator {
     }
 
     private void loadTxtFile(Path filePath, Consumer<String[]> processor) throws IOException {
-        if (!Files.exists(filePath)) return;
-        try (BufferedReader br = Files.newBufferedReader(filePath)) {
+        boolean stored = filePath.getFileName().toString().equals("药材价格.txt");
+        if (!(stored ? LocalDataFiles.exists(filePath) : Files.exists(filePath))) return;
+        try (BufferedReader br = stored ? LocalDataFiles.newBufferedReader(filePath) : Files.newBufferedReader(filePath)) {
             br.lines()
                     .map(line -> line.split("\\s+"))
                     .filter(parts -> parts.length >= 2)
@@ -512,7 +515,7 @@ public class DanCalculator {
         Map<Dan, Set<String>> danRecipes = new LinkedHashMap<>();
         String targetFilePath = botId + "/炼丹配方.txt";
         Config config = getConfig(botId);
-        try (BufferedWriter writer = Files.newBufferedWriter(Paths.get(targetFilePath), StandardCharsets.UTF_8)) {
+        try (BufferedWriter writer = LocalDataFiles.newBufferedWriter(Paths.get(targetFilePath), StandardCharsets.UTF_8)) {
             // 三重循环遍历组合（可以考虑 parallelStream 提升性能）
             herbs.parallelStream()
                     .filter(main -> main.price > 0)

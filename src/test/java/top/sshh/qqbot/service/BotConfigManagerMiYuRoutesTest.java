@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,9 +35,9 @@ class BotConfigManagerMiYuRoutesTest {
 
         assertTrue(manager.updateBotConfig(botId, config));
         Path botConfigPath = tempDir.resolve("bot-" + botId + ".json");
-        assertTrue(Files.exists(botConfigPath));
+        assertTrue(LocalDataFiles.exists(botConfigPath));
         assertEquals(routes,
-                JSON.parseObject(Files.readString(botConfigPath), BotConfigPersist.class).getMiYuRoutes());
+                JSON.parseObject(LocalDataFiles.readString(botConfigPath), BotConfigPersist.class).getMiYuRoutes());
 
         BotConfigPersist partialUpdate = JSON.parseObject(
                 JSON.toJSONString(manager.getBotConfig(botId)), BotConfigPersist.class);
@@ -61,7 +63,7 @@ class BotConfigManagerMiYuRoutesTest {
         assertTrue(manager.updateBotConfig(botId, config));
         assertTrue(manager.isGroupRecipeMatchEnabled(botId, firstGroupId));
         Path botConfigPath = tempDir.resolve("bot-" + botId + ".json");
-        BotConfigPersist saved = JSON.parseObject(Files.readString(botConfigPath), BotConfigPersist.class);
+        BotConfigPersist saved = JSON.parseObject(LocalDataFiles.readString(botConfigPath), BotConfigPersist.class);
         assertEquals(Boolean.FALSE, saved.getGroupRecipeMatchEnabled().get(secondGroupId));
 
         BotConfigPersist partialUpdate = JSON.parseObject(

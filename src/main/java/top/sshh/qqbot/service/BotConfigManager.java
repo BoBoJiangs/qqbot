@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
@@ -316,7 +318,7 @@ public class BotConfigManager {
         
         try {
             Path path = getBotConfigPath(botId);
-            if (!Files.exists(path)) {
+            if (!LocalDataFiles.exists(path)) {
                 Bot bot = BotFactory.getBots().get(botId);
                 if (bot != null) {
                     BotConfigPersist persist = createPersistFromRuntime(bot.getBotConfig());
@@ -326,7 +328,7 @@ public class BotConfigManager {
                 return createDefaultConfig();
             }
             
-            String content = Utils.readString(path);
+            String content = LocalDataFiles.readString(path);
             BotConfigPersist persist = JSON.parseObject(content, BotConfigPersist.class);
             
             // 缓存配置
@@ -367,24 +369,7 @@ public class BotConfigManager {
     }
     
     private void saveBotConfigToFile(Long botId, BotConfigPersist config) throws IOException {
-        Path path = getBotConfigPath(botId);
-        Files.createDirectories(path.getParent());
-        Path temp = Files.createTempFile(path.getParent(), "bot-" + botId + "-", ".tmp");
-        try {
-            Files.write(temp,
-                    JSON.toJSONString(config).getBytes(StandardCharsets.UTF_8),
-                    StandardOpenOption.WRITE,
-                    StandardOpenOption.TRUNCATE_EXISTING);
-            try {
-                Files.move(temp, path,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(temp, path, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(temp);
-        }
+        LocalDataFiles.writeString(getBotConfigPath(botId), JSON.toJSONString(config), StandardCharsets.UTF_8);
     }
 
     private List<List<String>> copyMiYuRoutes(List<List<String>> routes) {

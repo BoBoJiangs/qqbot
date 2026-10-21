@@ -5,6 +5,8 @@
 
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.zhuangxv.bot.annotation.BotOfflineHandler;
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
@@ -100,7 +102,7 @@ public class FamilyTask {
 
     public synchronized void saveTasksToFile() {
         try {
-            ObjectOutputStream oos = new ObjectOutputStream(Files.newOutputStream(Paths.get(FILE_PATH)));
+            ObjectOutputStream oos = new ObjectOutputStream(LocalDataFiles.newOutputStream(Paths.get(FILE_PATH)));
 
             try {
                 Iterator<Map.Entry<Long, Long>> iterator = remindMap.entrySet().iterator();
@@ -128,9 +130,9 @@ public class FamilyTask {
 
     private synchronized void loadTasksFromFile() {
         File dataFile = new File("./cache");
-        if (dataFile.exists()) {
+        if (LocalDataFiles.exists(java.nio.file.Paths.get(FILE_PATH))) {
             try {
-                ObjectInputStream ois = new ObjectInputStream(Files.newInputStream(new File(FILE_PATH).toPath()));
+                ObjectInputStream ois = new ObjectInputStream(LocalDataFiles.newInputStream(new File(FILE_PATH).toPath()));
                 Map<String, Object> data = (Map) ois.readObject();
                 this.remindMap = (ConcurrentHashMap) data.get("灵田提醒");
 

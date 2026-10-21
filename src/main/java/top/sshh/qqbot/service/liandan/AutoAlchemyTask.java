@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Buttons;
@@ -178,7 +180,7 @@ public class AutoAlchemyTask {
         if (message.equals("查询炼丹配方")) {
             customPool.submit(() -> {
                 try {
-                    File dataFile = new File(botId + "/炼丹配方.txt");
+                    File dataFile = LocalDataFiles.export(java.nio.file.Paths.get(botId + "/炼丹配方.txt")).toFile();
                     if (dataFile.exists()) {
                         bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "炼丹配方.txt", "");
                     } else {
@@ -193,7 +195,7 @@ public class AutoAlchemyTask {
         if (message.equals("查询药材价格")) {
             customPool.submit(() -> {
                 try {
-                    File dataFile = new File(botId + "/药材价格.txt");
+                    File dataFile = LocalDataFiles.export(java.nio.file.Paths.get(botId + "/药材价格.txt")).toFile();
                     bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "药材价格.txt", "");
                 } catch (Exception e) {
                     System.err.println("上传文件异常");
@@ -806,7 +808,7 @@ public class AutoAlchemyTask {
     public int getHerbCount(String name, Long botId) {
         ReentrantLock lock = getBotLock(botId);
         lock.lock();
-        try (BufferedReader reader = new BufferedReader(new FileReader(botId + "/背包药材.txt"))) {
+        try (BufferedReader reader = LocalDataFiles.newBufferedReader(java.nio.file.Paths.get(botId + "/背包药材.txt"))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 String[] parts = line.split("\\s+");
@@ -836,7 +838,7 @@ public class AutoAlchemyTask {
             boolean found = false;
 
             // 读取
-            try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            try (BufferedReader reader = LocalDataFiles.newBufferedReader(java.nio.file.Paths.get(filePath))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     String[] parts = line.split("\\s+");
@@ -863,7 +865,7 @@ public class AutoAlchemyTask {
             }
 
             // 写回
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath, false))) {
+            try (BufferedWriter writer = LocalDataFiles.newBufferedWriter(java.nio.file.Paths.get(filePath))) {
                 for (String outLine : lines) {
                     writer.write(outLine);
                     writer.newLine();
@@ -882,9 +884,9 @@ public class AutoAlchemyTask {
         Map<String, List<String>> danRecipes = new LinkedHashMap<>();
         String path = botId + "/炼丹配方.txt";
         File file = new File(path);
-        if (!file.exists()) return danRecipes;
+        if (!LocalDataFiles.exists(file.toPath())) return danRecipes;
 
-        try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+        try (BufferedReader reader = LocalDataFiles.newBufferedReader(file.toPath())) {
             String currentDan = null;
             List<String> currentRecipes = null;
             String line;
@@ -925,7 +927,7 @@ public class AutoAlchemyTask {
             boolean found = false;
 
             // 读取并替换
-            try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
+            try (BufferedReader reader = LocalDataFiles.newBufferedReader(java.nio.file.Paths.get(filePath))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
                     String[] parts = line.split("\\s+");
@@ -947,7 +949,7 @@ public class AutoAlchemyTask {
             }
 
             // 写回
-            try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath, false))) {
+            try (BufferedWriter writer = LocalDataFiles.newBufferedWriter(java.nio.file.Paths.get(filePath))) {
                 for (String out : lines) {
                     writer.write(out);
                     writer.newLine();
@@ -963,7 +965,7 @@ public class AutoAlchemyTask {
 
     private static void clearFile(String filePath, Long botId) {
         // 按原逻辑直接覆盖为空文件（注意：此方法在上文 enableScheduled 中以非阻塞方式调用）
-        try (FileWriter fw = new FileWriter(filePath, false)) {
+        try (BufferedWriter fw = LocalDataFiles.newBufferedWriter(java.nio.file.Paths.get(filePath))) {
             System.out.println("背包文件清空: " + filePath);
         } catch (Exception e) {
             System.out.println("背包文件清空错误: " + e.getMessage());

@@ -18,6 +18,7 @@ import top.sshh.qqbot.data.ProductLowPrice;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.service.utils.CompletionMessageSender;
 import top.sshh.qqbot.service.utils.HerbBackpackParser;
+import top.sshh.qqbot.service.utils.MarketPriceUtils;
 import top.sshh.qqbot.service.utils.Utils;
 
 import java.util.*;
@@ -444,7 +445,7 @@ public class AutoSellGoods {
                 }
                 ProductPrice first = this.productPriceResponse
                         .getFirstByNameOrderByTimeDesc(productPrice.getName().trim());
-                if (first == null) {
+                if (first == null || first.getPrice() <= 0) {
                     group.sendMessage(new MessageChain().text("药材：" + productPrice.getName()
                             + "未找到坊市价格，已跳过"));
                     autoBuyList.remove(0);
@@ -463,8 +464,9 @@ public class AutoSellGoods {
 
                 long delayMs = ThreadLocalRandom.current().nextLong(1000L, 2001L);
                 Thread.sleep(delayMs);
+                long listingPrice = MarketPriceUtils.limitListingPrice(first, ((long) first.getPrice() - 10L) * 10000L);
                 Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741")
-                        .text("确认坊市上架 " + first.getName() + " " + (first.getPrice() - 10) * 10000 + " "
+                        .text("确认坊市上架 " + first.getName() + " " + listingPrice + " "
                                 + productPrice.getHerbCount()));
                 return;
             } catch (Exception var6) {

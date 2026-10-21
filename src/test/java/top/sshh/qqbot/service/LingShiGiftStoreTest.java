@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -76,9 +78,9 @@ class LingShiGiftStoreTest {
         assertThrows(ArithmeticException.class, () -> store.recordReceipt(300, 100, "100:1", 1));
         assertThrows(IllegalArgumentException.class, () -> store.configure(0, 200, 300, 0L));
         assertEquals(Long.MAX_VALUE, new LingShiGiftStore(path).totalFor(300, 100));
-        Files.writeString(path, "{invalid");
+        LocalDataFiles.writeString(path, "{invalid", java.nio.charset.StandardCharsets.UTF_8);
         assertThrows(IOException.class, () -> new LingShiGiftStore(path).configure(100, 200, 300, 0L));
-        assertEquals("{invalid", Files.readString(path));
+        assertEquals("{invalid", LocalDataFiles.readString(path));
     }
 
     @Test
@@ -114,12 +116,8 @@ class LingShiGiftStoreTest {
         assertNull(store.recordReceipt(301, 100, "100:message:1", 87000000L));
         assertEquals(legacy, Files.readString(path));
         assertEquals(88000000L, store.recordReceipt(300, 100, "100:message:2", 1000000L));
-        assertEquals(2, JSON.parseObject(Files.readString(path)).getIntValue("version"));
-        try (java.util.stream.Stream<Path> files = Files.list(directory)) {
-            Path backup = files.filter(file -> file.getFileName().toString().startsWith("gifts.json.v1-"))
-                    .findFirst().orElseThrow();
-            assertEquals(legacy, Files.readString(backup));
-        }
+        assertEquals(2, JSON.parseObject(LocalDataFiles.readString(path)).getIntValue("version"));
+        assertEquals(legacy, Files.readString(path), "原文件保留为迁移备份");
         LingShiGiftStore restored = new LingShiGiftStore(path);
         assertEquals(88000000L, restored.totalFor(300, 100));
         assertEquals(87000000L, restored.totalFor(301, 100));

@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.impl;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.TypeReference;
 import com.alibaba.fastjson2.JSONWriter;
@@ -31,13 +33,13 @@ public class TaskStore {
     /** 加载配置 */
     public static synchronized void loadTasks() {
         File file = new File(CONFIG_FILE);
-        if (!file.exists()) {
+        if (!LocalDataFiles.exists(file.toPath())) {
             taskMap = new ConcurrentHashMap<>();
             return;
         }
         try {
             // 读取文件全部内容为字符串
-            String content = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            String content = new String(LocalDataFiles.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
 
             taskMap = JSON.parseObject(content, new TypeReference<ConcurrentHashMap<String, List<TaskInfo>>>(){});
             if (taskMap == null) {
@@ -51,7 +53,7 @@ public class TaskStore {
 
     /** 保存配置 */
     public static synchronized void saveTasks() {
-        try (Writer writer = new FileWriter(CONFIG_FILE)) {
+        try (Writer writer = LocalDataFiles.newBufferedWriter(java.nio.file.Paths.get(CONFIG_FILE))) {
             writer.write(JSON.toJSONString(taskMap, JSONWriter.Feature.PrettyFormat));
         } catch (IOException e) {
             e.printStackTrace();

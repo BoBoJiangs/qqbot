@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.zhuangxv.bot.annotation.GroupMessageHandler;
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
@@ -396,12 +398,12 @@ public class AutoBuyHerbs {
         Map<String, Integer> repeatBuyLimits = repeatBuyLimitMap.computeIfAbsent(
                 botId, k -> new ConcurrentHashMap<>());
         Path filePath = getRepeatBuyConfigPath(botId);
-        if (!Files.exists(filePath)) {
+        if (!LocalDataFiles.exists(filePath)) {
             return;
         }
 
         try {
-            for (String line : Files.readAllLines(filePath, StandardCharsets.UTF_8)) {
+            for (String line : LocalDataFiles.readAllLines(filePath, StandardCharsets.UTF_8)) {
                 String[] parts = line.trim().split("\\s+", 3);
                 if (parts.length >= 2) {
                     try {
@@ -455,7 +457,7 @@ public class AutoBuyHerbs {
                                 + " " + herbName;
                     })
                     .collect(Collectors.toList());
-            Files.write(filePath, lines, StandardCharsets.UTF_8,
+            LocalDataFiles.write(filePath, lines, StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE,
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.WRITE);
@@ -565,7 +567,7 @@ public class AutoBuyHerbs {
 
         // 如果purchases为空，清空文件
         if (purchases == null || purchases.isEmpty()) {
-            try (BufferedWriter writer = Files.newBufferedWriter(filePath,
+            try (BufferedWriter writer = LocalDataFiles.newBufferedWriter(filePath,
                     StandardOpenOption.TRUNCATE_EXISTING,
                     StandardOpenOption.CREATE)) {
                 // 空操作，打开文件时TRUNCATE_EXISTING选项会自动清空文件
@@ -576,7 +578,7 @@ public class AutoBuyHerbs {
         Map<String, String> medicineMap = new LinkedHashMap<>();
 
         // 读取现有文件内容
-        try (BufferedReader reader = Files.newBufferedReader(filePath)) {
+        try (BufferedReader reader = LocalDataFiles.newBufferedReader(filePath)) {
             String line;
             while ((line = reader.readLine()) != null) {
                 line = line.trim();
@@ -599,7 +601,7 @@ public class AutoBuyHerbs {
         }
 
         // 写回文件
-        try (BufferedWriter writer = Files.newBufferedWriter(filePath,
+        try (BufferedWriter writer = LocalDataFiles.newBufferedWriter(filePath,
                 StandardOpenOption.CREATE,
                 StandardOpenOption.TRUNCATE_EXISTING)) {
             for (Map.Entry<String, String> entry : medicineMap.entrySet()) {

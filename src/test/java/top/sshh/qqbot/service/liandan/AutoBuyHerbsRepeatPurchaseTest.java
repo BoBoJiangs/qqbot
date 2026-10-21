@@ -1,5 +1,7 @@
 package top.sshh.qqbot.service.liandan;
 
+import top.sshh.qqbot.service.storage.LocalDataFiles;
+
 import com.zhuangxv.bot.config.BotConfig;
 import com.zhuangxv.bot.core.Bot;
 import com.zhuangxv.bot.core.Group;
@@ -57,9 +59,9 @@ class AutoBuyHerbsRepeatPurchaseTest {
         ReflectionTestUtils.invokeMethod(writer, "saveRepeatBuyConfig", BOT_ID);
 
         Path configPath = tempDir.resolve(String.valueOf(BOT_ID)).resolve("重复采购药材.txt");
-        assertTrue(Files.exists(configPath));
-        assertEquals("80 乌灵参", Files.readAllLines(configPath, StandardCharsets.UTF_8).get(0));
-        assertFalse(Files.exists(tempDir.resolve(String.valueOf(BOT_ID)).resolve("药材价格.txt")));
+        assertTrue(LocalDataFiles.exists(configPath));
+        assertEquals("80 乌灵参", LocalDataFiles.readAllLines(configPath, StandardCharsets.UTF_8).get(0));
+        assertFalse(LocalDataFiles.exists(tempDir.resolve(String.valueOf(BOT_ID)).resolve("药材价格.txt")));
 
         AutoBuyHerbs reader = new AutoBuyHerbs();
         assertTrue(repeatHerbs(reader).contains("乌灵参"));
@@ -74,7 +76,7 @@ class AutoBuyHerbsRepeatPurchaseTest {
         ReflectionTestUtils.invokeMethod(writer, "saveRepeatBuyConfig", BOT_ID);
 
         Path configPath = tempDir.resolve(String.valueOf(BOT_ID)).resolve("重复采购药材.txt");
-        assertEquals("900 30 玄冰花", Files.readAllLines(configPath, StandardCharsets.UTF_8).get(0));
+        assertEquals("900 30 玄冰花", LocalDataFiles.readAllLines(configPath, StandardCharsets.UTF_8).get(0));
 
         AutoBuyHerbs reader = new AutoBuyHerbs();
         assertEquals(900, repeatPrices(reader).get("玄冰花"));
@@ -269,7 +271,7 @@ class AutoBuyHerbsRepeatPurchaseTest {
         repeatLimits(service).put("玄冰花", 30);
         ReflectionTestUtils.invokeMethod(service, "saveRepeatBuyConfig", BOT_ID);
         Path repeatFile = tempDir.resolve(String.valueOf(BOT_ID)).resolve("重复采购药材.txt");
-        String originalRepeatFile = Files.readString(repeatFile, StandardCharsets.UTF_8);
+        String originalRepeatFile = LocalDataFiles.readString(repeatFile, StandardCharsets.UTF_8);
         Map<String, ProductPrice> originalNormal = AutoBuyHerbs.AUTO_BUY_HERBS.put(BOT_ID,
                 Map.of("玄冰花", product("玄冰花", 950), "乌灵参", product("乌灵参", 100)));
         try {
@@ -314,7 +316,7 @@ class AutoBuyHerbsRepeatPurchaseTest {
             assertEquals(30, repeatLimits(service).get("玄冰花"));
             assertEquals(950, AutoBuyHerbs.AUTO_BUY_HERBS.get(BOT_ID).get("玄冰花").getPrice());
             assertEquals(100, AutoBuyHerbs.AUTO_BUY_HERBS.get(BOT_ID).get("乌灵参").getPrice());
-            assertEquals(originalRepeatFile, Files.readString(repeatFile, StandardCharsets.UTF_8));
+            assertEquals(originalRepeatFile, LocalDataFiles.readString(repeatFile, StandardCharsets.UTF_8));
         } finally {
             if (originalNormal == null) AutoBuyHerbs.AUTO_BUY_HERBS.remove(BOT_ID);
             else AutoBuyHerbs.AUTO_BUY_HERBS.put(BOT_ID, originalNormal);
@@ -329,7 +331,7 @@ class AutoBuyHerbsRepeatPurchaseTest {
         repeatLimits(service).put("玄冰花", 30);
         ReflectionTestUtils.invokeMethod(service, "saveRepeatBuyConfig", BOT_ID);
         Path repeatFile = tempDir.resolve(String.valueOf(BOT_ID)).resolve("重复采购药材.txt");
-        String originalRepeatFile = Files.readString(repeatFile, StandardCharsets.UTF_8);
+        String originalRepeatFile = LocalDataFiles.readString(repeatFile, StandardCharsets.UTF_8);
         Bot bot = org.mockito.Mockito.mock(Bot.class);
         Group group = org.mockito.Mockito.mock(Group.class);
         org.mockito.Mockito.when(bot.getBotId()).thenReturn(BOT_ID);
@@ -340,11 +342,11 @@ class AutoBuyHerbsRepeatPurchaseTest {
                 "采购药材玄冰花 80", 1, normalRules, false);
 
         assertEquals(80, normalRules.get("玄冰花").getPrice());
-        assertTrue(Files.readString(tempDir.resolve(String.valueOf(BOT_ID)).resolve("药材价格.txt"),
+        assertTrue(LocalDataFiles.readString(tempDir.resolve(String.valueOf(BOT_ID)).resolve("药材价格.txt"),
                 StandardCharsets.UTF_8).contains("80 玄冰花"));
         assertEquals(900, repeatPrices(service).get("玄冰花"));
         assertEquals(30, repeatLimits(service).get("玄冰花"));
-        assertEquals(originalRepeatFile, Files.readString(repeatFile, StandardCharsets.UTF_8));
+        assertEquals(originalRepeatFile, LocalDataFiles.readString(repeatFile, StandardCharsets.UTF_8));
     }
 
     private Set<String> repeatHerbs(AutoBuyHerbs service) {
