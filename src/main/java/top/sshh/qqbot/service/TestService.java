@@ -101,6 +101,10 @@ public class TestService {
     private final Map<Long, Long> myTimeMap = new ConcurrentHashMap<>();
     // 秘域探索（探索秘域地图自动选路/选丹药）：botId -> 上下文，内存态
     private final Map<Long, MiYuExploreContext> miyuExploreMap = new ConcurrentHashMap<>();
+    // 坊市轮询的上一轮页码与验证码等待状态，按机器人隔离。
+    private final Map<Long, MarketRefreshProgress> marketRefreshProgress = new ConcurrentHashMap<>();
+    @Value("${market.captcha-recovery-timeout-ms:300000}")
+    private long marketCaptchaRecoveryTimeoutMs = 300000L;
     private static final int MIYU_MAX_MAP_REFRESH = 6;
     private static final long MIYU_CONTEXT_TIMEOUT_MS = 30 * 60 * 1000L;
     private static final List<String> MIYU_PILL_WHITELIST = Arrays.asList(
@@ -190,6 +194,7 @@ public class TestService {
 
             if ("停止执行".equals(message)) {
                 botConfig.setStop(true);
+                stopMarketRefresh(bot);
                 this.miyuExploreMap.remove(bot.getBotId());
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
                 bot.getBotConfig().setCommand("");
@@ -753,10 +758,7 @@ public class TestService {
                 botConfig.setStartScheduledHerbs(true);
                 group.sendMessage((new MessageChain()).reply(messageId).text("开始更新坊市成功"));
             } else if ("停止更新坊市".equals(message)) {
-                botConfig.setStartScheduledMarket(false);
-                botConfig.setStartScheduledEquip(false);
-                botConfig.setStartScheduledSkills(false);
-                botConfig.setStartScheduledHerbs(false);
+                stopMarketRefresh(bot);
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止更新坊市成功"));
             } else if (!message.startsWith("查询自动购买")) {
                 if (message.startsWith("取消自动购买")) {
@@ -2345,36 +2347,37 @@ public class TestService {
     }
 
     @GroupMessageHandler(senderIds = { 3889001741L })
-    public void 验证码判断(Bot bot, Group group, Member member, MessageChain messageChain, String message, Integer messageId,
+    public void 验证码判断(Bot bot, Group group, Member member, MessageChain messageChain, String rawMessage, Integer messageId,
             Buttons buttons) {
+        String message = StringUtils.defaultString(rawMessage) + "\n" + Utils.getMessageText(messageChain);
+        boolean isAtSelf = Utils.isAtSelf(bot, message) || messageChain != null
+                && messageChain.getMessageByType(AtMessage.class).stream()
+                        .anyMatch(at -> String.valueOf(bot.getBotId()).equals(at.getQq()));
         if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
             // SnowLuma 等协议端注入不出按钮，从消息里的 inline_keyboard 段兜底解析
             buttons = Utils.parseButtonsFromMessage(bot, message, messageId);
         }
-        if (message.contains("解除限制") && bot.getBotConfig().getGroupId() == group.getGroupId()) {
+        if (message.contains("解除限制") && isAtSelf && group != null
+                && bot.getBotConfig().getGroupId() == group.getGroupId()) {
             bot.getBotConfig().setStop(true);
             bot.getBotConfig().setLastRefreshTime(System.currentTimeMillis() + 300000L);
             bot.getBotConfig().setFamilyTaskStatus(0);
             bot.getBotConfig().setCultivationMode(0);
-            bot.getBotConfig().setStartScheduledMarket(false);
-            bot.getBotConfig().setStartScheduledEquip(false);
-            bot.getBotConfig().setStartScheduledSkills(false);
-            bot.getBotConfig().setStartScheduledHerbs(false);
+            stopMarketRefresh(bot);
             bot.getBotConfig().setLastExecuteTime(9223372036854175807L);
             bot.getBotConfig().setVerificationStatus("失败");
             bot.getBotConfig().setEnableAutoBuyLowPrice(false);
             bot.getBotConfig().setAutoBuyHerbsMode(0);
         }
 
-        if (message.contains("请点击") && message.contains("表情") && Utils.isAtSelf(bot, message)) {
+        boolean captchaPrompt = message.contains("请点击") && message.contains("表情");
+        if (captchaPrompt && isAtSelf) {
+            BotConfig botConfig = bot.getBotConfig();
+            botConfig.setStop(true);
+            botConfig.setLastRefreshTime(System.currentTimeMillis() + 300000L);
+            // 即使协议端没有解析出按钮，也应暂停轮询；保留开关和被拦截页供验证后重试。
+            pauseMarketRefreshForCaptcha(bot, group);
             if (buttons != null && !buttons.getButtonList().isEmpty() && buttons.getButtonList().size() > 5) {
-                BotConfig botConfig = bot.getBotConfig();
-                botConfig.setStop(true);
-                botConfig.setLastRefreshTime(System.currentTimeMillis() + 300000L);
-                botConfig.setStartScheduledMarket(false);
-                botConfig.setStartScheduledEquip(false);
-                botConfig.setStartScheduledSkills(false);
-                botConfig.setStartScheduledHerbs(false);
                 botButtonMap.put(bot.getBotId(), buttons);
                 buttons.setGroupId(group.getGroupId());
 
@@ -2417,9 +2420,16 @@ public class TestService {
             }
         }
 
-        if ((message.contains("奖励") && message.contains("灵石") || message.contains("不需要验证") || message.contains("验证码已过期")
-                || message.contains("验证码不正确")) && message.contains("" + bot.getBotId())) {
+        boolean verificationFailed = message.contains("验证码不正确") || message.contains("验证失败")
+                || message.contains("验证未通过") || message.contains("未验证通过");
+        boolean verified = !captchaPrompt && !verificationFailed
+                && (message.contains("奖励") && message.contains("灵石") || message.contains("不需要验证")
+                        || message.contains("验证成功") || message.contains("验证通过"));
+        if ((verified || message.contains("验证码已过期") || message.contains("验证码不正确")) && isAtSelf) {
             bot.getBotConfig().setStop(false);
+            if (verified) {
+                resumeMarketRefreshAfterCaptcha(bot, group);
+            }
             if (message.contains("奖励") && message.contains("灵石")
                     && StringUtils.isNotBlank(bot.getBotConfig().getCommand())) {
                 bot.getBotConfig().setVerificationStatus("");
@@ -3936,9 +3946,41 @@ public class TestService {
 
     @Scheduled(fixedDelay = 3000L, initialDelay = 30000L)
     public void 定时查询坊市() {
-        BotFactory.getBots().values().forEach((bot) -> {
+        BotFactory.getBots().values().forEach(this::refreshMarket);
+    }
+
+    private void refreshMarket(Bot bot) {
+        refreshMarket(bot, System.currentTimeMillis());
+    }
+
+    private void refreshMarket(Bot bot, long now) {
+        synchronized (bot.getBotConfig()) {
             BotConfig botConfig = bot.getBotConfig();
             long groupId = botConfig.getGroupId();
+            MarketRefreshProgress progress = marketRefreshProgress.get(bot.getBotId());
+            if (progress != null && progress.groupId != groupId) {
+                marketRefreshProgress.remove(bot.getBotId());
+                progress = null;
+            }
+            if (!isMarketRefreshEnabled(botConfig)) {
+                marketRefreshProgress.remove(bot.getBotId());
+                return;
+            }
+            if (progress != null && progress.waitingForCaptcha) {
+                // 仅全自动模式允许超时重试；显式停止/账号受限已清除此状态。
+                if (botConfig.getAutoVerifyModel() != 2 || now < progress.captchaWaitUntil) {
+                    return;
+                }
+                progress.waitingForCaptcha = false;
+                botConfig.setStop(false);
+                botConfig.setVerificationStatus("失败");
+                log.warn("坊市更新验证码等待超时，botId={}, groupId={}，重新查询当前页", bot.getBotId(), groupId);
+            }
+            if (botConfig.isStop()) {
+                return;
+            }
+            progress = new MarketRefreshProgress(botConfig);
+            marketRefreshProgress.put(bot.getBotId(), progress);
             if (botConfig.isStartScheduledMarket()) {
                 if (botConfig.getTaskStatusEquip() == 5 && botConfig.getTaskStatusSkills() == 10
                         && botConfig.getTaskStatusHerbs() == 8) {
@@ -3948,17 +3990,23 @@ public class TestService {
                 }
 
                 if (botConfig.getTaskStatusEquip() < 5) {
-                    Utils.sendGroupMessage(bot, groupId,
-                            (new MessageChain()).at("3889001741").text("查看坊市装备" + botConfig.getTaskStatusEquip()));
-                    botConfig.setTaskStatusEquip(botConfig.getTaskStatusEquip() + 1);
+                    if (Utils.sendGroupMessage(bot, groupId,
+                            (new MessageChain()).at("3889001741").text("查看坊市装备" + botConfig.getTaskStatusEquip()))) {
+                        if (progress.equipPage == null) progress.equipPage = botConfig.getTaskStatusEquip();
+                        botConfig.setTaskStatusEquip(botConfig.getTaskStatusEquip() + 1);
+                    }
                 } else if (botConfig.getTaskStatusSkills() < 10) {
-                    Utils.sendGroupMessage(bot, groupId,
-                            (new MessageChain()).at("3889001741").text("查看坊市技能" + botConfig.getTaskStatusSkills()));
-                    botConfig.setTaskStatusSkills(botConfig.getTaskStatusSkills() + 1);
+                    if (Utils.sendGroupMessage(bot, groupId,
+                            (new MessageChain()).at("3889001741").text("查看坊市技能" + botConfig.getTaskStatusSkills()))) {
+                        if (progress.skillsPage == null) progress.skillsPage = botConfig.getTaskStatusSkills();
+                        botConfig.setTaskStatusSkills(botConfig.getTaskStatusSkills() + 1);
+                    }
                 } else if (botConfig.getTaskStatusHerbs() < 8) {
-                    Utils.sendGroupMessage(bot, groupId,
-                            (new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
-                    botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
+                    if (Utils.sendGroupMessage(bot, groupId,
+                            (new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()))) {
+                        if (progress.herbsPage == null) progress.herbsPage = botConfig.getTaskStatusHerbs();
+                        botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
+                    }
                 }
             }
 
@@ -3968,9 +4016,11 @@ public class TestService {
                 }
 
                 if (botConfig.getTaskStatusEquip() < 5) {
-                    Utils.sendGroupMessage(bot, groupId,
-                            (new MessageChain()).at("3889001741").text("查看坊市装备" + botConfig.getTaskStatusEquip()));
-                    botConfig.setTaskStatusEquip(botConfig.getTaskStatusEquip() + 1);
+                    if (Utils.sendGroupMessage(bot, groupId,
+                            (new MessageChain()).at("3889001741").text("查看坊市装备" + botConfig.getTaskStatusEquip()))) {
+                        if (progress.equipPage == null) progress.equipPage = botConfig.getTaskStatusEquip();
+                        botConfig.setTaskStatusEquip(botConfig.getTaskStatusEquip() + 1);
+                    }
                 }
             }
 
@@ -3980,9 +4030,11 @@ public class TestService {
                 }
 
                 if (botConfig.getTaskStatusSkills() < 10) {
-                    Utils.sendGroupMessage(bot, groupId,
-                            (new MessageChain()).at("3889001741").text("查看坊市技能" + botConfig.getTaskStatusSkills()));
-                    botConfig.setTaskStatusSkills(botConfig.getTaskStatusSkills() + 1);
+                    if (Utils.sendGroupMessage(bot, groupId,
+                            (new MessageChain()).at("3889001741").text("查看坊市技能" + botConfig.getTaskStatusSkills()))) {
+                        if (progress.skillsPage == null) progress.skillsPage = botConfig.getTaskStatusSkills();
+                        botConfig.setTaskStatusSkills(botConfig.getTaskStatusSkills() + 1);
+                    }
                 }
             }
 
@@ -3992,13 +4044,83 @@ public class TestService {
                 }
 
                 if (botConfig.getTaskStatusHerbs() < 8) {
-                    Utils.sendGroupMessage(bot, groupId,
-                            (new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()));
-                    botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
+                    if (Utils.sendGroupMessage(bot, groupId,
+                            (new MessageChain()).at("3889001741").text("查看坊市药材" + botConfig.getTaskStatusHerbs()))) {
+                        if (progress.herbsPage == null) progress.herbsPage = botConfig.getTaskStatusHerbs();
+                        botConfig.setTaskStatusHerbs(botConfig.getTaskStatusHerbs() + 1);
+                    }
                 }
             }
+        }
+    }
 
-        });
+    private boolean isMarketRefreshEnabled(BotConfig config) {
+        return config.isStartScheduledMarket() || config.isStartScheduledEquip()
+                || config.isStartScheduledSkills() || config.isStartScheduledHerbs();
+    }
+
+    private void pauseMarketRefreshForCaptcha(Bot bot, Group group) {
+        BotConfig config = bot.getBotConfig();
+        synchronized (config) {
+            if (group == null || group.getGroupId() != config.getGroupId() || !isMarketRefreshEnabled(config)) {
+                return;
+            }
+            MarketRefreshProgress progress = marketRefreshProgress.get(bot.getBotId());
+            if (progress == null || progress.groupId != group.getGroupId()) {
+                progress = new MarketRefreshProgress(config);
+                marketRefreshProgress.put(bot.getBotId(), progress);
+            }
+            if (!progress.waitingForCaptcha) {
+                progress.restore(config);
+                progress.waitingForCaptcha = true;
+                progress.captchaWaitUntil = System.currentTimeMillis() + Math.max(5000L, marketCaptchaRecoveryTimeoutMs);
+                log.info("坊市更新等待验证码，botId={}, groupId={}，验证通过后重试当前页",
+                        bot.getBotId(), group.getGroupId());
+            }
+        }
+    }
+
+    private void resumeMarketRefreshAfterCaptcha(Bot bot, Group group) {
+        BotConfig config = bot.getBotConfig();
+        synchronized (config) {
+            MarketRefreshProgress progress = marketRefreshProgress.get(bot.getBotId());
+            if (progress != null && progress.waitingForCaptcha && group != null
+                    && progress.groupId == group.getGroupId() && progress.groupId == config.getGroupId()) {
+                progress.waitingForCaptcha = false;
+                log.info("坊市更新验证完成，botId={}, groupId={}，恢复查询", bot.getBotId(), group.getGroupId());
+            }
+        }
+    }
+
+    private void stopMarketRefresh(Bot bot) {
+        BotConfig config = bot.getBotConfig();
+        synchronized (config) {
+            config.setStartScheduledMarket(false);
+            config.setStartScheduledEquip(false);
+            config.setStartScheduledSkills(false);
+            config.setStartScheduledHerbs(false);
+            marketRefreshProgress.remove(bot.getBotId());
+        }
+    }
+
+    private static class MarketRefreshProgress {
+        final long groupId;
+        Integer equipPage;
+        Integer skillsPage;
+        Integer herbsPage;
+        boolean waitingForCaptcha;
+        long captchaWaitUntil;
+
+        MarketRefreshProgress(BotConfig config) {
+            groupId = config.getGroupId();
+        }
+
+        void restore(BotConfig config) {
+            // 仅重试这一轮实际查询过的页面，不改动其他任务使用的分类页码。
+            if (equipPage != null) config.setTaskStatusEquip(equipPage);
+            if (skillsPage != null) config.setTaskStatusSkills(skillsPage);
+            if (herbsPage != null) config.setTaskStatusHerbs(herbsPage);
+        }
     }
 
     @Scheduled(fixedDelay = 60000L, initialDelay = 3000L)
