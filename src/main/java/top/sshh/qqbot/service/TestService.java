@@ -89,6 +89,10 @@ public class TestService {
     private UpdateService updateService;
     @Autowired
     private BotConfigManager botConfigManager;
+    @Autowired
+    private GameTaskStateStore gameTaskStateStore;
+    private final Map<Long, Bot> restoredTaskBots = new ConcurrentHashMap<>();
+    private final Map<Long, Long> miYuRecoveryAttempts = new ConcurrentHashMap<>();
     @Value("${xxGroupId:0}")
     private Long xxGroupId;
     // @Value("${captcha.shitu-url:#{null}}")
@@ -97,9 +101,9 @@ public class TestService {
     private String shituApiUrl;
     private boolean isFirst = true;
 
-    // 秘域自动结算：botId -> 预计到期时间戳（bot-core 的 BotConfig 无法加字段，内存态即可）
+    // 秘域自动结算：botId -> 预计到期时间戳；变化时同步写入 SQLite。
     private final Map<Long, Long> myTimeMap = new ConcurrentHashMap<>();
-    // 秘域探索（探索秘域地图自动选路/选丹药）：botId -> 上下文，内存态
+    // 秘域探索（探索秘域地图自动选路/选丹药）：botId -> 可恢复的业务上下文。
     private final Map<Long, MiYuExploreContext> miyuExploreMap = new ConcurrentHashMap<>();
     // 坊市轮询的上一轮页码与验证码等待状态，按机器人隔离。
     private final Map<Long, MarketRefreshProgress> marketRefreshProgress = new ConcurrentHashMap<>();
@@ -195,7 +199,7 @@ public class TestService {
             if ("停止执行".equals(message)) {
                 botConfig.setStop(true);
                 stopMarketRefresh(bot);
-                this.miyuExploreMap.remove(bot.getBotId());
+                cancelAutomaticGameTasks(bot);
                 group.sendMessage((new MessageChain()).reply(messageId).text("停止执行成功"));
                 bot.getBotConfig().setCommand("");
             }
@@ -226,20 +230,20 @@ public class TestService {
                 MiYuExploreContext exploreContext = null;
                 boolean plainMiYuCommand = "开始自动秘域".equals(message.trim());
                 if (plainMiYuCommand) {
-                    // 不带设置 = 明确走快捷流程，清掉可能残留的旧设置
-                    this.miyuExploreMap.remove(bot.getBotId());
+                    exploreContext = new MiYuExploreContext();
+                    exploreContext.setQuickStart(true);
                 } else {
                     exploreContext = this.parseMiYuExploreContext(bot, group, message.trim(), messageId);
                 }
                 if (plainMiYuCommand || exploreContext != null) {
                     if (exploreContext != null) {
-                        this.miyuExploreMap.put(bot.getBotId(), exploreContext);
+                        this.putMiYuContext(bot.getBotId(), exploreContext);
                     }
                     botConfig.setCommand("开始自动秘域");
                     if (cultivationMode == 3) {
                         familyBotList.add(bot);
                     }
-                    this.startAutoTask(bot, botConfig, cultivationMode, groupId, message);
+                    this.startAutoTask(bot, botConfig, cultivationMode, groupId, "开始自动秘域");
                 }
             }
 
@@ -887,16 +891,162 @@ public class TestService {
     @OnQQConnected
     public void onConnected(Bot bot) {
         BotConfig botConfig = bot.getBotConfig();
+        loadBotConfig(bot);
+        try {
+            restoreGameTaskState(bot);
+        } catch (Exception e) {
+            log.error("游戏任务恢复失败，保留原存档等待重试：botId={}", bot.getBotId(), e);
+        }
         // if (!botConfig.isEnableAlchemy()) return;
 
         customPool.submit(() -> {
-            loadBotConfig(bot);
+            if (gameTaskStateStore == null || restoredTaskBots.get(bot.getBotId()) == bot) {
+                resumeMiYuExploration(bot);
+            }
 
             if (!botConfig.isEnableAlchemy())
                 return;
             danCalculator.loadOrCreateConfig(bot.getBotId());
             danCalculator.addAutoBuyHerbs(bot.getBotId());
         });
+    }
+
+    void restoreGameTaskState(Bot bot) {
+        if (gameTaskStateStore == null) return;
+        synchronized (bot) {
+            if (restoredTaskBots.get(bot.getBotId()) == bot) return;
+            synchronized (miyuExploreMap) {
+                GameTaskStateStore.State state = gameTaskStateStore.load(bot.getBotId());
+                if (state.mjTime != null) bot.getBotConfig().setMjTime(state.mjTime);
+                if (state.xslTime != null) bot.getBotConfig().setXslTime(state.xslTime);
+                if (state.myTime != null) myTimeMap.put(bot.getBotId(), state.myTime);
+                else myTimeMap.remove(bot.getBotId());
+                if (state.exploration != null && (state.myTime == null || state.myTime <= 0L)) {
+                    MiYuExploreContext context = state.exploration;
+                    if (context.getState() == MiYuExploreContext.State.CLICKING_ROUTE) {
+                        context.setState(MiYuExploreContext.State.WAIT_MAP);
+                    } else if (context.getState() == MiYuExploreContext.State.CLICKING_PILLS) {
+                        context.setState(MiYuExploreContext.State.WAIT_PILLS);
+                    }
+                    putMiYuContext(bot.getBotId(), context);
+                    miYuRecoveryAttempts.put(bot.getBotId(), 0L);
+                } else {
+                    miyuExploreMap.remove(bot.getBotId());
+                    miYuRecoveryAttempts.remove(bot.getBotId());
+                }
+                restoredTaskBots.put(bot.getBotId(), bot);
+            }
+        }
+    }
+
+    private void setMjTime(Bot bot, long time) {
+        restoreGameTaskState(bot);
+        synchronized (bot) {
+            bot.getBotConfig().setMjTime(time);
+            if (gameTaskStateStore != null) gameTaskStateStore.setMjTime(bot.getBotId(), time);
+        }
+    }
+
+    private void cancelAutomaticGameTasks(Bot bot) {
+        restoreGameTaskState(bot);
+        synchronized (bot) {
+            synchronized (miyuExploreMap) {
+                if (gameTaskStateStore != null) gameTaskStateStore.cancelAutomaticTasks(bot.getBotId());
+                bot.getBotConfig().setMjTime(-1L);
+                bot.getBotConfig().setXslTime(-1L);
+                myTimeMap.remove(bot.getBotId());
+                miyuExploreMap.remove(bot.getBotId());
+                miYuRecoveryAttempts.remove(bot.getBotId());
+            }
+        }
+    }
+
+    private void setXslTime(Bot bot, long time) {
+        restoreGameTaskState(bot);
+        synchronized (bot) {
+            bot.getBotConfig().setXslTime(time);
+            if (gameTaskStateStore != null) gameTaskStateStore.setXslTime(bot.getBotId(), time);
+        }
+    }
+
+    private void setMyTime(Bot bot, Long time) {
+        restoreGameTaskState(bot);
+        synchronized (bot) {
+            synchronized (miyuExploreMap) {
+                if (gameTaskStateStore != null) gameTaskStateStore.setMyTime(bot.getBotId(), time);
+                if (time == null) myTimeMap.remove(bot.getBotId());
+                else myTimeMap.put(bot.getBotId(), time);
+                if (time != null && time > 0L) {
+                    miyuExploreMap.remove(bot.getBotId());
+                    miYuRecoveryAttempts.remove(bot.getBotId());
+                }
+            }
+        }
+    }
+
+    private void putMiYuContext(long botId, MiYuExploreContext context) {
+        synchronized (miyuExploreMap) {
+            miyuExploreMap.put(botId, context);
+            context.setChangeListener(() -> {
+                synchronized (miyuExploreMap) {
+                    if (gameTaskStateStore != null && miyuExploreMap.get(botId) == context) {
+                        gameTaskStateStore.setExploration(botId, context);
+                    }
+                }
+            });
+            if (gameTaskStateStore != null) gameTaskStateStore.setExploration(botId, context);
+        }
+    }
+
+    private void removeMiYuContext(long botId) {
+        synchronized (miyuExploreMap) {
+            miyuExploreMap.remove(botId);
+            miYuRecoveryAttempts.remove(botId);
+            if (gameTaskStateStore != null) gameTaskStateStore.setExploration(botId, null);
+        }
+    }
+
+    private void removeMiYuContext(long botId, MiYuExploreContext context) {
+        synchronized (miyuExploreMap) {
+            if (miyuExploreMap.remove(botId, context)) {
+                miYuRecoveryAttempts.remove(botId);
+                if (gameTaskStateStore != null) gameTaskStateStore.setExploration(botId, null);
+            }
+        }
+    }
+
+    private void recoverMiYuContext(long botId, MiYuExploreContext context) {
+        synchronized (miyuExploreMap) {
+            if (miyuExploreMap.get(botId) != context) return;
+            if (context.getState() == MiYuExploreContext.State.CLICKING_ROUTE) {
+                context.setState(MiYuExploreContext.State.WAIT_MAP);
+            } else if (context.getState() == MiYuExploreContext.State.CLICKING_PILLS) {
+                context.setState(MiYuExploreContext.State.WAIT_PILLS);
+            }
+            miYuRecoveryAttempts.put(botId, 0L);
+        }
+    }
+
+    void resumeMiYuExploration(Bot bot) {
+        Long previous = miYuRecoveryAttempts.get(bot.getBotId());
+        MiYuExploreContext context = miyuExploreMap.get(bot.getBotId());
+        if (previous == null || context == null || !bot.getBotConfig().isEnableAutoSecret()
+                || System.currentTimeMillis() - previous < 60000L) return;
+        miYuRecoveryAttempts.put(bot.getBotId(), System.currentTimeMillis());
+        long groupId = bot.getBotConfig().getGroupId();
+        if (context.getState() == MiYuExploreContext.State.WAIT_START) {
+            bot.getBotConfig().setCommand("开始自动秘域");
+            int mode = bot.getBotConfig().getCultivationMode();
+            if (mode == 2 || mode == 3) {
+                Utils.sendGroupMessage(bot, groupId, new MessageChain().at("3889001741")
+                        .text(mode == 3 ? "宗门出关" : "出关"));
+            } else {
+                sendMiYuExploreStart(bot, groupId);
+            }
+        } else {
+            // 只请求游戏当前卡片；已发出的按钮、丹药选择和出发指令不直接重放。
+            Utils.sendGroupMessage(bot, groupId, new MessageChain().at("3889001741").text("探索秘域"));
+        }
     }
 
     public void saveBotConfig(Bot bot) {
@@ -1203,8 +1353,12 @@ public class TestService {
         MiYuExploreContext context = this.miyuExploreMap.get(bot.getBotId());
         String commandText = "秘域快捷开始";
         if (context != null) {
-            commandText = "探索秘域";
-            context.setState(MiYuExploreContext.State.WAIT_MAP);
+            if (context.isQuickStart()) {
+                context.setState(MiYuExploreContext.State.WAIT_DEPARTURE);
+            } else {
+                commandText = "探索秘域";
+                context.setState(MiYuExploreContext.State.WAIT_MAP);
+            }
             context.touch();
         }
         Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text(commandText));
@@ -1581,6 +1735,8 @@ public class TestService {
                 sb.append("批量取消自动购买\n");
                 sb.append("查询自动购买\n");
                 sb.append("开始/停止更新坊市\n");
+                sb.append("开始更新坊市限价\n");
+                sb.append("停止更新坊市限价\n");
                 break;
             case "提醒帮助":
                 sb.append("〓提醒菜单〓\n");
@@ -1610,13 +1766,18 @@ public class TestService {
                 sb.append("添加主号 QQ号\n");
                 sb.append("设置爱称(@机器人 你的编号是××)\n");
                 sb.append("设置/添加提醒群号××\n");
-                sb.append("设置赠送灵石群号××\n");
-                sb.append("更新赠送灵石××\n");
-                sb.append("@机器人 我要灵石××（旧模式，单位万，0停止）\n");
-                sb.append("机器人本人发送新模式配置：\n设置赠送灵石\nQQ：收款人QQ\n群号：群号\n灵石：0（可省略，群累计初始值，单位万）\n");
-                sb.append("查看赠送灵石设置（机器人本人发送，查看本号全部新模式配置）\n");
-                sb.append("@机器人 申请灵石××（新模式，单位万，单次生效，1分钟优先接收）\n");
-                sb.append("@机器人 查询灵石赠送（查询新模式群累计）\n");
+                sb.append("灵石赠送相关命令：发送 灵石帮助\n");
+                break;
+            case "灵石帮助":
+                sb.append("〓灵石菜单〓\n");
+                sb.append("机器人本人发送以下多行配置：\n");
+                sb.append("设置赠送灵石\nQQ：收款人QQ\n群号：赠送群号\n灵石：0\n");
+                sb.append("灵石为可选的累计初始值，单位万；填写0开启累计，不填则不启用本号在该群的累计统计。\n");
+                sb.append("配置后，自动按接收码中的今日剩余最大可收额度赠送。\n");
+                sb.append("查看赠送灵石设置（机器人本人发送，查看本号全部配置）\n");
+                sb.append("@机器人 申请灵石100（单位万，单次生效）\n");
+                sb.append("申请后1分钟内获取本人接收码并完成接收；期间暂停本号在本群的专属QQ自动赠送。\n");
+                sb.append("@机器人 查询灵石赠送（查询本号在当前群累计，含手续费）\n");
                 break;
             case "系统帮助":
                 sb.append("〓系统菜单〓\n");
@@ -1680,6 +1841,7 @@ public class TestService {
             sb.append("【提醒帮助】 【多号帮助】\n");
             sb.append("【系统帮助】 【炼丹帮助】\n");
             sb.append("【小北帮助】 【定时帮助】\n");
+            sb.append("【灵石帮助】\n");
             sb.append("回复对应菜单名查看明细\n");
             return sb.toString();
         } else {
@@ -1758,8 +1920,8 @@ public class TestService {
         if (Utils.isAtSelf(bot, group, message, xxGroupId) && message.contains("" + bot.getBotId())) {
             if ((message.contains("本次修炼增加") || message.contains("本次挖矿获取")) && botConfig.getCultivationMode() == 1
                     && botConfig.isStartScheduled()) {
-                botConfig.setXslTime(-1L);
-                botConfig.setMjTime(-1L);
+                setXslTime(bot, -1L);
+                setMjTime(bot, -1L);
                 botConfig.setLastSendTime(System.currentTimeMillis());
                 Utils.sendGroupMessage(bot, botConfig.getGroupId(), (new MessageChain()).at("3889001741").text("修炼"));
             } else if (message.contains("本次修炼增加")) {
@@ -1771,8 +1933,8 @@ public class TestService {
             }
 
             if (message.contains("在宗门闭关室中") || message.contains("现在在闭关")) {
-                botConfig.setXslTime(-1L);
-                botConfig.setMjTime(-1L);
+                setXslTime(bot, -1L);
+                setMjTime(bot, -1L);
                 if (botConfig.getCultivationMode() == 1 && message.contains("现在在闭关")) {
                     Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("出关"));
                     Thread.sleep(1000L);
@@ -3148,11 +3310,11 @@ public class TestService {
                 botConfig.setFamilyTaskStatus(0);
                 Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("秘境结算"));
             } else if (message.contains("道友现在什么都没干") || message.contains("小心走火入魔")) {
-                botConfig.setXslTime(-1L);
-                botConfig.setMjTime(-1L);
+                setXslTime(bot, -1L);
+                setMjTime(bot, -1L);
             } else if (message.contains("道友已经参加过本次秘境")) {
-                botConfig.setXslTime(-1L);
-                botConfig.setMjTime(-1L);
+                setXslTime(bot, -1L);
+                setMjTime(bot, -1L);
                 proccessCultivation(group);
             } else if (message.contains("进行中的：") && message.contains("可结束") && message.contains("探索")) {
                 String[] parts;
@@ -3162,7 +3324,7 @@ public class TestService {
                     parts = message.split("预计|分钟");
                 }
 
-                botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * (double) 60.0F * (double) 1000.0F
+                setMjTime(bot, (long) (Double.parseDouble(parts[1]) * (double) 60.0F * (double) 1000.0F
                         + (double) System.currentTimeMillis()));
                 botConfig.setStartScheduled(false);
             } else if (message.contains("进入秘境") && message.contains("探索需要花费")) {
@@ -3173,18 +3335,18 @@ public class TestService {
                     parts = message.split("花费时间：|分钟");
                 }
 
-                botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * (double) 60.0F * (double) 1000.0F
+                setMjTime(bot, (long) (Double.parseDouble(parts[1]) * (double) 60.0F * (double) 1000.0F
                         + (double) System.currentTimeMillis()));
                 botConfig.setStartScheduled(false);
             } else if (message.contains("秘境昭告") && message.contains("勘历天时")) {
                 String[] parts = message.split("勘历天时：|分钟");
-                botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * (double) 60.0F * (double) 1000.0F
+                setMjTime(bot, (long) (Double.parseDouble(parts[1]) * (double) 60.0F * (double) 1000.0F
                         + (double) System.currentTimeMillis()));
                 log.info("秘境时间：{}", parts[1]);
                 botConfig.setStartScheduled(false);
             } else if (message.contains("秘境降临") && message.contains("时轮压缩")) {
                 String[] parts = message.split("时轮压缩：|分钟");
-                botConfig.setMjTime((long) (Double.parseDouble(parts[1]) * (double) 60.0F * (double) 1000.0F
+                setMjTime(bot, (long) (Double.parseDouble(parts[1]) * (double) 60.0F * (double) 1000.0F
                         + (double) System.currentTimeMillis()));
                 log.info("秘境时间：{}", parts[1]);
                 botConfig.setStartScheduled(false);
@@ -3201,7 +3363,7 @@ public class TestService {
                         String unit = matcher.group(2);
                         long durationMs = (long) (unit.equals("小时") ? (timeValue * 60.0D * 60.0D * 1000.0D)
                                 : (timeValue * 60.0D * 1000.0D));
-                        botConfig.setMjTime(System.currentTimeMillis() + durationMs);
+                        setMjTime(bot, System.currentTimeMillis() + durationMs);
                         botConfig.setStartScheduled(false);
                         System.out.println("成功设置秘境时间：" + timeValue + unit);
                     } catch (NumberFormatException numberFormatException) {
@@ -3225,17 +3387,28 @@ public class TestService {
             Matcher matcher = Pattern.compile("约\\s*(\\d+(?:\\.\\d+)?)\\s*分钟").matcher(message);
             if (matcher.find()) {
                 long minutes = (long) Math.ceil(Double.parseDouble(matcher.group(1)));
-                this.myTimeMap.put(bot.getBotId(), System.currentTimeMillis() + minutes * 60L * 1000L);
+                this.setMyTime(bot, System.currentTimeMillis() + minutes * 60L * 1000L);
+                removeMiYuContext(bot.getBotId());
             }
         } else if (message.contains("秘域探索仍在进行") && message.contains("分钟")) {
             // 秘域探索仍在进行，约还需 79 分钟。（结算时间未到时收到，重新计时等待下次结算）
             Matcher matcher = Pattern.compile("约还需\\s*(\\d+(?:\\.\\d+)?)\\s*分钟").matcher(message);
             if (matcher.find()) {
                 long minutes = (long) Math.ceil(Double.parseDouble(matcher.group(1)));
-                this.myTimeMap.put(bot.getBotId(), System.currentTimeMillis() + minutes * 60L * 1000L);
-            } else {
-                this.myTimeMap.remove(bot.getBotId());
+                this.setMyTime(bot, System.currentTimeMillis() + minutes * 60L * 1000L);
+                removeMiYuContext(bot.getBotId());
             }
+        }
+        if (message.contains("秘域") && (message.contains("结算成功") || message.contains("结算完成")
+                || message.contains("没有正在探索") || message.contains("未在秘域"))) {
+            setMyTime(bot, null);
+            if (miYuRecoveryAttempts.containsKey(bot.getBotId()) && miyuExploreMap.containsKey(bot.getBotId())) {
+                sendMiYuExploreStart(bot, bot.getBotConfig().getGroupId());
+            }
+        } else if (miyuExploreMap.containsKey(bot.getBotId()) && message.contains("秘域")
+                && (message.contains("已经在") || message.contains("正在秘域"))) {
+            Utils.sendGroupMessage(bot, bot.getBotConfig().getGroupId(),
+                    new MessageChain().at("3889001741").text("秘域结算"));
         }
     }
 
@@ -3250,17 +3423,16 @@ public class TestService {
             return;
         }
         if (!bot.getBotConfig().isEnableAutoSecret()) {
-            this.miyuExploreMap.remove(bot.getBotId());
+            this.removeMiYuContext(bot.getBotId());
             return;
         }
         // 设置已保存但还没发出探索秘域（可能在闭关等出关），不处理任何消息
         if (context.getState() == MiYuExploreContext.State.WAIT_START) {
             return;
         }
-        context.touch();
         // 已参与等终态消息，放弃本次自动探索
-        if (message.contains("已经参加过本次秘")) {
-            this.miyuExploreMap.remove(bot.getBotId());
+        if (this.isMiYuCardForSelf(bot, message) && message.contains("已经参加过本次秘")) {
+            this.removeMiYuContext(bot.getBotId());
             return;
         }
         if (context.getState() == MiYuExploreContext.State.CLICKING_ROUTE
@@ -3271,6 +3443,7 @@ public class TestService {
         if (!this.isMiYuCardForSelf(bot, message)) {
             return;
         }
+        context.touch();
         boolean looksLikeMiYuCard = message.contains("秘域探险") || message.contains("本次现世地区")
                 || message.contains("请选择备药") || message.contains("候选丹药");
         if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
@@ -3279,7 +3452,7 @@ public class TestService {
         if (buttons == null || buttons.getButtonList() == null || buttons.getButtonList().isEmpty()) {
             if (looksLikeMiYuCard) {
                 log.warn("秘域卡片按钮解析失败：botId={}", bot.getBotId());
-                this.miyuExploreMap.remove(bot.getBotId());
+                this.removeMiYuContext(bot.getBotId());
                 Bot remindBot = this.getRemindAtQQ(bot);
                 if (remindBot != null) {
                     Utils.sendGroupMessage(bot, this.getRemindGroupId(bot),
@@ -3290,6 +3463,11 @@ public class TestService {
             return;
         }
         buttons.setGroupId(group.getGroupId());
+        if (context.isQuickStart() && looksLikeMiYuCard) {
+            // 恢复查询返回了当前准备卡片，继续原有快捷指令。
+            sendMiYuExploreStart(bot, bot.getBotConfig().getGroupId());
+            return;
+        }
 
         List<Button> regionButtons = new ArrayList<>();
         List<Button> pillButtons = new ArrayList<>();
@@ -3305,6 +3483,14 @@ public class TestService {
             }
         }
 
+        // 重连后以新卡片反映的游戏阶段为准，不使用上轮卡片按钮。
+        if (regionButtons.size() >= 3) {
+            miYuRecoveryAttempts.remove(bot.getBotId());
+            context.setState(MiYuExploreContext.State.WAIT_MAP);
+        } else if (!pillButtons.isEmpty()) {
+            miYuRecoveryAttempts.remove(bot.getBotId());
+            context.setState(MiYuExploreContext.State.WAIT_PILLS);
+        }
         if (context.getState() == MiYuExploreContext.State.WAIT_MAP) {
             this.handleMiYuMapCard(bot, message, buttons, context, regionButtons, refreshButton);
         } else if (context.getState() == MiYuExploreContext.State.WAIT_PILLS) {
@@ -3391,7 +3577,7 @@ public class TestService {
         List<Button> picked = this.topMiYuRegionButtons(candidates, 3);
         if (picked.isEmpty()) {
             log.warn("秘域地图未解析到可选地区按钮：botId={}", bot.getBotId());
-            this.miyuExploreMap.remove(bot.getBotId());
+            this.removeMiYuContext(bot.getBotId());
             return;
         }
         log.info("秘域按危险等级兜底选择：botId={}，{}个地区", bot.getBotId(), picked.size());
@@ -3400,7 +3586,7 @@ public class TestService {
     }
 
     /**
-     * 处理备药卡片：按设置点丹药（指定/随机/不设置），随后发送「确认秘域出发」命令并清理上下文。
+     * 处理备药卡片：按设置点丹药，发送「确认秘域出发」后保留阶段，等游戏确认进入再清理。
      */
     private void handleMiYuPillCard(Bot bot, String message, Buttons buttons, MiYuExploreContext context,
             List<Button> pillButtons) {
@@ -3501,7 +3687,7 @@ public class TestService {
     }
 
     /**
-     * 串行点击秘域卡片按钮（间隔 BUTTON_CLICK_INTERVAL_MS），完成后切换状态或清理上下文。
+     * 串行点击秘域卡片按钮（间隔 BUTTON_CLICK_INTERVAL_MS），阶段变化同步保存。
      */
     private void clickMiYuButtons(Bot bot, Buttons buttons, List<Button> targets, MiYuExploreContext context,
             MiYuExploreContext.State doneState) {
@@ -3513,14 +3699,17 @@ public class TestService {
         final long groupId = buttons.getGroupId() > 0L ? buttons.getGroupId() : bot.getBotConfig().getGroupId();
         customPool.submit(() -> {
             for (int i = 0; i < targets.size(); i++) {
+                if (miyuExploreMap.get(bot.getBotId()) != context) return;
                 if (i > 0) {
                     try {
                         TimeUnit.MILLISECONDS.sleep(BUTTON_CLICK_INTERVAL_MS);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
+                        recoverMiYuContext(bot.getBotId(), context);
                         return;
                     }
                 }
+                if (miyuExploreMap.get(bot.getBotId()) != context) return;
                 Button button = targets.get(i);
                 try {
                     bot.clickKeyboardButton(groupId, buttons.getBotAppid(), button.getId(), button.getData(),
@@ -3528,7 +3717,7 @@ public class TestService {
                     log.info("秘域点击按钮：botId={}，label={}", bot.getBotId(), button.getLabel());
                 } catch (Exception e) {
                     log.warn("秘域点击按钮失败：botId={}，label={}", bot.getBotId(), button.getLabel(), e);
-                    this.miyuExploreMap.remove(bot.getBotId());
+                    recoverMiYuContext(bot.getBotId(), context);
                     return;
                 }
             }
@@ -3541,22 +3730,24 @@ public class TestService {
                     if (this.miyuExploreMap.get(bot.getBotId()) != context) {
                         return;
                     }
+                    context.setState(MiYuExploreContext.State.WAIT_DEPARTURE);
                     Utils.sendGroupMessage(bot, groupId,
                             (new MessageChain()).at("3889001741").text(commandAfterClicks));
                     log.info("秘域发送出发命令：botId={}，command={}", bot.getBotId(), commandAfterClicks);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
+                    recoverMiYuContext(bot.getBotId(), context);
                     return;
                 } catch (Exception e) {
                     log.warn("秘域发送出发命令失败：botId={}，command={}", bot.getBotId(), commandAfterClicks, e);
-                    this.miyuExploreMap.remove(bot.getBotId(), context);
+                    recoverMiYuContext(bot.getBotId(), context);
                     return;
                 }
             }
             if (doneState != null) {
                 context.setState(doneState);
             } else {
-                this.miyuExploreMap.remove(bot.getBotId(), context);
+                context.setState(MiYuExploreContext.State.WAIT_DEPARTURE);
             }
         });
     }
@@ -3569,14 +3760,14 @@ public class TestService {
         if (isAtSelf && botConfig.getRewardMode() != 1) {
             if (message.contains("悬赏令") && message.contains("分身乏术")) {
                 botConfig.setStartScheduled(false);
-                bot.getBotConfig().setMjTime(-1L);
+                setMjTime(bot, -1L);
                 botConfig.setFamilyTaskStatus(0);
                 Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("悬赏令结算"));
             }
 
             if (message.contains("没有查到你的悬赏令信息") || message.contains("未查询到道友的悬赏令信息")) {
                 botConfig.setStartScheduled(true);
-                botConfig.setXslTime(-1L);
+                setXslTime(bot, -1L);
                 if (botConfig.getRewardMode() == 3 || botConfig.getRewardMode() == 4
                         || botConfig.getRewardMode() == 5) {
                     Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("悬赏令刷新"));
@@ -3584,7 +3775,7 @@ public class TestService {
             }
 
             if (message.contains("悬赏令刷新次数已用尽")) {
-                bot.getBotConfig().setXslTime(-1L);
+                setXslTime(bot, -1L);
                 Thread.sleep(2000L);
                 proccessCultivation(group);
                 this.groupManager.setXslTaskFinished(bot);
@@ -3599,7 +3790,7 @@ public class TestService {
                     try {
                         double minutes = Double.parseDouble(matcher.group(1));
                         long timeMillis = (long) (Math.ceil(minutes) * (double) 60.0F * (double) 1000.0F);
-                        botConfig.setXslTime(System.currentTimeMillis() + timeMillis);
+                        setXslTime(bot, System.currentTimeMillis() + timeMillis);
                     } catch (NumberFormatException var15) {
                         var15.printStackTrace();
                     }
@@ -3608,8 +3799,8 @@ public class TestService {
 
             if (message.contains("进行中的悬赏令") && message.contains("已结束")
                     || message.contains("悬赏令完成通知") && message.contains("已完成")) {
-                botConfig.setXslTime(-1L);
-                botConfig.setMjTime(-1L);
+                setXslTime(bot, -1L);
+                setMjTime(bot, -1L);
                 botConfig.setStartScheduled(true);
                 Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("悬赏令结算"));
             }
@@ -3860,7 +4051,7 @@ public class TestService {
                 // 只排除任务倒计时提示，结算成功的任务描述也可能包含“花费百年时间”。
                 if (message.contains("悬赏令结算") && message.contains("增加修为")
                         && !message.contains("预计剩余时间") && !message.contains("可结束")) {
-                    bot.getBotConfig().setXslTime(-1L);
+                    setXslTime(bot, -1L);
                     if ("一键使用追捕令".equals(botConfig.getCommand())) {
                         Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text(" 道具使用追捕令"));
                     } else if (botConfig.getRewardMode() != 3 && botConfig.getRewardMode() != 4
@@ -3884,7 +4075,11 @@ public class TestService {
             Stream<String> stream = KEYWORDS.stream();
             Objects.requireNonNull(message);
             if (stream.anyMatch(message::contains) && !message.contains("时间：")) {
-                bot.getBotConfig().setMjTime(-1L);
+                setMjTime(bot, -1L);
+                if (myTimeMap.containsKey(bot.getBotId())) {
+                    setMyTime(bot, null);
+                    removeMiYuContext(bot.getBotId());
+                }
                 if ("一键使用次元之钥".equals(botConfig.getCommand())) {
                     Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text(" 道具使用次元之钥"));
                 } else {
@@ -4130,22 +4325,33 @@ public class TestService {
 
     @Scheduled(fixedDelay = 60000L, initialDelay = 3000L)
     public void 结算() {
-        // 秘域探索上下文超时清理（未启用的 WAIT_START 等出关，不参与清理），防止选路流程卡死后状态残留
+        List<Bot> readyBots = new ArrayList<>();
+        BotFactory.getBots().values().forEach(bot -> {
+            try {
+                restoreGameTaskState(bot);
+                resumeMiYuExploration(bot);
+                readyBots.add(bot);
+            } catch (Exception e) {
+                log.error("游戏任务恢复失败，保留原存档等待重试：botId={}", bot.getBotId(), e);
+            }
+        });
+        // 已恢复且等待重新获取卡片的流程继续保留，避免停机时间导致其被当成超时任务清除。
         long now = System.currentTimeMillis();
         this.miyuExploreMap.forEach((botId, exploreContext) -> {
-            if (exploreContext.getState() != MiYuExploreContext.State.WAIT_START
+            if (BotFactory.getBots().containsKey(botId) && !miYuRecoveryAttempts.containsKey(botId)
+                    && exploreContext.getState() != MiYuExploreContext.State.WAIT_START
                     && now - exploreContext.getLastActiveTime() > MIYU_CONTEXT_TIMEOUT_MS) {
-                this.miyuExploreMap.remove(botId);
+                this.removeMiYuContext(botId, exploreContext);
                 log.info("秘域探索上下文超时清理：botId={}", botId);
             }
         });
-        BotFactory.getBots().values().forEach((bot) -> {
+        readyBots.forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             Long myExpireTime = this.myTimeMap.get(bot.getBotId());
             if (botConfig.isEnableAutoSecret() && myExpireTime != null && myExpireTime > 0L
                     && myExpireTime < System.currentTimeMillis()) {
                 if (botConfig.isStop() && botConfig.getAutoVerifyModel() == 0) {
-                    this.myTimeMap.remove(bot.getBotId());
+                    this.setMyTime(bot, null);
                     Bot remindBot = this.getRemindAtQQ(bot);
                     if (remindBot == null) {
                         return;
@@ -4155,8 +4361,7 @@ public class TestService {
                     return;
                 }
 
-                // 先移除再发送，未到时间时游戏会回复"仍在进行约还需N分钟"并重新计时，避免重复发送
-                this.myTimeMap.remove(bot.getBotId());
+                // 保留到游戏明确返回结算结果；断连或未收到回复时下一轮继续核对。
                 long groupId = botConfig.getGroupId();
                 try {
                     Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("秘域结算"));
@@ -4165,13 +4370,13 @@ public class TestService {
                 }
             }
         });
-        BotFactory.getBots().values().forEach((bot) -> {
+        readyBots.forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             if (botConfig.isEnableAutoSecret() && botConfig.getMjTime() > 0L
                     && botConfig.getMjTime() < System.currentTimeMillis()) {
                 if (botConfig.isStop() && botConfig.getAutoVerifyModel() == 0) {
                     botConfig.setStop(false);
-                    botConfig.setMjTime(-1L);
+                    setMjTime(bot, -1L);
                     Bot remindBot = this.getRemindAtQQ(bot);
                     if (remindBot == null) {
                         return;
@@ -4191,13 +4396,13 @@ public class TestService {
             }
 
         });
-        BotFactory.getBots().values().forEach((bot) -> {
+        readyBots.forEach((bot) -> {
             BotConfig botConfig = bot.getBotConfig();
             if (botConfig.getRewardMode() != 1 && botConfig.getXslTime() > 0L
                     && botConfig.getXslTime() < System.currentTimeMillis()) {
                 if (botConfig.isStop() && botConfig.getAutoVerifyModel() == 0) {
                     botConfig.setStop(false);
-                    botConfig.setXslTime(-1L);
+                    setXslTime(bot, -1L);
                     Bot remindBot = this.getRemindAtQQ(bot);
                     if (remindBot == null) {
                         return;

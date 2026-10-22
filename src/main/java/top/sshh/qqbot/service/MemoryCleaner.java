@@ -59,6 +59,8 @@ public class MemoryCleaner {
     private static final int DIRECT_MEMORY_SIZE = 1048576;
     @Autowired
     private GroupManager groupManager;
+    @Autowired
+    private BotConnectionMonitor botConnectionMonitor;
     private final MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
 
     public MemoryCleaner() {
@@ -240,10 +242,12 @@ public class MemoryCleaner {
     private boolean handleRestart() {
         try {
             String scriptPath = this.generateRestartScript();
+            botConnectionMonitor.prepareForRestart();
             this.executeRestartScript(scriptPath);
             System.exit(0);
             return true;
         } catch (Exception var5) {
+            botConnectionMonitor.cancelRestart();
             Exception e = var5;
             logger.error("重启处理失败", e);
             return false;

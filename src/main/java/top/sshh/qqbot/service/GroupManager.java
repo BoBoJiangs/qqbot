@@ -94,6 +94,7 @@ public class GroupManager {
             "【传功提醒】时间到！徒弟嗷嗷待哺，师父的真元已蓄势待发，快去传功吧！",
             "【传功提醒】传功冷却已到！把握机缘，将毕生修为倾囊相授，助徒弟一日千里！");
     private static final String FILE_PATH = "./cache/task_data.json";
+    private final java.nio.file.Path taskStatePath;
 //    @Value("${botId}")
 //    private Long botId;
 
@@ -120,6 +121,11 @@ public class GroupManager {
     public Map<String, Long> tokenRewardTimeMap = new ConcurrentHashMap(); // 令牌奖励时间
 
     public GroupManager() {
+        this(Paths.get(FILE_PATH));
+    }
+
+    GroupManager(java.nio.file.Path taskStatePath) {
+        this.taskStatePath = taskStatePath;
 
     }
 
@@ -370,6 +376,7 @@ public class GroupManager {
         try {
             Map<String, Object> data = new HashMap<>();
             data.put("灵田", this.ltmap);
+            data.put("悬赏秘境秘域提醒", this.mjXslmap);
             data.put("传功", this.cgmap);
             data.put("发言统计", MESSAGE_NUMBER_MAP);
             data.put("任务统计", taskStateMap);
@@ -386,7 +393,7 @@ public class GroupManager {
             data.put("打怪记录", this.monsterKillingRecords);
             data.put("令牌奖励时间", this.tokenRewardTimeMap);
             // 直接写入JSON字节（UTF-8编码）
-            LocalDataFiles.write(Paths.get(FILE_PATH),
+            LocalDataFiles.write(taskStatePath,
                     JSON.toJSONString(data).getBytes(StandardCharsets.UTF_8));
 
         } catch (Throwable e) {
@@ -399,7 +406,7 @@ public class GroupManager {
     public synchronized void loadTasksFromFile() {
         try {
             // 读取JSON文件
-            byte[] jsonBytes = LocalDataFiles.readAllBytes(Paths.get(FILE_PATH));
+            byte[] jsonBytes = LocalDataFiles.readAllBytes(taskStatePath);
             String jsonStr = new String(jsonBytes, StandardCharsets.UTF_8);
 
             // 解析JSON（使用TypeReference处理复杂泛型）
@@ -409,6 +416,11 @@ public class GroupManager {
             this.ltmap = data.getObject("灵田",
                     new TypeReference<Map<String, RemindTime>>() {
                     });
+            this.ltmap = this.ltmap == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(this.ltmap);
+            Map<String, RemindTime> savedExplorationReminders = data.getObject("悬赏秘境秘域提醒",
+                    new TypeReference<Map<String, RemindTime>>() { });
+            this.mjXslmap = savedExplorationReminders == null ? new ConcurrentHashMap<>()
+                    : new ConcurrentHashMap<>(savedExplorationReminders);
 
             this.cgmap = data.getObject("传功",
                     new TypeReference<Map<String, RemindTime>>() {
@@ -1533,6 +1545,7 @@ public class GroupManager {
             remindTime.setGroupId(group.getGroupId());
             remindTime.setRemindQq(bot.getBotId());
             this.mjXslmap.put(qq, remindTime);
+            this.saveTasksToFile();
             group.sendMessage(new MessageChain().at(qq).text("收到"+type+"结算提醒，将在" + time + "分钟后提醒你结算任务"));
             String taskKey = group.getGroupId() + "_"+type;
             removeTaskRecordIfOwned(taskKey, qq, type, group.getGroupId());
@@ -1740,6 +1753,7 @@ public class GroupManager {
             remindTime.setGroupId(group.getGroupId());
             remindTime.setRemindQq(botId);
             this.ltmap.put(qqNumber, remindTime);
+            this.saveTasksToFile();
             group.sendMessage((new MessageChain()).at(qqNumber).text("道友下次灵田收取时间：" + sdf.format(new Date(remindTime.getExpireTime()))));
             String taskKey = group.getGroupId() + "_灵田";
             if (this.taskRecords.containsKey(taskKey)) {
@@ -1763,55 +1777,40 @@ public class GroupManager {
     }
 
     private void checkAndNotify(Map<String, RemindTime> map, String taskType1, String taskType2) {
-        Iterator<Map.Entry<String, RemindTime>> iterator = map.entrySet().iterator();
-
-        while (iterator.hasNext()) {
-            Map.Entry<String, RemindTime> entry = (Map.Entry) iterator.next();
-            RemindTime remindTime = (RemindTime) entry.getValue();
-            if (remindTime.getExpireTime() > 0L && System.currentTimeMillis() >= remindTime.getExpireTime()) {
-                if (System.currentTimeMillis() - remindTime.getExpireTime() < 1000L * 60 * 30) {
-                    Bot bot = BotFactory.getBots().get(remindTime.getRemindQq());
-                    if (bot != null) {
-                        if (!this.isGroupSettlementReminderEnabled(remindTime.getGroupId())) {
-                            iterator.remove();
-                            continue;
+        boolean changed = false;
+        for (Map.Entry<String, RemindTime> entry : map.entrySet()) {
+            RemindTime reminder = entry.getValue();
+            if (reminder.getExpireTime() == null || reminder.getExpireTime() <= 0L
+                    || System.currentTimeMillis() < reminder.getExpireTime()) continue;
+            Bot bot = BotFactory.getBots().get(reminder.getRemindQq());
+            if (bot == null) continue;
+            if (!isGroupSettlementReminderEnabled(reminder.getGroupId())) {
+                changed |= map.remove(entry.getKey(), reminder);
+                continue;
+            }
+            try {
+                String text;
+                switch (reminder.getText()) {
+                    case "悬赏": text = XSL_TEXT_LIST.get(new Random().nextInt(XSL_TEXT_LIST.size())); break;
+                    case "秘境": text = MJ_TEXT_LIST.get(new Random().nextInt(MJ_TEXT_LIST.size())); break;
+                    case "秘域": text = MY_TEXT_LIST.get(new Random().nextInt(MY_TEXT_LIST.size())); break;
+                    case "灵田": text = LT_TEXT_LIST.get(new Random().nextInt(LT_TEXT_LIST.size())); break;
+                    case "传功":
+                        text = CG_TEXT_LIST.get(new Random().nextInt(CG_TEXT_LIST.size()));
+                        if (StringUtils.isNotBlank(reminder.getDiscipleName())) {
+                            text = text.replaceFirst("【传功提醒】", "【传功提醒·徒弟" + reminder.getDiscipleName() + "】");
                         }
-                        switch (remindTime.getText()) {
-                            case "悬赏":
-                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
-                                        .at(remindTime.getQq() + "").text(XSL_TEXT_LIST.get(new Random().nextInt(XSL_TEXT_LIST.size()))));
-                                break;
-                            case "秘境":
-                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
-                                        .at(remindTime.getQq() + "").text(MJ_TEXT_LIST.get(new Random().nextInt(MJ_TEXT_LIST.size()))));
-                                break;
-                            case "秘域":
-                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
-                                        .at(remindTime.getQq() + "").text(MY_TEXT_LIST.get(new Random().nextInt(MY_TEXT_LIST.size()))));
-                                break;
-                            case "传功":
-                                String cgText = CG_TEXT_LIST.get(new Random().nextInt(CG_TEXT_LIST.size()));
-                                if (StringUtils.isNotBlank(remindTime.getDiscipleName())) {
-                                    cgText = cgText.replaceFirst("【传功提醒】", "【传功提醒·徒弟" + remindTime.getDiscipleName() + "】");
-                                }
-                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
-                                        .at(remindTime.getQq() + "").text(cgText));
-                                break;
-                            case "灵田":
-                                Utils.sendGroupMessage(bot, remindTime.getGroupId(), (new MessageChain())
-                                        .at(remindTime.getQq() + "").text(LT_TEXT_LIST.get(new Random().nextInt(LT_TEXT_LIST.size()))));
-                                break;
-                        }
-
-                    }
+                        break;
+                    default: continue;
                 }
-
-                iterator.remove();
-
+                int messageId = bot.sendGroupMessage(reminder.getGroupId(), new MessageChain()
+                        .at(Long.toString(reminder.getQq())).text(text));
+                if (messageId != 0) changed |= map.remove(entry.getKey(), reminder);
+            } catch (Exception e) {
+                logger.warn("到期提醒发送失败，保留并重试 qq={}, type={}", reminder.getQq(), reminder.getText(), e);
             }
         }
-
-
+        if (changed) saveTasksToFile();
     }
 
 

@@ -30,6 +30,7 @@ import top.sshh.qqbot.service.utils.CompletionMessageSender;
 import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PostConstruct;
+import javax.annotation.PreDestroy;
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -51,14 +52,22 @@ public class FamilyTask {
         }
     };
     private static final String FILE_PATH = "./cache/field_remind_data.ser";
+    private final java.nio.file.Path fieldStatePath;
     Map<Long, Long> remindMap = new ConcurrentHashMap();
     private static final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(1);
     @Value("${xxGroupId:0}")
     private long xxGroupId;
     @Autowired
     private GroupManager groupManager;
+    @Autowired
+    private BotConnectionMonitor botConnectionMonitor;
 
     public FamilyTask() {
+        this(Paths.get(FILE_PATH));
+    }
+
+    FamilyTask(java.nio.file.Path fieldStatePath) {
+        this.fieldStatePath = fieldStatePath;
     }
 
     @PostConstruct
@@ -100,27 +109,12 @@ public class FamilyTask {
         return accepted;
     }
 
+    @PreDestroy
     public synchronized void saveTasksToFile() {
-        try {
-            ObjectOutputStream oos = new ObjectOutputStream(LocalDataFiles.newOutputStream(Paths.get(FILE_PATH)));
-
-            try {
-                Iterator<Map.Entry<Long, Long>> iterator = remindMap.entrySet().iterator();
-                while (iterator.hasNext()) {
-                    Map.Entry<Long, Long> entry = iterator.next();
-                    if (entry.getValue() == 9223372036854175807L) {
-                        logger.info("移除异常时间的灵田提醒：{}", entry.getKey());
-                        iterator.remove();
-                    }
-                }
-                Map<String, Object> data = new HashMap();
-                data.put("灵田提醒", this.remindMap);
-                oos.writeObject(data);
-            } catch (Throwable var5) {
-
-            }
-
-            oos.close();
+        try (ObjectOutputStream oos = new ObjectOutputStream(LocalDataFiles.newOutputStream(fieldStatePath))) {
+            Map<String, Object> data = new HashMap<>();
+            data.put("灵田提醒", new ConcurrentHashMap<>(this.remindMap));
+            oos.writeObject(data);
         } catch (Exception e) {
             logger.info("任务数据保存失败：", e);
         }
@@ -130,11 +124,12 @@ public class FamilyTask {
 
     private synchronized void loadTasksFromFile() {
         File dataFile = new File("./cache");
-        if (LocalDataFiles.exists(java.nio.file.Paths.get(FILE_PATH))) {
+        if (LocalDataFiles.exists(fieldStatePath)) {
             try {
-                ObjectInputStream ois = new ObjectInputStream(LocalDataFiles.newInputStream(new File(FILE_PATH).toPath()));
+                ObjectInputStream ois = new ObjectInputStream(LocalDataFiles.newInputStream(fieldStatePath));
                 Map<String, Object> data = (Map) ois.readObject();
-                this.remindMap = (ConcurrentHashMap) data.get("灵田提醒");
+                Map<Long, Long> saved = (Map<Long, Long>) data.get("灵田提醒");
+                this.remindMap = saved == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(saved);
 
                 ois.close();
             } catch (Exception var4) {
@@ -148,21 +143,26 @@ public class FamilyTask {
 
     }
 
+    private void setFieldTime(long botId, long time) {
+        remindMap.put(botId, time);
+        saveTasksToFile();
+    }
+
+    private void requestFieldSettlement(Bot bot, long groupId, Long previous) {
+        if (Utils.sendGroupMessage(bot, groupId, new MessageChain().at("3889001741").text("灵田结算"))) {
+            // 首次查询尚无时间时保留一分钟后可重试的记录；已有的到期时间保持原值。
+            // 同步回复若已写入新的时间，不能被查询后的占位时间覆盖。
+            if (previous == null) {
+                remindMap.putIfAbsent(bot.getBotId(), System.currentTimeMillis());
+                saveTasksToFile();
+            }
+        }
+    }
+
     @BotOfflineHandler
     public void handleBotOffline(Bot bot, BotOfflineEvent event) {
         logger.info("Bot offline: {}",  bot.getBotName()+event.getMessage());
-        long botId = bot.getBotId();
-
-        long maserId = bot.getBotConfig().getMasterQQ();
-
-        for(Bot bot2 : BotFactory.getBots().values()) {
-            BotConfig botConfig2 = bot2.getBotConfig();
-            if (botConfig2.getMasterQQ() == maserId && bot2.getBotId() != botId) {
-                bot2.sendPrivateMessage(maserId, (new MessageChain()).text("账号：" + botId +"(" + bot.getBotName()+ ")掉线啦\n\n" + event.getMessage()));
-                break;
-            }
-        }
-
+        botConnectionMonitor.onOffline(bot, event.getMessage());
     }
 
     @Scheduled(
@@ -555,7 +555,7 @@ public class FamilyTask {
                 try {
                     double hours = Double.parseDouble(parts[1].trim());
                     long remindTime = (long) ((double) System.currentTimeMillis() + hours * 60.0 * 60.0 * 1000.0);
-                    remindMap.put(bot.getBotId(), remindTime);
+                    setFieldTime(bot.getBotId(), remindTime);
                     group.sendMessage((new MessageChain()).text("下次收取时间为：" + sdf.format(new Date(remindTime))));
                 } catch (Exception e) {
                     logger.error("灵田收取时间失败", e);
@@ -565,12 +565,12 @@ public class FamilyTask {
             } else if (message.contains("还没有洞天福地")) {
                 System.out.println(LocalDateTime.now() + " " + group.getGroupName() + " 收到灵田领取结果,还没有洞天福地");
 //                bot.getBotConfig().setLastExecuteTime(9223372036854175807L);
-                remindMap.put(bot.getBotId(), 9223372036854175807L);
+                setFieldTime(bot.getBotId(), 9223372036854175807L);
             } else if (message.contains("本次修炼到达上限")) {
                 Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("直接突破"));
             } else if (message.contains("道友成功收获药材")||(message.contains("道友本次采集成果") && message.contains("收获药材"))) {
-                remindMap.put(bot.getBotId(), 9223372036854175807L);
-                Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("灵田结算"));
+                setFieldTime(bot.getBotId(), System.currentTimeMillis());
+                requestFieldSettlement(bot, group.getGroupId(), remindMap.get(bot.getBotId()));
             }
         }
 
@@ -596,16 +596,14 @@ public class FamilyTask {
 
                 if (remindMap.get(bot.getBotId()) == null) {
                     logger.info("bot.getBotId()==" + remindMap.get(bot.getBotId()));
-                    remindMap.put(bot.getBotId(), 9223372036854175807L);
-                    Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("灵田结算"));
+                    requestFieldSettlement(bot, groupId, null);
                     continue;
                 }
 
                 if (remindMap.get(bot.getBotId()) + 60000L < System.currentTimeMillis()) {
                     logger.info(String.format("bot.getBotId()==%d", remindMap.get(bot.getBotId())));
 //                    botConfig.setLastExecuteTime(9223372036854175807L);
-                    remindMap.put(bot.getBotId(), 9223372036854175807L);
-                    Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("灵田结算"));
+                    requestFieldSettlement(bot, groupId, remindMap.get(bot.getBotId()));
 
                 }
 

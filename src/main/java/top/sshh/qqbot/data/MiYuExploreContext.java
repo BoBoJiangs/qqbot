@@ -1,11 +1,12 @@
 package top.sshh.qqbot.data;
 
+import com.alibaba.fastjson2.annotation.JSONField;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
  * 秘域探索（路线/禁区/丹药自动选择）的运行时上下文。
- * 与 botConfig 的待执行命令机制一致采用内存态：重启丢失后重发「开始自动秘域」多行命令即可。
+ * 参数和阶段写入 SQLite；恢复时重新获取卡片，不保存或重放按钮对象。
  */
 public class MiYuExploreContext {
 
@@ -19,7 +20,9 @@ public class MiYuExploreContext {
         /** 地区已选完，等待游戏的备药卡片 */
         WAIT_PILLS,
         /** 正在点击丹药按钮或发送出发命令 */
-        CLICKING_PILLS
+        CLICKING_PILLS,
+        /** 确认出发指令已提交，等待游戏返回进入秘域的计时。 */
+        WAIT_DEPARTURE
     }
 
     /** 候选路线；每条路线由3个地区名组成，可为空表示未设置固定路线 */
@@ -30,13 +33,26 @@ public class MiYuExploreContext {
     private List<String> pills = new ArrayList<>();
     /** 携带丹药=随机 */
     private boolean randomPills = false;
+    /** 单行开始指令走游戏快捷流程，同样保存等待出关和入境的阶段。 */
+    private boolean quickStart = false;
 
     private State state = State.WAIT_START;
     /** 已点击刷新路线的次数（游戏上限6次/日） */
     private int refreshCount = 0;
-    private final long createTime = System.currentTimeMillis();
+    private long createTime = System.currentTimeMillis();
     /** 最近一次活跃时间（发出探索秘域或收到卡片时刷新），用于超时清理 */
     private long lastActiveTime = createTime;
+    @JSONField(serialize = false, deserialize = false)
+    private transient Runnable changeListener;
+
+    @JSONField(serialize = false, deserialize = false)
+    public void setChangeListener(Runnable changeListener) {
+        this.changeListener = changeListener;
+    }
+
+    private void changed() {
+        if (changeListener != null) changeListener.run();
+    }
 
     public List<List<String>> getRoutes() {
         return routes;
@@ -70,12 +86,21 @@ public class MiYuExploreContext {
         this.randomPills = randomPills;
     }
 
+    public boolean isQuickStart() {
+        return quickStart;
+    }
+
+    public void setQuickStart(boolean quickStart) {
+        this.quickStart = quickStart;
+    }
+
     public State getState() {
         return state;
     }
 
     public void setState(State state) {
         this.state = state;
+        changed();
     }
 
     public int getRefreshCount() {
@@ -84,10 +109,15 @@ public class MiYuExploreContext {
 
     public void setRefreshCount(int refreshCount) {
         this.refreshCount = refreshCount;
+        changed();
     }
 
     public long getCreateTime() {
         return createTime;
+    }
+
+    public void setCreateTime(long createTime) {
+        this.createTime = createTime;
     }
 
     public long getLastActiveTime() {
@@ -100,5 +130,6 @@ public class MiYuExploreContext {
 
     public void touch() {
         this.lastActiveTime = System.currentTimeMillis();
+        changed();
     }
 }
