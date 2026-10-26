@@ -65,6 +65,7 @@ import top.sshh.qqbot.data.UpdateManifest;
 import top.sshh.qqbot.service.liandan.DanCalculator;
 import top.sshh.qqbot.service.utils.CaptchaReminderSender;
 import top.sshh.qqbot.service.utils.MarketPriceUtils;
+import top.sshh.qqbot.service.utils.SectCultivationManager;
 import top.sshh.qqbot.service.utils.Utils;
 
 @Component
@@ -99,7 +100,7 @@ public class TestService {
     // private String shituApiUrl;
     @Value("${custom.shitu-api-url:#{null}}")
     private String shituApiUrl;
-    private boolean isFirst = true;
+    private final SectCultivationManager sectCultivationManager = SectCultivationManager.getInstance();
 
     // 秘域自动结算：botId -> 预计到期时间戳；变化时同步写入 SQLite。
     private final Map<Long, Long> myTimeMap = new ConcurrentHashMap<>();
@@ -124,7 +125,6 @@ public class TestService {
             "探索耗时", "道友成功领取到丹药", "道友已经领取过了", "不需要验证", "验证码已过期", "道友今天已经很努力了", "主修功法");
     @Autowired
     public DanCalculator danCalculator;
-    private List<Bot> familyBotList = new ArrayList<>();
 
     public TestService() {
     }
@@ -150,7 +150,7 @@ public class TestService {
             Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741").text("闭关"));
         } else if (cultivationMode == 3) {
             botConfig.setStartScheduled(false);
-            Utils.sendGroupMessage(group.getBot(), group.getGroupId(), (new MessageChain()).at("3889001741").text("宗门闭关"));
+            SectCultivationManager.getInstance().enter(group.getBot(), group.getGroupId());
         }
 
     }
@@ -205,11 +205,6 @@ public class TestService {
             }
 
             if ("开始自动悬赏".equals(message)) {
-                botConfig.setCommand("开始自动悬赏");
-                if (cultivationMode == 3) {
-                    familyBotList.add(bot);
-                }
-
                 this.startAutoTask(bot, botConfig, cultivationMode, groupId, message);
             }
 
@@ -218,10 +213,6 @@ public class TestService {
             }
 
             if ("开始自动秘境".equals(message)) {
-                botConfig.setCommand("开始自动秘境");
-                if (cultivationMode == 3) {
-                    familyBotList.add(bot);
-                }
                 this.startAutoTask(bot, botConfig, cultivationMode, groupId, message);
             }
 
@@ -238,10 +229,6 @@ public class TestService {
                 if (plainMiYuCommand || exploreContext != null) {
                     if (exploreContext != null) {
                         this.putMiYuContext(bot.getBotId(), exploreContext);
-                    }
-                    botConfig.setCommand("开始自动秘域");
-                    if (cultivationMode == 3) {
-                        familyBotList.add(bot);
                     }
                     this.startAutoTask(bot, botConfig, cultivationMode, groupId, "开始自动秘域");
                 }
@@ -474,22 +461,13 @@ public class TestService {
                     group.sendMessage((new MessageChain()).reply(messageId)
                             .text("道友当前悬赏令模式为" + typeString + "! 请切换为自动模式在使用该功能吧！"));
                 } else {
-                    botConfig.setCommand("一键使用追捕令");
-
-                    if (cultivationMode == 3) {
-                        familyBotList.add(bot);
-                    }
                     this.startAutoTask(bot, botConfig, cultivationMode, groupId, message);
                 }
             }
 
             if ("一键使用次元之钥".equals(message)) {
                 if (botConfig.isEnableAutoSecret()) {
-                    botConfig.setCommand("一键使用次元之钥");
                     // group.sendMessage((new MessageChain()).at("3889001741").text(" 道具使用次元之钥"));
-                    if (cultivationMode == 3) {
-                        familyBotList.add(bot);
-                    }
                     this.startAutoTask(bot, botConfig, cultivationMode, groupId, message);
                 } else {
                     group.sendMessage(
@@ -498,6 +476,7 @@ public class TestService {
             }
 
             if (message.startsWith("取消一键使用")) {
+                sectCultivationManager.cancel(bot);
                 botConfig.setCommand("");
                 group.sendMessage((new MessageChain()).reply(messageId).text("取消成功"));
             }
@@ -611,6 +590,9 @@ public class TestService {
                 String typeString = message.substring(message.indexOf("修炼模式") + 4).trim();
                 if (StringUtils.isNotBlank(typeString)) {
                     int type = Integer.parseInt(typeString);
+                    sectCultivationManager.cancel(bot);
+                    botConfig.setCommand("");
+                    botConfig.setStop(false);
                     if (type == 0) {
                         if (botConfig.getCultivationMode() == 2) {
                             Utils.sendGroupMessage(bot, group.getGroupId(), (new MessageChain()).at("3889001741").text("出关"));
@@ -948,6 +930,7 @@ public class TestService {
     }
 
     private void cancelAutomaticGameTasks(Bot bot) {
+        sectCultivationManager.cancel(bot);
         restoreGameTaskState(bot);
         synchronized (bot) {
             synchronized (miyuExploreMap) {
@@ -1031,15 +1014,18 @@ public class TestService {
         Long previous = miYuRecoveryAttempts.get(bot.getBotId());
         MiYuExploreContext context = miyuExploreMap.get(bot.getBotId());
         if (previous == null || context == null || !bot.getBotConfig().isEnableAutoSecret()
+                || bot.getBotConfig().isStop() || sectCultivationManager.isTracking(bot)
                 || System.currentTimeMillis() - previous < 60000L) return;
         miYuRecoveryAttempts.put(bot.getBotId(), System.currentTimeMillis());
         long groupId = bot.getBotConfig().getGroupId();
         if (context.getState() == MiYuExploreContext.State.WAIT_START) {
             bot.getBotConfig().setCommand("开始自动秘域");
             int mode = bot.getBotConfig().getCultivationMode();
-            if (mode == 2 || mode == 3) {
+            if (mode == 3) {
+                this.startAutoTask(bot, bot.getBotConfig(), mode, groupId, "开始自动秘域");
+            } else if (mode == 2) {
                 Utils.sendGroupMessage(bot, groupId, new MessageChain().at("3889001741")
-                        .text(mode == 3 ? "宗门出关" : "出关"));
+                        .text("出关"));
             } else {
                 sendMiYuExploreStart(bot, groupId);
             }
@@ -1365,66 +1351,63 @@ public class TestService {
     }
 
     private void startAutoTask(Bot bot, BotConfig botConfig, int cultivationMode, Long groupId, String command) {
-        if (cultivationMode == 2) {
-            Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("出关"));
-        } else if (cultivationMode == 1) {
-            botConfig.setStartScheduled(false);
-        } else if (cultivationMode == 3) {
-            if (this.isFirst) {
-                this.isFirst = false;
-                customPool.submit(() -> {
-                    try {
-                        List<Bot> scheduledBots = new ArrayList<>(familyBotList);
-                        scheduledBots.sort(Comparator
-                                .comparingInt((Bot item) -> item.getBotConfig().getBotNumber() > 0
-                                        ? item.getBotConfig().getBotNumber() : Integer.MAX_VALUE)
-                                .thenComparingLong(Bot::getBotId));
-                        for (Bot bot1 : scheduledBots) {
-                            Group group = bot1.getGroup(bot1.getBotConfig().getGroupId());
-                            Utils.sendGroupMessage(bot1, group.getGroupId(),
-                                    (new MessageChain()).at("3889001741").text("宗门出关"));
-                        }
-                        familyBotList.clear();
-                        this.isFirst = true;
-                    } catch (Exception var5) {
-                        this.isFirst = true;
-                        log.error("处理bot时出错", var5);
-                    }
-
-                });
-            }
-        } else if (cultivationMode == 0) {
-            if ("开始自动悬赏".equals(command)) {
+        synchronized (bot) {
+            sectCultivationManager.cancel(bot);
+            botConfig.setCommand(command);
+            botConfig.setStop(false);
+            if (cultivationMode == 2) {
+                Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("出关"));
+            } else if (cultivationMode == 1) {
+                botConfig.setStartScheduled(false);
+            } else if (cultivationMode == 3) {
+                sectCultivationManager.exit(bot, groupId, command,
+                        () -> !botConfig.isStop() && botConfig.getCultivationMode() == 3
+                                && botConfig.getGroupId() == groupId && command.equals(botConfig.getCommand()),
+                        () -> continueAfterSectExit(bot, groupId, command),
+                        () -> {
+                            if (command.equals(botConfig.getCommand())) botConfig.setCommand("");
+                            if ("开始自动秘域".equals(command)) removeMiYuContext(bot.getBotId());
+                        });
+            } else if (cultivationMode == 0) {
                 botConfig.setCommand("");
-                Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("悬赏令刷新"));
-            }
-
-            if ("开始自动秘境".equals(command)) {
-                botConfig.setCommand("");
-                Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("探索秘境"));
-            }
-
-            if ("开始自动秘域".equals(command)) {
-                botConfig.setCommand("");
-                this.sendMiYuExploreStart(bot, groupId);
-            }
-            if ("一键使用次元之钥".equals(command)) {
-                botConfig.setCommand("");
-                Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("道具使用次元之钥"));
-            }
-
-            if ("一键使用追捕令".equals(command)) {
-                botConfig.setCommand("");
-                Utils.sendGroupMessage(bot, groupId, (new MessageChain()).at("3889001741").text("道具使用追捕令"));
+                continueAfterSectExit(bot, groupId, command);
             }
         }
+    }
 
+    private void continueAfterSectExit(Bot bot, long groupId, String command) {
+        switch (command) {
+            case "开始自动悬赏":
+                bot.getBotConfig().setCommand("");
+                Utils.sendGroupMessage(bot, groupId, new MessageChain().at("3889001741").text("悬赏令刷新"));
+                break;
+            case "开始自动秘境":
+                bot.getBotConfig().setCommand("");
+                Utils.sendGroupMessage(bot, groupId, new MessageChain().at("3889001741").text("探索秘境"));
+                break;
+            case "开始自动秘域":
+                bot.getBotConfig().setCommand("");
+                sendMiYuExploreStart(bot, groupId);
+                break;
+            case "一键使用次元之钥":
+                Utils.sendGroupMessage(bot, groupId, new MessageChain().at("3889001741").text("道具使用次元之钥"));
+                break;
+            case "一键使用追捕令":
+                Utils.sendGroupMessage(bot, groupId, new MessageChain().at("3889001741").text("道具使用追捕令"));
+                break;
+            default:
+                break;
+        }
     }
 
     @GroupMessageHandler(senderIds = { 3889001741L })
     public void 开始自动秘境悬赏(Bot bot, Group group, Member member, MessageChain messageChain, String message,
             Integer messageId) {
         BotConfig botConfig = bot.getBotConfig();
+        if (sectCultivationManager.handleReply(bot, group, messageChain, message, messageId)) return;
+        // 宗门模式必须由对应的等待上下文推进，迟到回执不能启动已取消的任务。
+        if (botConfig.getCultivationMode() == 3) return;
+        message = StringUtils.defaultString(message) + "\n" + Utils.getMessageText(messageChain);
         boolean isBiGuan = message.contains("闭关时长") && (message.contains("修为提升") || message.contains("修为突破"))
                 || message.contains("闭关结束");
         boolean isXiuLian = message.contains("本次修炼增加");

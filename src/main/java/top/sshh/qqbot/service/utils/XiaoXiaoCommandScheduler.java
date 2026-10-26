@@ -16,6 +16,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 /**
  * 给小小发送自动任务指令的简化调度器。
@@ -55,12 +57,25 @@ public final class XiaoXiaoCommandScheduler {
      * 如果消息是艾特小小的任务指令，则按编号入队；普通消息保持同步发送。
      */
     public static boolean send(Bot bot, long groupId, MessageChain messageChain) {
+        return send(bot, groupId, messageChain, null, null);
+    }
+
+    /** 回执跟踪指令由业务状态机去重；发送前再次核对任务是否仍然有效。 */
+    public static void sendTracked(Bot bot, long groupId, MessageChain messageChain,
+                                   BooleanSupplier beforeSend, Consumer<Boolean> result) {
+        send(bot, groupId, messageChain, beforeSend, result);
+    }
+
+    private static boolean send(Bot bot, long groupId, MessageChain messageChain,
+                                BooleanSupplier beforeSend, Consumer<Boolean> result) {
         if (bot == null || groupId <= 0L || messageChain == null) {
+            if (result != null) result.accept(false);
             return false;
         }
 
         Group group = bot.getGroup(groupId);
         if (group == null) {
+            if (result != null) result.accept(false);
             return false;
         }
 
@@ -70,31 +85,39 @@ public final class XiaoXiaoCommandScheduler {
             return true;
         }
 
+        // 妖塔、手动切换等其他流程发出宗门指令时，旧流程不得继续补发相反操作。
+        if (beforeSend == null) SectCultivationManager.getInstance().cancel(bot);
+
         BotConfig botConfig = bot.getBotConfig();
         String queueKey = XIAO_XIAO_QQ + ":" + groupId;
         String pendingKey = bot.getBotId() + ":" + groupId + ":" + commandText;
-        if (!PENDING_COMMANDS.add(pendingKey)) {
+        if (beforeSend == null && !PENDING_COMMANDS.add(pendingKey)) {
             return true;
         }
 
         long now = System.currentTimeMillis();
         long numberDelay = getNumberDelay(botConfig);
         long earliestTime = now + numberDelay;
-        long scheduledTime = Math.max(earliestTime, NEXT_AVAILABLE_TIME.getOrDefault(queueKey, now));
-        NEXT_AVAILABLE_TIME.put(queueKey, scheduledTime + COMMAND_INTERVAL_MS);
+        long scheduledTime = NEXT_AVAILABLE_TIME.compute(queueKey,
+                (key, previous) -> Math.max(earliestTime, previous == null ? now : previous)
+                        + COMMAND_INTERVAL_MS) - COMMAND_INTERVAL_MS;
 
         long delay = Math.max(0L, scheduledTime - now);
         EXECUTOR.schedule(() -> {
             try {
                 Group targetGroup = bot.getGroup(groupId);
-                if (targetGroup != null) {
+                if (targetGroup == null) {
+                    if (result != null) result.accept(false);
+                } else if (beforeSend == null || beforeSend.getAsBoolean()) {
                     targetGroup.sendMessage(messageChain);
+                    if (result != null) result.accept(true);
                 }
             } catch (Exception e) {
                 logger.warn("小小任务指令发送失败: botId={}, groupId={}, command={}",
                         bot.getBotId(), groupId, commandText, e);
+                if (result != null) result.accept(false);
             } finally {
-                PENDING_COMMANDS.remove(pendingKey);
+                if (beforeSend == null) PENDING_COMMANDS.remove(pendingKey);
             }
         }, delay, TimeUnit.MILLISECONDS);
         return true;

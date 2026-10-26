@@ -27,6 +27,7 @@ import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.QQBotConfig;
 import top.sshh.qqbot.data.RemindTime;
 import top.sshh.qqbot.service.utils.CompletionMessageSender;
+import top.sshh.qqbot.service.utils.SectCultivationManager;
 import top.sshh.qqbot.service.utils.Utils;
 
 import javax.annotation.PostConstruct;
@@ -491,6 +492,10 @@ public class FamilyTask {
                 }
             }
 
+            // 自动悬赏/秘境正在确认宗门操作时，由其统一处理繁忙，避免妖塔分支补发相反指令。
+            if (msg.contains("宗门系统繁忙")
+                    && (SectCultivationManager.getInstance().isTracking(bot)
+                    || SectCultivationManager.getInstance().wasHandled(bot, group, msgId))) return;
             if ((botConfig.getChallengeMode() == 12 || botConfig.getChallengeMode() == 22 || botConfig.getChallengeMode() == 13 || botConfig.getChallengeMode() == 23) && msg.contains("宗门系统繁忙，请稍后再试。")) {
                 long delaySeconds = ThreadLocalRandom.current().nextLong(5L, 60L);
                 String text = botConfig.getCommand();

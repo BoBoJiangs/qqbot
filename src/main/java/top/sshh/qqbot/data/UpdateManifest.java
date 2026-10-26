@@ -5,6 +5,7 @@ public class UpdateManifest {
     private String jarUrl;
     private String sha256;
     private String notes;
+    /** true：新版本允许自动安装；false/null：仅通过“立即更新”安装。 */
     private Boolean force;
 
     public String getVersion() {

@@ -70,19 +70,20 @@ public class UpdateService {
 
     public boolean hasUpdate(UpdateManifest manifest) {
         if (manifest == null) return false;
-        boolean force = manifest.getForce() != null && manifest.getForce();
-        return force || isUpdateAvailable(getCurrentVersion(), manifest.getVersion());
+        // force 控制是否自动安装；版本可用性统一按版本号判断，避免强制版本反复重启。
+        return isUpdateAvailable(getCurrentVersionText(), manifest.getVersion());
     }
 
     public String buildCheckUpdateMessage() throws Exception {
         UpdateManifest manifest = checkForUpdate();
-        String current = getCurrentVersion();
+        String current = getCurrentVersionText();
         boolean available = hasUpdate(manifest);
         StringBuilder sb = new StringBuilder();
         if (available) {
             sb.append("检测到新版本\n");
             sb.append("当前版本：").append(StringUtils.defaultString(current, "—")).append("\n");
             sb.append("最新版本：").append(StringUtils.defaultString(manifest == null ? null : manifest.getVersion(), "—")).append("\n");
+            sb.append("更新类型：").append(Boolean.TRUE.equals(manifest.getForce()) ? "强制更新" : "手动更新").append("\n");
             if (StringUtils.isNotBlank(manifest == null ? null : manifest.getNotes())) {
                 sb.append("\n更新日志：\n").append(manifest.getNotes());
             } else {
@@ -100,7 +101,7 @@ public class UpdateService {
         UpdateManifest manifest = checkForUpdate();
         StringBuilder sb = new StringBuilder();
         sb.append("版本更新日志\n");
-        sb.append("当前版本：").append(StringUtils.defaultString(getCurrentVersion(), "—")).append("\n");
+        sb.append("当前版本：").append(StringUtils.defaultString(getCurrentVersionText(), "—")).append("\n");
         sb.append("最新版本：").append(StringUtils.defaultString(manifest == null ? null : manifest.getVersion(), "—")).append("\n");
         if (StringUtils.isNotBlank(manifest == null ? null : manifest.getNotes())) {
             sb.append("\n").append(manifest.getNotes());
@@ -121,11 +122,11 @@ public class UpdateService {
         out.put("initialDelayMs", updateProperties.getInitialDelayMs());
         out.put("lastCheckAt", lastCheckAt == null ? null : lastCheckAt.toEpochMilli());
         out.put("lastError", lastError);
-        out.put("currentVersion", getCurrentVersion());
+        out.put("currentVersion", getCurrentVersionText());
         if (lastManifest != null) {
             out.put("latestVersion", lastManifest.getVersion());
             out.put("latest", lastManifest);
-            out.put("updateAvailable", isUpdateAvailable(getCurrentVersion(), lastManifest.getVersion()));
+            out.put("updateAvailable", hasUpdate(lastManifest));
         } else {
             out.put("latestVersion", null);
             out.put("latest", null);
@@ -282,12 +283,14 @@ public class UpdateService {
         }
         try {
             UpdateManifest manifest = checkForUpdate();
-            String current = getCurrentVersion();
-            boolean force = manifest.getForce() != null && manifest.getForce();
-            if (force || isUpdateAvailable(current, manifest.getVersion())) {
-                logger.info("检测到新版本：当前={} 远端={}", current, manifest.getVersion());
-                applyUpdateAndRestart(manifest);
+            if (!hasUpdate(manifest)) return;
+            if (!Boolean.TRUE.equals(manifest.getForce())) {
+                logger.info("检测到手动更新版本：当前={} 远端={}，发送“立即更新”后安装",
+                        getCurrentVersionText(), manifest.getVersion());
+                return;
             }
+            logger.info("检测到强制更新版本：当前={} 远端={}", getCurrentVersionText(), manifest.getVersion());
+            applyUpdateAndRestart(manifest);
         } catch (Exception e) {
             logger.warn("自动更新检查失败：{}", e.getMessage());
         }
