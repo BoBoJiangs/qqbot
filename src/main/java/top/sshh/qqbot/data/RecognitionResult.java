@@ -12,6 +12,22 @@ public class RecognitionResult implements Serializable {
     public String url;
     public String title;
     private int lastClickIndex;
+    private String recognizer;
+    private List<Integer> knnAppliedIndices;
+    private boolean knnAttempted;
+    private boolean clickFailed;
+    private String knnReviewId;
+
+    public String getRecognizer() { return recognizer; }
+    public void setRecognizer(String recognizer) { this.recognizer = recognizer; }
+    public List<Integer> getKnnAppliedIndices() { return knnAppliedIndices; }
+    public void setKnnAppliedIndices(List<Integer> indices) { this.knnAppliedIndices = indices; }
+    public boolean isKnnAttempted() { return knnAttempted; }
+    public void setKnnAttempted(boolean attempted) { this.knnAttempted = attempted; }
+    public boolean isClickFailed() { return clickFailed; }
+    public void setClickFailed(boolean failed) { this.clickFailed = failed; }
+    public String getKnnReviewId() { return knnReviewId; }
+    public void setKnnReviewId(String id) { this.knnReviewId = id; }
 
 
     public RecognitionResult(List<String> list, String r) {

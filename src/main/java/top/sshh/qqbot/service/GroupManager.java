@@ -113,7 +113,7 @@ public class GroupManager {
     public Map<String, TaskStatus> taskStateMap = new ConcurrentHashMap();
     public Map<String, Boolean> groupXslPriceQueryMap = new ConcurrentHashMap();
     public Map<String, Boolean> groupSettlementReminderMap = new ConcurrentHashMap();
-    public VerifyCount verifyCount = new VerifyCount();
+    public volatile VerifyCount verifyCount = new VerifyCount();
     public volatile boolean taskReminder = true;
     private final Map<String, Map<String, Long>> taskRecords = new ConcurrentHashMap();
     public  Map<String, String> autoVerifyQQ= new ConcurrentHashMap();

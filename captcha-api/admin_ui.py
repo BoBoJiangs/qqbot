@@ -1087,6 +1087,7 @@ class AdminUI:
                 <a href="/admin/members">会员</a>
                 <a href="/admin/renewals">续费通知</a>
                 <a href="/admin/recognize">验证码识别</a>
+                <a href="/admin/knn-review">KNN 人工纠错</a>
                 <a href="/admin/password">改密</a>
               </div>
             </aside>

@@ -135,7 +135,8 @@ class RemoteVerifyCodeFallbackTest {
         process(result);
 
         verify(bot, times(1)).clickKeyboardButton(anyLong(), any(), any(), any(), any());
-        assertEquals(1, groupManager.verifyCount.correctCount);
+        assertEquals(0, groupManager.verifyCount.getPrimary().getSuccesses());
+        assertEquals(1, groupManager.verifyCount.getPrimary().getUnconfirmed());
         verifyNoInteractions(reminders);
     }
 
@@ -151,7 +152,8 @@ class RemoteVerifyCodeFallbackTest {
         verify(bot, times(2)).clickKeyboardButton(
                 GROUP_ID, buttons.getBotAppid(), "2", "data-2", buttons.getMsgSeq());
         verify(service, times(1)).recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText(), bot);
-        assertEquals(1, groupManager.verifyCount.correctCount);
+        assertEquals(0, groupManager.verifyCount.getPrimary().getSuccesses());
+        assertEquals(1, groupManager.verifyCount.getPrimary().getAttempts());
         assertEquals(0, random.calls);
         verifyNoInteractions(reminders);
     }
@@ -182,7 +184,8 @@ class RemoteVerifyCodeFallbackTest {
 
         verify(bot, times(2)).clickKeyboardButton(
                 GROUP_ID, buttons.getBotAppid(), "2", "data-2", buttons.getMsgSeq());
-        assertEquals(1, groupManager.verifyCount.correctCount);
+        assertEquals(0, groupManager.verifyCount.getPrimary().getSuccesses());
+        assertEquals(1, groupManager.verifyCount.getPrimary().getUnconfirmed());
         verifyNoInteractions(reminders);
     }
 

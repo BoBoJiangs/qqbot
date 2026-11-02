@@ -1,0 +1,117 @@
+<style>
+  .knn-grid{display:grid;grid-template-columns:230px minmax(0,1fr);gap:18px;margin-top:18px}
+  .knn-toolbar{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .knn-secondary{background:var(--bg-tertiary)!important;color:var(--text-primary)!important}
+  .knn-muted{color:var(--text-secondary);font-size:13px}.knn-queue{display:grid;gap:8px;max-height:64vh;overflow:auto;margin-top:12px}
+  .knn-queue button{text-align:left;white-space:normal;line-height:1.5;width:100%;padding:10px;border:1px solid var(--border-default);border-radius:8px;background:var(--bg-primary);color:var(--text-primary);cursor:pointer}
+  .knn-queue button.active{border-color:var(--info);background:var(--info-bg)}
+  .knn-canvas{display:block;width:100%;height:auto;background:#eee;border:1px solid var(--border-default);border-radius:8px;touch-action:none;cursor:crosshair}
+  .knn-editor{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin:14px 0}
+  .knn-item{padding:12px;border:1px solid var(--border-default);border-radius:8px;background:var(--bg-primary)}
+  .knn-item.active{border-color:var(--info)}.knn-item-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+  .knn-coords{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}.knn-coords label{font-size:11px;color:var(--text-secondary)}
+  .knn-coords input{width:100%;padding:6px}.knn-item select{width:100%;margin-top:6px}
+  .knn-message{padding:12px 15px;border-radius:8px;background:var(--info-bg);margin-top:14px;white-space:pre-wrap}
+  .knn-message.error{background:var(--danger-bg);color:#fca5a5}.knn-remove{background:transparent;border:0;color:#fca5a5;cursor:pointer}
+  #knn-empty{padding:45px 15px;text-align:center}#knn-title{white-space:pre-wrap;overflow-wrap:anywhere}.knn-queue-empty{padding:18px 0}
+  @media(max-width:1000px){.knn-grid{grid-template-columns:1fr}.knn-queue{max-height:180px}.knn-editor{grid-template-columns:1fr}}
+</style>
+<div class="card">
+  <div class="knn-toolbar"><h2 style="margin:0">KNN 人工纠错</h2><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn knn-secondary" id="knn-refresh">刷新队列</button><button class="btn" id="knn-publish">发布已确认样本到索引</button></div></div>
+  <p class="knn-muted">仅收集 KNN 无可用答案或游戏确认失败的图片。先核对真实图标、框和标签，再保存；发布后会保留原有样本，并加入已确认的分类纠错样本。</p>
+  <div id="knn-summary" class="knn-muted">正在加载…</div>
+  <div id="knn-message" class="knn-message" role="status" hidden></div>
+</div>
+<div class="knn-grid">
+  <aside class="card"><label for="knn-filter">复核队列</label><select id="knn-filter" style="width:100%;margin-top:8px"><option value="pending">待复核</option><option value="confirmed">已确认</option><option value="ignored">已忽略</option><option value="all">全部</option></select><div id="knn-queue" class="knn-queue"></div><div style="display:flex;gap:8px;margin-top:10px"><button id="knn-prev" class="btn knn-secondary">上一页</button><button id="knn-next" class="btn knn-secondary">下一页</button></div></aside>
+  <main class="card" style="min-width:0">
+    <div id="knn-empty"><h3>没有待复核的 KNN 错题</h3><p class="knn-muted">新发生的 KNN 失败会自动进入此处。未确认结果、接口异常和点击异常不会作为识别错题收集。</p></div>
+    <div id="knn-workspace" hidden>
+      <div class="knn-toolbar"><h3 style="margin:0" id="knn-name"></h3><div><button id="knn-select" class="btn knn-secondary">选择 / 移动框</button> <button id="knn-add" class="btn knn-secondary">拖动新增框</button></div></div>
+      <p id="knn-title"></p><p id="knn-reason" class="knn-muted"></p>
+      <canvas id="knn-canvas" class="knn-canvas" aria-label="验证码原图和候选框"></canvas>
+      <p class="knn-muted">标签当前为预测预填值，尚未确认。点击框可选择，拖动可移动；可修改下方坐标，或删除背景误检框。发布仅改善分类，不能替代检测模型修复漏框和误检。</p>
+      <div id="knn-editor" class="knn-editor"></div>
+      <label for="knn-category">问题类型</label><select id="knn-category" style="width:100%;margin:6px 0 12px"><option value="classification">分类错误：人工确认后可加入 KNN</option><option value="detection">背景误检 / 漏框 / 顺序问题：仅归档，不加入 KNN</option><option value="unclear">无法确定：仅归档，不加入 KNN</option></select>
+      <label for="knn-note">备注（可选）</label><textarea id="knn-note" rows="2" maxlength="2000" style="width:100%;margin:6px 0 14px" placeholder="例如：第2个是书本；浅色背景被误检"></textarea>
+      <div class="knn-toolbar"><div><button id="knn-save" class="btn">确认保存并下一张</button> <button id="knn-ignore" class="btn knn-secondary">忽略此图</button> <button id="knn-reopen" class="btn knn-secondary">撤销确认 / 重新复核</button></div><span class="knn-muted">Ctrl+Enter 保存；修改保存后需手动发布索引</span></div>
+    </div>
+  </main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById('knn-' + id);
+  const canvas = $('canvas'), ctx = canvas.getContext('2d');
+  const reasons = {game_rejected:'游戏明确判定失败',same_image_again:'提交后再次收到相同验证码',no_usable_answer:'KNN 没有给出可用答案',same_failed_answer:'KNN 与之前失败的答案相同'};
+  let labels=[], rows=[], record=null, items=[], selected=-1, image=null, mode='select', drag=null, offset=0, total=0, dirty=false, busy=false, sequence=0;
+  const message = (text,error=false) => { $('message').hidden=false; $('message').textContent=text; $('message').classList.toggle('error',error); };
+  async function api(path, body) {
+    const response=await fetch('/admin/knn-review/'+path, body===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await response.json(); if(!response.ok)throw new Error(data.error||'请求失败，请重新登录后重试'); return data;
+  }
+  function draw() {
+    if(!image)return; ctx.clearRect(0,0,canvas.width,canvas.height);ctx.drawImage(image,0,0);
+    items.forEach((item,i)=>{const [x,y,w,h]=item.box;ctx.strokeStyle=i===selected?'#f59e0b':'#087f8c';ctx.lineWidth=i===selected?3:2;ctx.strokeRect(x,y,w,h);ctx.fillStyle=ctx.strokeStyle;ctx.fillRect(x,Math.max(0,y-18),23,18);ctx.fillStyle='white';ctx.font='bold 13px sans-serif';ctx.fillText(String(i+1),x+6,Math.max(0,y-18)+14);});
+    if(drag&&mode==='add'){ctx.strokeStyle='#f59e0b';ctx.strokeRect(drag.x,drag.y,drag.lastX-drag.x,drag.lastY-drag.y);}
+  }
+  function renderItems() {
+    $('editor').replaceChildren();
+    items.forEach((item,i)=>{
+      const card=document.createElement('div');card.className='knn-item'+(i===selected?' active':'');
+      const head=document.createElement('div');head.className='knn-item-head';
+      const title=document.createElement('strong');title.textContent='图标 '+(i+1);title.style.cursor='pointer';title.onclick=()=>{selected=i;renderItems();draw();};
+      const remove=document.createElement('button');remove.type='button';remove.className='knn-remove';remove.textContent='删除框';remove.onclick=()=>{items.splice(i,1);selected=Math.min(selected,items.length-1);dirty=true;renderItems();draw();};head.append(title,remove);card.append(head);
+      if(item.prediction){const note=document.createElement('div');note.className='knn-muted';note.textContent=item.prediction;card.append(note);}
+      const select=document.createElement('select');select.setAttribute('aria-label','图标'+(i+1)+'真值标签');
+      const empty=document.createElement('option');empty.value='';empty.textContent='请选择正确标签';select.append(empty);
+      labels.forEach(label=>{const option=document.createElement('option');option.value=label;option.textContent=label;select.append(option);});select.value=item.label||'';
+      select.onchange=()=>{item.label=select.value;dirty=true;};card.append(select);
+      const coords=document.createElement('div');coords.className='knn-coords';['X','Y','宽','高'].forEach((name,j)=>{const label=document.createElement('label');label.textContent=name;const input=document.createElement('input');input.type='number';input.step='1';input.value=item.box[j];input.setAttribute('aria-label','图标'+(i+1)+name);input.onchange=()=>{item.box[j]=Number(input.value);dirty=true;draw();};label.append(input);coords.append(label);});card.append(coords);$('editor').append(card);
+    });
+  }
+  async function loadSample(id, force=false) {
+    if(!force&&dirty&&!window.confirm('当前修改尚未保存，是否切换图片？'))return;
+    const token=++sequence; const data=await api('sample/'+id); if(token!==sequence)return;
+    const nextImage=new Image();nextImage.onload=()=>{
+      if(token!==sequence)return; record=data;image=nextImage;dirty=false;mode='select';selected=0;
+      items=(data.review_items||data.prediction_items.map(item=>({box:item.box,label:item.knn.accepted?item.knn.label:item.primary_label}))).map((item,i)=>{
+        const prediction=data.prediction_items[i];let text='人工调整后的框';
+        if(prediction){const knn=prediction.knn;text='主模型：'+prediction.primary_label+'；KNN：'+(knn.label||'未给出建议')+(knn.confidence!==undefined?'，相似度 '+(knn.confidence*100).toFixed(1)+'%':'');}
+        return {box:[...item.box],label:item.label,prediction:text};
+      });
+      canvas.width=data.width;canvas.height=data.height;$('workspace').hidden=false;$('empty').hidden=true;
+      $('name').textContent='样本 '+id.slice(0,12);const last=data.attempts[data.attempts.length-1];$('title').textContent=last.title||'未提供题目';$('reason').textContent=(reasons[last.reason]||last.reason)+' · 上次提交：'+(last.answer||'无答案');
+      $('category').value=data.category||'classification';$('note').value=data.note||'';renderItems();renderQueue();draw();
+    };nextImage.onerror=()=>message('图片加载失败，请刷新后重试',true);nextImage.src='/admin/knn-review/image/'+id+'?v='+encodeURIComponent(data.updated_at||'');
+  }
+  function renderQueue() {
+    $('queue').replaceChildren();rows.forEach(row=>{const button=document.createElement('button');button.classList.toggle('active',record&&record.id===row.id);button.textContent=row.id.slice(0,12)+' · '+(reasons[row.reason]||row.reason);button.onclick=()=>loadSample(row.id).catch(error=>message(error.message,true));$('queue').append(button);});
+    if(!rows.length){const empty=document.createElement('p');empty.className='knn-muted knn-queue-empty';empty.textContent='当前筛选下没有图片';$('queue').append(empty);}
+    $('prev').disabled=offset===0;$('next').disabled=offset+100>=total;
+  }
+  async function refresh(selectFirst=false) {
+    const data=await api('data?status='+$('filter').value+'&offset='+offset);labels=data.labels;rows=data.items;total=data.total;
+    const counts=data.counts,index=data.index;let text='待复核 '+counts.pending+' · 已确认 '+counts.confirmed+' · 已忽略 '+counts.ignored+' · 当前索引 '+(index.candidates||0)+' 个图标 / '+(index.reference_labels||[]).length+' 类';
+    if(data.publication)text+=' · 最近发布已纳入 '+data.publication.review_documents+' 张纠错图';$('summary').textContent=text;renderQueue();
+    if(selectFirst){if(rows.length)await loadSample(rows[0].id,true);else{++sequence;record=null;image=null;$('workspace').hidden=true;$('empty').hidden=false;dirty=false;}}
+  }
+  async function save() {
+    if(!record||busy)return;if(!items.length||items.some(item=>!item.label)){message('请为每个真实图标选择正确标签；无法确认的图片可忽略',true);return;}
+    busy=true;$('save').disabled=true;
+    try{await api('sample/'+record.id+'/confirm',{items:items.map(item=>({box:item.box,label:item.label})),category:$('category').value,note:$('note').value});dirty=false;message('已人工确认保存。分类纠错样本需点击“发布已确认样本到索引”才会用于识别。');await refresh(true);}catch(error){message(error.message,true);}finally{busy=false;$('save').disabled=false;}
+  }
+  async function setStatus(status){if(!record||busy)return;try{await api('sample/'+record.id+'/status',{status});dirty=false;message(status==='ignored'?'已忽略此图':'已重新放回待复核队列；如样本已发布，请重新发布以更新索引。');await refresh(true);}catch(error){message(error.message,true);}}
+  function point(event){const rect=canvas.getBoundingClientRect();return [Math.max(0,Math.min(canvas.width,Math.round((event.clientX-rect.left)*canvas.width/rect.width))),Math.max(0,Math.min(canvas.height,Math.round((event.clientY-rect.top)*canvas.height/rect.height)))];}
+  canvas.onpointerdown=event=>{if(!record)return;const [x,y]=point(event);canvas.setPointerCapture(event.pointerId);if(mode==='add')drag={x,y,lastX:x,lastY:y};else{selected=items.findLastIndex(item=>{const [bx,by,w,h]=item.box;return x>=bx&&x<=bx+w&&y>=by&&y<=by+h;});if(selected>=0)drag={x,y,original:[...items[selected].box]};renderItems();}draw();};
+  canvas.onpointermove=event=>{if(!drag)return;const [x,y]=point(event);if(mode==='add'){drag.lastX=x;drag.lastY=y;}else if(selected>=0){const [ox,oy,w,h]=drag.original;items[selected].box=[Math.max(0,Math.min(canvas.width-w,ox+x-drag.x)),Math.max(0,Math.min(canvas.height-h,oy+y-drag.y)),w,h];dirty=true;}draw();};
+  canvas.onpointerup=event=>{if(!drag)return;if(mode==='add'){const [x,y]=point(event),w=Math.abs(x-drag.x),h=Math.abs(y-drag.y);if(w>=2&&h>=2){items.push({box:[Math.min(x,drag.x),Math.min(y,drag.y),w,h],label:'',prediction:'人工新增图标框'});selected=items.length-1;dirty=true;}mode='select';}drag=null;renderItems();draw();};
+  canvas.onpointercancel=()=>{drag=null;draw();};
+  $('select').onclick=()=>{mode='select';message('选择模式：点击框选择，拖动移动；宽高可在下方修改。');};$('add').onclick=()=>{mode='add';message('请在真实图标上按住并拖动，新增一个候选框。');};
+  $('category').onchange=()=>{dirty=true;};$('note').oninput=()=>{dirty=true;};$('save').onclick=save;$('ignore').onclick=()=>setStatus('ignored');$('reopen').onclick=()=>setStatus('pending');
+  $('refresh').onclick=()=>refresh(false).catch(error=>message(error.message,true));$('filter').onchange=()=>{if(dirty&&!window.confirm('放弃尚未保存的修改并切换筛选？'))return;offset=0;refresh(true).catch(error=>message(error.message,true));};
+  $('prev').onclick=()=>{offset=Math.max(0,offset-100);refresh(true).catch(error=>message(error.message,true));};$('next').onclick=()=>{offset+=100;refresh(true).catch(error=>message(error.message,true));};
+  $('publish').onclick=async()=>{if(busy)return;if(dirty){message('请先保存当前图片的修改，再发布索引。',true);return;}if(!window.confirm('发布将保留原始基准样本，并加入当前已确认的分类纠错样本。检测问题和未确认样本不会加入。是否发布？'))return;busy=true;$('publish').disabled=true;message('正在提取已确认样本特征并发布索引，请稍候…');try{const result=await api('publish',{});message('发布成功：当前 '+result.candidates+' 个图标样本，其中包含 '+result.review_documents+' 张纠错图。原索引已备份，无需重启服务。');await refresh(false);}catch(error){message('发布失败，原索引保留：'+error.message,true);}finally{busy=false;$('publish').disabled=false;}};
+  document.addEventListener('keydown',event=>{if(event.ctrlKey&&event.key==='Enter'){event.preventDefault();save();}});window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
+  refresh(true).catch(error=>message(error.message,true));
+})();
+</script>

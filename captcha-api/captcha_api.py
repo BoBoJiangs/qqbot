@@ -29,6 +29,7 @@ from routes.member_routes import member_routes
 from routes.renewal_routes import renewal_routes
 from routes.recognize_routes import recognize_routes
 from routes.api_routes import api_routes
+from routes.knn_review_routes import knn_review_routes
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -334,6 +335,7 @@ app.include_router(member_routes, tags=["members"])
 app.include_router(renewal_routes, tags=["renewals"])
 app.include_router(recognize_routes, tags=["recognize"])
 app.include_router(api_routes, tags=["api"])
+app.include_router(knn_review_routes, tags=["knn-review"])
 
 
 # ============== Additional API Endpoints ==============

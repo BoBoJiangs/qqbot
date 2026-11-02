@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     classify_config: str = 'models/darknet.cfg'
     classify_weights: str = 'models/darknet_last.weights'
     classify_labels: str = 'models/labels.txt'
+    knn_index_path: str = 'knn/reference_index.npz'
+    knn_report_path: str = 'knn/reference_meta.json'
+    knn_review_dir: str = 'knn_review'
+    knn_review_pending_ttl_seconds: int = 3600
 
     # Error image directory
     error_dir: str = "errorPic"

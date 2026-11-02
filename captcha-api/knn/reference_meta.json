@@ -1,0 +1,31 @@
+{
+  "source": "human_confirmed_annotations",
+  "documents": 618,
+  "candidates": 2486,
+  "reference_labels": [
+    "书本",
+    "兔子",
+    "图钉",
+    "汽车",
+    "沙漏",
+    "电池",
+    "电脑",
+    "苹果",
+    "葡萄",
+    "西瓜",
+    "鲸鱼",
+    "鸡头"
+  ],
+  "feature_dim": 80,
+  "model_assets": {
+    "classifier_config_sha256": "d062bf81731569eb31c82ad2b40c94dc547e7af4c63be8cbe8d8dc818ff2a05d",
+    "classifier_weights_sha256": "5f9084e9b0307fea966967cf6c44ec9c35bcba99c36049ba4dd66b647954267a"
+  },
+  "index_sha256": "1a01ebb19e486d780d9d549a4dbd017a7a0cde10156dada562484603f10eebe1",
+  "threshold": {
+    "similarity_threshold": 0.5,
+    "margin_threshold": 0.0,
+    "vote_threshold": 0.0
+  },
+  "threshold_note": "Reuses existing reviewed KNN gates; no new accuracy claim."
+}

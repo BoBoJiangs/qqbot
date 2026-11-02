@@ -18,6 +18,8 @@ import top.sshh.qqbot.constant.Constant;
 import top.sshh.qqbot.data.Config;
 import top.sshh.qqbot.data.ProductPrice;
 import top.sshh.qqbot.data.RecognitionResult;
+import top.sshh.qqbot.data.VerifyCount;
+import top.sshh.qqbot.service.GroupManager;
 import top.sshh.qqbot.service.TestService;
 import top.sshh.qqbot.verifycode.RemoteVerifyCode;
 
@@ -107,6 +109,9 @@ class AutoBuyHerbsCaptchaRecoveryTest {
         RemoteVerifyCode verifier = spy(new RemoteVerifyCode());
         TestService reminders = mock(TestService.class);
         ReflectionTestUtils.setField(verifier, "testService", reminders);
+        GroupManager statistics = mock(GroupManager.class);
+        statistics.verifyCount = new VerifyCount();
+        ReflectionTestUtils.setField(verifier, "groupManager", statistics);
         Buttons buttons = new Buttons();
         buttons.setButtonList(List.of(mock(com.zhuangxv.bot.core.Button.class)));
         buttons.setImageUrl("https://example.com/captcha.png");

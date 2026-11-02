@@ -11,7 +11,14 @@
 
 # Local runtime artifacts
 /bot.jar.bak
+/bot.jar.bak.*
+/bot.jar.new*
+/lib/*.jar.bak-*
+/captcha-api-sync-backups/
+/*.lnk
 /update/
+/captcha-api/.env
+/captcha-api/knn_review/
 
 # Per-bot local runtime configs
 /config/bot-*.json

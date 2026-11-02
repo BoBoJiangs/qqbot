@@ -52,6 +52,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -67,6 +68,7 @@ import top.sshh.qqbot.service.utils.CaptchaReminderSender;
 import top.sshh.qqbot.service.utils.MarketPriceUtils;
 import top.sshh.qqbot.service.utils.SectCultivationManager;
 import top.sshh.qqbot.service.utils.Utils;
+import top.sshh.qqbot.verifycode.RemoteVerifyCode;
 
 @Component
 public class TestService {
@@ -86,6 +88,8 @@ public class TestService {
     private LingShiGiftService lingShiGiftService;
     @Autowired
     private GroupManager groupManager;
+    @Autowired
+    private ObjectProvider<RemoteVerifyCode> remoteVerifyCodeProvider;
     @Autowired
     private UpdateService updateService;
     @Autowired
@@ -2103,6 +2107,7 @@ public class TestService {
         }
 
         final long clickGroupId = buttons.getGroupId() > 0L ? buttons.getGroupId() : group.getGroupId();
+        excludeExternalVerificationFromStatistics(bot, buttons);
         customPool.submit(() -> {
             for (int i = 0; i < buttonsToClick.size(); i++) {
                 if (i > 0) {
@@ -2124,6 +2129,12 @@ public class TestService {
                 }
             }
         });
+    }
+
+    private void excludeExternalVerificationFromStatistics(Bot bot, Buttons buttons) {
+        if (remoteVerifyCodeProvider == null) { return; }
+        RemoteVerifyCode verifier = remoteVerifyCodeProvider.getIfAvailable();
+        if (verifier != null) { verifier.excludeExternalVerification(bot.getBotId(), buttons.getImageUrl()); }
     }
 
     private Button findButtonByIndex(List<Button> buttonList, String argument) {
@@ -2630,6 +2641,7 @@ public class TestService {
                 if (buttonsS != null && !buttonsS.getButtonList().isEmpty()) {
                     for (Button buttonx : buttonsS.getButtonList()) {
                         if (textx.equals(buttonx.getLabel())) {
+                            excludeExternalVerificationFromStatistics(bot, buttonsS);
                             bot.clickKeyboardButton(buttonsS.getGroupId(), buttonsS.getBotAppid(), buttonx.getId(),
                                     buttonx.getData(), buttonsS.getMsgSeq());
                             return;
@@ -2646,6 +2658,7 @@ public class TestService {
             if (buttons1 != null && !buttons1.getButtonList().isEmpty()
                     && Integer.parseInt(statusCode) <= buttons1.getButtonList().size()) {
                 Button button = (Button) buttons1.getButtonList().get(Integer.parseInt(statusCode) - 1);
+                excludeExternalVerificationFromStatistics(bot, buttons1);
                 bot.clickKeyboardButton(buttons1.getGroupId(), buttons1.getBotAppid(), button.getId(), button.getData(),
                         buttons1.getMsgSeq());
                 return;

@@ -9,7 +9,8 @@ import secrets
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, UploadFile, Form, File
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from typing import Literal
 import numpy as np
 import cv2
 import requests
@@ -19,6 +20,8 @@ from services.member_service import get_member_service
 from services.renewal_service import get_renewal_service
 from data.whitelist_repository import get_whitelist_repository
 from data.usage_repository import get_usage_repository
+from knn_classifier import KnnClassifier
+from services.knn_review_service import get_knn_review_store, request_owner
 
 
 # Create router
@@ -38,6 +41,7 @@ os.makedirs(SAVE_DIR, exist_ok=True)
 CLASS_LABELS = []
 detector = None
 classifier = None
+knn_classifier = None
 _DETECTOR_LOCK = None
 _CLASSIFIER_LOCK = None
 _DETECTOR_OUTPUT_LAYERS = None
@@ -66,7 +70,7 @@ def _parse_darknet_config(cfg_path: str) -> tuple[int, int]:
 
 def initialize_models():
     """Initialize YOLO detector and classifier models."""
-    global detector, classifier, _DETECTOR_LOCK, _CLASSIFIER_LOCK, _DETECTOR_OUTPUT_LAYERS, CLASS_LABELS, _CLASSIFIER_INPUT_SIZE
+    global detector, classifier, knn_classifier, _DETECTOR_LOCK, _CLASSIFIER_LOCK, _DETECTOR_OUTPUT_LAYERS, CLASS_LABELS, _CLASSIFIER_INPUT_SIZE
 
     # Load classification labels
     with open(settings.classify_labels, 'r', encoding='utf-8') as f:
@@ -83,11 +87,33 @@ def initialize_models():
     _DETECTOR_LOCK = threading.Lock()
     _CLASSIFIER_LOCK = threading.Lock()
     _DETECTOR_OUTPUT_LAYERS = detector.getUnconnectedOutLayersNames()
+    knn_classifier = KnnClassifier(settings.knn_index_path,settings.knn_report_path,
+        settings.classify_config,settings.classify_weights,CLASS_LABELS)
 
 
 class ImageURLRequest(BaseModel):
     """Image URL request model."""
     url: str
+    recognizer: Literal['primary', 'knn'] = 'primary'
+
+
+class KnnFailureRequest(BaseModel):
+    reviewId: str = Field(pattern=r'^[0-9a-f]{64}$')
+    reason: Literal['game_rejected', 'same_image_again', 'no_usable_answer', 'same_failed_answer']
+    title: str = Field(default='', max_length=2000)
+    answer: str = Field(default='', max_length=1000)
+
+
+@api_routes.post('/knn/report_failure')
+async def report_knn_failure(payload: KnnFailureRequest, request: Request):
+    try:
+        record = get_knn_review_store().report_failure(payload.reviewId, request_owner(request),
+                    payload.reason, payload.title, payload.answer)
+        return {'code': 0, 'id': record['id'], 'msg': 'KNN 错题已单独保存'}
+    except PermissionError:
+        return JSONResponse(status_code=403, content={'code': 403, 'msg': '识别快照不属于当前账号'})
+    except FileNotFoundError:
+        return JSONResponse(status_code=404, content={'code': 404, 'msg': '识别快照已过期或不存在'})
 
 
 def error_payload(message: str) -> dict:
@@ -445,6 +471,7 @@ async def recognize_from_url(req: ImageURLRequest, request: Request):
 
         text_result = ""
         emoji_result = []
+        emoji_boxes = []
 
         for det in detections:
             x, y, w, h = det['box']
@@ -463,6 +490,7 @@ async def recognize_from_url(req: ImageURLRequest, request: Request):
                 text_result += label
             else:
                 emoji_result.append(label)
+                emoji_boxes.append([x,y,x_end-x,y_end-y])
 
         if not text_result and not emoji_result:
             return error_payload("未识别到内容")
@@ -470,8 +498,32 @@ async def recognize_from_url(req: ImageURLRequest, request: Request):
         response = {
             "code": 0,
             "result": text_result,
-            "emojiList": emoji_result
+            "emojiList": emoji_result,
+            "recognizer": req.recognizer,
         }
+        if req.recognizer == 'knn':
+            response['knnAppliedIndices'] = []
+            primary_labels = list(emoji_result)
+            try:
+                if knn_classifier is None:
+                    raise ValueError('KNN 尚未初始化')
+                predictions = knn_classifier.predict(image,emoji_boxes,emoji_result,
+                    classifier,_CLASSIFIER_LOCK,_CLASSIFIER_INPUT_SIZE)
+                response['knn'] = predictions
+                for item in predictions:
+                    if item['accepted']:
+                        emoji_result[item['index']] = item['label']
+                        response['knnAppliedIndices'].append(item['index'])
+                response['knnStatus'] = 'applied' if response['knnAppliedIndices'] else 'uncertain'
+            except Exception as exc:
+                logger.warning('KNN 重试不可用: %s',exc)
+                response['knnStatus'] = 'unavailable'
+            if response['knnStatus'] != 'unavailable':
+                try:
+                    response['knnReviewId'] = get_knn_review_store().capture(image, emoji_boxes, primary_labels,
+                        response['knn'], request_owner(request), req.url)
+                except Exception as exc:
+                    logger.warning('KNN 复核快照保存失败: %s', exc)
 
         # Add user info for QQ authentication
         if auth_type == "qq":
