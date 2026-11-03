@@ -4,6 +4,10 @@ xxGroupId: 690933736
 captcha:
    shitu-api-url: http://81.71.4.234:8000/
 #   shitu-api-url: http://116.205.232.32:8848/
+   # 每台 Java 服务可配置独立 server-id；省略时自动生成并持久化。
+   # 查询密钥从验证码 API 后台「全局验证统计」复制到该文件。
+   statistics:
+      read-key-file: ./config/captcha-statistics.key
 
 bot:
   # 类型：ws 正向连接，ws-reverse 反向连接，

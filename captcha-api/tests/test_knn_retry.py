@@ -16,7 +16,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 STATE=tempfile.TemporaryDirectory()
 for name in ['members_file','usage_counters_file','renewal_requests_file','admin_credentials_file',
-             'admin_secret_file','admin_settings_file','allowed_ips_file','allowed_qq_file','error_dir','knn_review_dir']:
+             'admin_secret_file','admin_settings_file','allowed_ips_file','allowed_qq_file','error_dir','knn_review_dir','knn_background_file']:
     os.environ[name.upper()]=str(Path(STATE.name)/name)
 import cv2
 import numpy as np
@@ -105,6 +105,23 @@ class RouteTests(unittest.TestCase):
         self.assertEqual(result['knnStatus'],'unavailable');self.assertEqual(result['emojiList'],['汽车','飞机'])
     def test_unknown_recognizer_is_rejected(self):
         with self.assertRaises(ValueError): self.api.ImageURLRequest(url='https://example.com/a.png',recognizer='other')
+
+    def test_quick_image_download_failure_gets_one_retry(self):
+        with patch.object(self.api, '_fetch_image_bytes_once', side_effect=[ConnectionError('temporary'), b'image']) as fetch, \
+             patch.object(self.api.time, 'sleep'):
+            self.assertEqual(self.api.fetch_image_bytes('https://example.com/captcha.png'), b'image')
+            self.assertEqual(fetch.call_count, 2)
+
+    def test_slow_download_failure_does_not_exceed_java_timeout_by_retrying(self):
+        with patch.object(self.api, '_fetch_image_bytes_once', side_effect=TimeoutError('slow')) as fetch, \
+             patch.object(self.api.time, 'monotonic', side_effect=[0., 5.]):
+            with self.assertRaises(TimeoutError): self.api.fetch_image_bytes('https://example.com/captcha.png')
+            self.assertEqual(fetch.call_count, 1)
+
+    def test_disallowed_image_url_is_never_retried(self):
+        with patch.object(self.api, '_fetch_image_bytes_once', side_effect=ValueError('disallowed ip')) as fetch:
+            with self.assertRaises(ValueError): self.api.fetch_image_bytes('http://127.0.0.1/private')
+            self.assertEqual(fetch.call_count, 1)
 
 
 class ActualApplicationRouteTests(RouteTests):

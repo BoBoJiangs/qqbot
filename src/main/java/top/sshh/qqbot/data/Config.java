@@ -22,6 +22,9 @@ public class Config implements Serializable {
     private int addPrice = -20;
     //查看坊市药材与连续购买药材共用的最大随机延迟，单位：秒
     private int randomDelay = 0;
+    // 每轮平均每页成功采购数低于此值时休眠；0 表示关闭。
+    private double purchaseSleepThreshold = 0;
+    private int purchaseSleepMinutes = 10;
 
     public Config() {
     }
@@ -112,5 +115,21 @@ public class Config implements Serializable {
 
     public void setRandomDelay(int randomDelay) {
         this.randomDelay = randomDelay;
+    }
+
+    public double getPurchaseSleepThreshold() {
+        return purchaseSleepThreshold;
+    }
+
+    public void setPurchaseSleepThreshold(double purchaseSleepThreshold) {
+        this.purchaseSleepThreshold = purchaseSleepThreshold;
+    }
+
+    public int getPurchaseSleepMinutes() {
+        return purchaseSleepMinutes;
+    }
+
+    public void setPurchaseSleepMinutes(int purchaseSleepMinutes) {
+        this.purchaseSleepMinutes = purchaseSleepMinutes;
     }
 }

@@ -3,9 +3,12 @@
 Handles image recognition, error reporting, and membership management.
 """
 import hashlib
+import base64
+import binascii
 import json
 import os
 import secrets
+import time
 from datetime import datetime, timezone
 from fastapi import APIRouter, Request, UploadFile, Form, File
 from fastapi.responses import JSONResponse
@@ -21,6 +24,9 @@ from services.renewal_service import get_renewal_service
 from data.whitelist_repository import get_whitelist_repository
 from data.usage_repository import get_usage_repository
 from knn_classifier import KnnClassifier
+from recognition_pipeline import run_recognition
+from services.recognition_statistics import StatisticsContext, StatisticsError, get_recognition_statistics
+from routes.statistics_routes import tracked_recognition
 from services.knn_review_service import get_knn_review_store, request_owner
 
 
@@ -95,6 +101,14 @@ class ImageURLRequest(BaseModel):
     """Image URL request model."""
     url: str
     recognizer: Literal['primary', 'knn'] = 'primary'
+    statistics: StatisticsContext | None = None
+
+
+class ImageUploadFallbackRequest(BaseModel):
+    recognitionId: str = Field(pattern=r'^[0-9a-f]{32}$')
+    feedbackToken: str = Field(min_length=32, max_length=128)
+    url: str = Field(min_length=1, max_length=4096)
+    imageBase64: str = Field(min_length=1, max_length=4 * ((settings.image_max_bytes + 2) // 3))
 
 
 class KnnFailureRequest(BaseModel):
@@ -120,6 +134,7 @@ def error_payload(message: str) -> dict:
     """Create error response payload."""
     return {
         "code": 1,
+        "serviceError": message != "未识别到内容",
         "error": message,
         "msg": message,
         "result": f"识别失败：{message}",
@@ -138,6 +153,22 @@ def recognize_error_payload(code: int, message: str) -> dict:
 
 
 def fetch_image_bytes(url: str) -> bytes:
+    """Retry a quick upstream failure once, within Java's recognition timeout."""
+    started = time.monotonic()
+    try:
+        return _fetch_image_bytes_once(url)
+    except ValueError:
+        raise
+    except Exception as error:
+        if time.monotonic() - started >= 4 or str(error) in {'too large', 'empty', 'too many redirects'}:
+            raise
+        import logging
+        logging.getLogger('captcha_api').warning('验证码图片下载暂时失败，重试一次 errorType=%s', type(error).__name__)
+        time.sleep(0.2)
+        return _fetch_image_bytes_once(url)
+
+
+def _fetch_image_bytes_once(url: str) -> bytes:
     """Download image from URL with validation."""
     import urllib.parse
     import ipaddress
@@ -434,8 +465,46 @@ async def recognize_from_upload(image: UploadFile = File(...)):
         return error_payload("服务异常")
 
 
+def recognize_image(image, recognizer='primary', background_options=None):
+    return run_recognition(image, recognizer, detector=detect_objects, sorter=sort_detections_reading_order,
+        classifier_fn=classify_char, matcher=knn_classifier, network=classifier,
+        network_lock=_CLASSIFIER_LOCK, input_size=_CLASSIFIER_INPUT_SIZE, background_options=background_options)
+
+
 @api_routes.post("/recognize")
 async def recognize_from_url(req: ImageURLRequest, request: Request):
+    return await tracked_recognition(req, request, recognize_url_content)
+
+
+@api_routes.post('/recognize/fallback')
+async def recognize_uploaded_fallback(req: ImageUploadFallbackRequest, request: Request):
+    """Continue the same recognition after upstream image download failed."""
+    import logging
+    logger = logging.getLogger('captcha_api')
+    try:
+        image_bytes = base64.b64decode(req.imageBase64, validate=True)
+    except (ValueError, binascii.Error):
+        return JSONResponse(status_code=400, content=error_payload('图片编码无效'))
+    if not image_bytes or len(image_bytes) > settings.image_max_bytes:
+        return JSONResponse(status_code=400, content=error_payload('图片为空或超过大小限制'))
+    try:
+        recognizer = get_recognition_statistics().claim_image_upload(req.recognitionId, req.feedbackToken,
+                                                                   req.url, request.query_params.get('qq'))
+    except StatisticsError as error:
+        return JSONResponse(status_code=error.status, content={**error_payload(str(error)), 'code': error.status})
+    try:
+        response = recognize_image_content(image_bytes, ImageURLRequest(url=req.url, recognizer=recognizer), request)
+    except Exception:
+        logger.exception('上传原图识别异常 recognitionId=%s', req.recognitionId)
+        response = error_payload('服务异常')
+    response.update({'recognitionId': req.recognitionId, 'feedbackToken': req.feedbackToken, 'imageSource': 'java_upload'})
+    logger.info('原图上传兜底 recognitionId=%s recognizer=%s code=%s serviceError=%s emojiCount=%s',
+                req.recognitionId, recognizer, response.get('code'), response.get('serviceError', False),
+                len(response.get('emojiList') or []))
+    return response
+
+
+async def recognize_url_content(req: ImageURLRequest, request: Request):
     """Recognize text and emojis in image from URL."""
     import logging
     logger = logging.getLogger("captcha_api")
@@ -458,86 +527,34 @@ async def recognize_from_url(req: ImageURLRequest, request: Request):
             img_bytes = fetch_image_bytes(req.url)
         except ValueError:
             return error_payload("图片URL不允许")
-        except Exception:
+        except Exception as error:
+            logger.warning('验证码图片下载失败 errorType=%s', type(error).__name__)
             return error_payload("图片下载失败")
 
-        np_arr = np.frombuffer(img_bytes, np.uint8)
-        image = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-        if image is None:
-            return error_payload("图片解码失败")
-
-        # Detect and sort objects
-        detections = sort_detections_reading_order(detect_objects(image))
-
-        text_result = ""
-        emoji_result = []
-        emoji_boxes = []
-
-        for det in detections:
-            x, y, w, h = det['box']
-            h_img, w_img = image.shape[:2]
-            x = max(0, x)
-            y = max(0, y)
-            x_end = min(w_img, x + w)
-            y_end = min(h_img, y + h)
-            if x_end <= x or y_end <= y:
-                continue
-            crop = image[y:y_end, x:x_end]
-            if crop.size == 0:
-                continue
-            label = classify_char(crop)
-            if det["class_id"] == 0:
-                text_result += label
-            else:
-                emoji_result.append(label)
-                emoji_boxes.append([x,y,x_end-x,y_end-y])
-
-        if not text_result and not emoji_result:
-            return error_payload("未识别到内容")
-
-        response = {
-            "code": 0,
-            "result": text_result,
-            "emojiList": emoji_result,
-            "recognizer": req.recognizer,
-        }
-        if req.recognizer == 'knn':
-            response['knnAppliedIndices'] = []
-            primary_labels = list(emoji_result)
-            try:
-                if knn_classifier is None:
-                    raise ValueError('KNN 尚未初始化')
-                predictions = knn_classifier.predict(image,emoji_boxes,emoji_result,
-                    classifier,_CLASSIFIER_LOCK,_CLASSIFIER_INPUT_SIZE)
-                response['knn'] = predictions
-                for item in predictions:
-                    if item['accepted']:
-                        emoji_result[item['index']] = item['label']
-                        response['knnAppliedIndices'].append(item['index'])
-                response['knnStatus'] = 'applied' if response['knnAppliedIndices'] else 'uncertain'
-            except Exception as exc:
-                logger.warning('KNN 重试不可用: %s',exc)
-                response['knnStatus'] = 'unavailable'
-            if response['knnStatus'] != 'unavailable':
-                try:
-                    response['knnReviewId'] = get_knn_review_store().capture(image, emoji_boxes, primary_labels,
-                        response['knn'], request_owner(request), req.url)
-                except Exception as exc:
-                    logger.warning('KNN 复核快照保存失败: %s', exc)
-
-        # Add user info for QQ authentication
-        if auth_type == "qq":
-            qq_comment = getattr(request.state, 'qq_comment', "未知用户")
-            response["user_info"] = {
-                "qq": auth_info,
-                "comment": qq_comment
-            }
-
-        return response
+        return recognize_image_content(img_bytes, req, request)
 
     except Exception as e:
         logger.exception("识别失败: %s", e)
         return error_payload("服务异常")
+
+
+def recognize_image_content(image_bytes, req, request):
+    import logging
+    image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        return error_payload('图片解码失败')
+    response, context = recognize_image(image, req.recognizer)
+    if req.recognizer == 'knn' and response.get('knnStatus') in {'applied', 'uncertain'}:
+        try:
+            response['knnReviewId'] = get_knn_review_store().capture(image, context['emoji_boxes'],
+                context['primary_labels'], response['knn'], request_owner(request), req.url,
+                preprocessing=response.get('knnBackground'))
+        except Exception as exc:
+            logging.getLogger('captcha_api').warning('KNN 复核快照保存失败: %s', exc)
+    if getattr(request.state, 'auth_type', None) == 'qq':
+        response['user_info'] = {'qq': request.state.auth_info,
+                                 'comment': getattr(request.state, 'qq_comment', '未知用户')}
+    return response
 
 
 @api_routes.post("/report_error")

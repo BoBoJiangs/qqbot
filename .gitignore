@@ -19,6 +19,10 @@
 /update/
 /captcha-api/.env
 /captcha-api/knn_review/
+/captcha-api/knn_background.json
+/captcha-api/recognition_statistics.db*
+/captcha-api/recognition_statistics.key
+/config/captcha-statistics*
 
 # Per-bot local runtime configs
 /config/bot-*.json

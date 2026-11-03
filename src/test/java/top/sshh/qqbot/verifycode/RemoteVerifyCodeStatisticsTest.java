@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class RemoteVerifyCodeStatisticsTest {
+    private final RecordingStatisticsClient statistics = new RecordingStatisticsClient();
     private final RemoteVerifyCode service = spy(new RemoteVerifyCode());
     private final Bot bot = mock(Bot.class);
     private final Group group = mock(Group.class);
@@ -45,6 +46,7 @@ class RemoteVerifyCodeStatisticsTest {
         buttons.setButtonList(List.of(button("1", "🔋"), button("2", "🐰"), button("3", "📖")));
         manager.verifyCount = new VerifyCount();
         ReflectionTestUtils.setField(service, "groupManager", manager);
+        ReflectionTestUtils.setField(service, "statisticsClient", statistics);
         ReflectionTestUtils.setField(service, "testService", mock(TestService.class));
         ReflectionTestUtils.setField(service, "xxGroupId", 0L);
         ReflectionTestUtils.setField(service, "knnRetryEnabled", true);
@@ -52,22 +54,37 @@ class RemoteVerifyCodeStatisticsTest {
             @Override public int nextInt(int bound) { return 2; }
         });
         doNothing().when(service).saveErrorImage(any(), any(), any(), anyLong());
-        doReturn(result("🐰")).when(service).recognizeVerifyCode(anyString(), anyString(), eq(bot));
-        doReturn(result("📖")).when(service).recognizeVerifyCodeWithKnn(anyString(), anyString(), eq(bot));
+        doAnswer(call -> result("🐰")).when(service).recognizeVerifyCode(anyString(), anyString(), eq(bot));
+        doAnswer(call -> result("📖")).when(service).recognizeVerifyCodeWithKnn(anyString(), anyString(), eq(bot));
+    }
+
+    @Test
+    void noContentResponseIsFailureButServiceErrorIsUnconfirmed() {
+        RecognitionResult missing = result(""); missing.setCode(1); missing.setResult("识别失败：未识别到内容");
+        doReturn(missing).when(service).recognizeVerifyCode(anyString(), anyString(), eq(bot));
+        process(1);
+        assertEquals("failure", statistics.outcomes.get(missing.getRecognitionId()));
+        assertEquals("no_usable_answer", statistics.reasons.get(missing.getRecognitionId()));
+        RecognitionResult error = result(""); error.setCode(1); error.setServiceError(true);
+        error.setResult("识别失败：图片下载失败");
+        doReturn(error).when(service).recognizeVerifyCode(anyString(), anyString(), eq(bot));
+        buttons.setImageUrl("https://example.com/next.jpg"); process(2);
+        assertEquals("unconfirmed", statistics.outcomes.get(error.getRecognitionId()));
+        verify(service, times(1)).recognizeVerifyCodeWithKnn(anyString(), anyString(), eq(bot));
     }
 
     @Test
     void primaryClickIsUnconfirmedUntilRealSuccessReceiptAndDuplicatesCountOnce() {
         process(1);
-        assertEquals(1, manager.verifyCount.getPrimary().getAttempts());
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, manager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(1, statistics.counts.getPrimary().getAttempts());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
         feedback("@1001 验证奖励100灵石", 2);
         feedback("@1001 验证奖励100灵石", 2);
-        assertEquals(1, manager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(100.0, manager.verifyCount.getPrimary().getSuccessRate());
-        assertEquals(0, manager.verifyCount.getPrimary().getUnconfirmed());
-        assertEquals(0, manager.verifyCount.getKnn().getAttempts());
+        assertEquals(1, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(100.0, statistics.counts.getPrimary().getSuccessRate());
+        assertEquals(0, statistics.counts.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getKnn().getAttempts());
     }
 
     @Test
@@ -79,8 +96,30 @@ class RemoteVerifyCodeStatisticsTest {
         chain.add(new MarkdownMessage(receipt));
         service.autoVerifyCode(bot, group, null, chain, "[Markdown]", 2, null);
         service.autoVerifyCode(bot, group, null, chain, "[Markdown]", 2, null);
-        assertEquals(1, manager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(0, manager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(1, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(0, statistics.counts.getPrimary().getUnconfirmed());
+    }
+
+    @Test
+    void snowlumaDuplicateMarkdownAndPlainTextRewardConfirmsPrimaryOnce() {
+        process(1);
+        String content = "[](%7B%22version%22%3A2%7D)\n"
+                + "[@嵩确(发言次数:400)](mqqapi://markdown/mention?at_type=1&at_tinyid=1001)奖励8675灵石";
+        MessageChain chain = new MessageChain().at("1001").markdown(content).text(content)
+                .json("{\"type\":\"inline_keyboard\",\"data\":{\"bot_appid\":\"102074059\",\"rows\":[]}}");
+        service.autoVerifyCode(bot, group, null, chain, chain.toString(), 2, null);
+        service.autoVerifyCode(bot, group, null, chain, chain.toString(), 2, null);
+        assertEquals(1, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(0, statistics.counts.getPrimary().getUnconfirmed());
+    }
+
+    @Test
+    void differentTextSegmentsCannotTurnOrdinaryRewardsIntoVerificationSuccess() {
+        process(1);
+        MessageChain chain = new MessageChain().at("1001").text("悬赏任务完成").markdown("奖励8675灵石");
+        service.autoVerifyCode(bot, group, null, chain, chain.toString(), 2, null);
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
     }
 
     @Test
@@ -90,9 +129,9 @@ class RemoteVerifyCodeStatisticsTest {
         MessageChain chain = new MessageChain().at("1001");
         chain.add(new MarkdownMessage("奖励1826灵石"));
         service.autoVerifyCode(bot, group, null, chain, "", 3, null);
-        assertEquals(1, manager.verifyCount.getPrimary().getFailures());
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, manager.verifyCount.getKnn().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getFailures());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getKnn().getSuccesses());
     }
 
     @Test
@@ -102,7 +141,7 @@ class RemoteVerifyCodeStatisticsTest {
         buttons.setImageUrl("https://example.com/next.jpg");
         process(3);
         feedback("[CQ:at,qq=1001]奖励1826灵石", 4);
-        assertEquals(2, manager.verifyCount.getPrimary().getSuccesses());
+        assertEquals(2, statistics.counts.getPrimary().getSuccesses());
     }
 
     @Test
@@ -117,8 +156,8 @@ class RemoteVerifyCodeStatisticsTest {
         other.add(new MarkdownMessage("奖励1001灵石"));
         service.autoVerifyCode(bot, group, null, other, "", 3, null);
         feedback("@10010 奖励5574灵石", 4);
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, manager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
     }
 
     @Test
@@ -128,8 +167,8 @@ class RemoteVerifyCodeStatisticsTest {
         MessageChain chain = new MessageChain().at("1001");
         chain.add(new MarkdownMessage("验证码不正确"));
         service.autoVerifyCode(bot, group, null, chain, "", 3, null);
-        assertEquals(1, manager.verifyCount.getKnn().getFailures());
-        assertEquals(0, manager.verifyCount.getKnn().getUnconfirmed());
+        assertEquals(1, statistics.counts.getKnn().getFailures());
+        assertEquals(0, statistics.counts.getKnn().getUnconfirmed());
     }
 
     @Test
@@ -137,12 +176,56 @@ class RemoteVerifyCodeStatisticsTest {
         process(1);
         repeat(2);
         feedback("@1001 验证通过", 3);
-        assertEquals(1, manager.verifyCount.getPrimary().getAttempts());
-        assertEquals(1, manager.verifyCount.getPrimary().getFailures());
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, manager.verifyCount.getKnn().getAttempts());
-        assertEquals(1, manager.verifyCount.getKnn().getSuccesses());
-        assertEquals(100.0, manager.verifyCount.getKnn().getSuccessRate());
+        assertEquals(1, statistics.counts.getPrimary().getAttempts());
+        assertEquals(1, statistics.counts.getPrimary().getFailures());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getKnn().getAttempts());
+        assertEquals(1, statistics.counts.getKnn().getSuccesses());
+        assertEquals(100.0, statistics.counts.getKnn().getSuccessRate());
+    }
+
+    @Test
+    void explicitGameRejectionStartsKnnWithoutWaitingForAnotherPrompt() {
+        process(1);
+        feedback("@1001 验证码不正确", 2);
+        verify(bot, timeout(3000).times(2)).clickKeyboardButton(anyLong(), any(), any(), any(), any());
+        feedback("@1001 验证成功", 3);
+        assertEquals(1, statistics.counts.getPrimary().getFailures());
+        assertEquals(0, statistics.counts.getPrimary().getUnconfirmed());
+        assertEquals(1, statistics.counts.getKnn().getSuccesses());
+        verify(service, times(1)).recognizeVerifyCodeWithKnn(anyString(), anyString(), eq(bot));
+    }
+
+    @Test
+    void duplicateRejectionReceiptCannotRejectTheNewKnnAttempt() {
+        process(1);
+        feedback("@1001 验证码不正确", 2);
+        verify(bot, timeout(3000).times(2)).clickKeyboardButton(anyLong(), any(), any(), any(), any());
+        feedback("@1001 验证码不正确", 2);
+        feedback("@1001 验证成功", 3);
+        assertEquals(1, statistics.counts.getKnn().getSuccesses());
+        assertEquals(0, statistics.counts.getKnn().getFailures());
+    }
+
+    @Test
+    void rejectionBundledWithCaptchaPromptCountsPrimaryFailureBeforeKnn() {
+        process(1);
+        feedback("@1001 验证码不正确，请点击图中第2个表情对应的按钮", 2);
+        repeat(2);
+        feedback("@1001 验证成功", 3);
+        assertEquals(1, statistics.counts.getPrimary().getFailures());
+        assertEquals(0, statistics.counts.getPrimary().getUnconfirmed());
+        assertEquals(1, statistics.counts.getKnn().getSuccesses());
+        verify(service, times(1)).recognizeVerifyCodeWithKnn(anyString(), anyString(), eq(bot));
+    }
+
+    @Test
+    void explicitRejectionUsesTheOriginalPromptWhenSharedButtonsAreChanged() {
+        process(1);
+        buttons.setImageText("inline_keyboard protocol metadata");
+        feedback("@1001 验证码不正确", 2);
+        verify(bot, timeout(3000).times(2)).clickKeyboardButton(anyLong(), any(), any(), any(), any());
+        verify(service).recognizeVerifyCodeWithKnn(anyString(), eq("请点击图中第2个表情对应的按钮"), eq(bot));
     }
 
     @Test
@@ -150,8 +233,8 @@ class RemoteVerifyCodeStatisticsTest {
         doReturn(result("无法匹配")).when(service).recognizeVerifyCode(anyString(), anyString(), eq(bot));
         process(1);
         feedback("@1001 验证成功", 2);
-        assertEquals(1, manager.verifyCount.getPrimary().getFailures());
-        assertEquals(1, manager.verifyCount.getKnn().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getFailures());
+        assertEquals(1, statistics.counts.getKnn().getSuccesses());
     }
 
     @Test
@@ -160,9 +243,9 @@ class RemoteVerifyCodeStatisticsTest {
         doReturn(result("识别失败")).when(service).recognizeVerifyCodeWithKnn(anyString(), anyString(), eq(bot));
         process(1);
         feedback("@1001 验证成功", 2);
-        assertEquals(1, manager.verifyCount.getPrimary().getFailures());
-        assertEquals(1, manager.verifyCount.getKnn().getFailures());
-        assertEquals(0, manager.verifyCount.getKnn().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getFailures());
+        assertEquals(1, statistics.counts.getKnn().getFailures());
+        assertEquals(0, statistics.counts.getKnn().getSuccesses());
     }
 
     @Test
@@ -171,9 +254,9 @@ class RemoteVerifyCodeStatisticsTest {
         process(1);
         repeat(2);
         feedback("@1001 验证成功", 3);
-        assertEquals(1, manager.verifyCount.getPrimary().getFailures());
-        assertEquals(1, manager.verifyCount.getKnn().getFailures());
-        assertEquals(0, manager.verifyCount.getKnn().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getFailures());
+        assertEquals(1, statistics.counts.getKnn().getFailures());
+        assertEquals(0, statistics.counts.getKnn().getSuccesses());
     }
 
     @Test
@@ -183,9 +266,9 @@ class RemoteVerifyCodeStatisticsTest {
         repeat(3);
         feedback("@1001 验证失败", 4);
         repeat(5);
-        assertEquals(1, manager.verifyCount.getPrimary().getFailures());
-        assertEquals(1, manager.verifyCount.getKnn().getFailures());
-        assertEquals(0, manager.verifyCount.getKnn().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getFailures());
+        assertEquals(1, statistics.counts.getKnn().getFailures());
+        assertEquals(0, statistics.counts.getKnn().getSuccesses());
     }
 
     @Test
@@ -193,11 +276,11 @@ class RemoteVerifyCodeStatisticsTest {
         process(1);
         repeat(2);
         repeat(2);
-        assertEquals(0, manager.verifyCount.getKnn().getFailures());
-        assertEquals(1, manager.verifyCount.getKnn().getUnconfirmed());
+        assertEquals(0, statistics.counts.getKnn().getFailures());
+        assertEquals(1, statistics.counts.getKnn().getUnconfirmed());
         verify(service, times(1)).recognizeVerifyCodeWithKnn(anyString(), anyString(), eq(bot));
         feedback("@1001 验证成功", 3);
-        assertEquals(1, manager.verifyCount.getKnn().getSuccesses());
+        assertEquals(1, statistics.counts.getKnn().getSuccesses());
     }
 
     @Test
@@ -208,8 +291,8 @@ class RemoteVerifyCodeStatisticsTest {
         feedback("@1001 悬赏奖励100灵石", 4);
         feedback("@1001 不需要验证", 5);
         feedback("@1001 请点击表情，验证成功后奖励100灵石", 6);
-        assertEquals(1, manager.verifyCount.getPrimary().getUnconfirmed());
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
     }
 
     @Test
@@ -218,7 +301,7 @@ class RemoteVerifyCodeStatisticsTest {
         Group other = mock(Group.class);
         when(other.getGroupId()).thenReturn(2002L);
         service.autoVerifyCode(bot, other, null, new MessageChain(), "@1001 验证成功", 2, null);
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
     }
 
     @Test
@@ -226,14 +309,14 @@ class RemoteVerifyCodeStatisticsTest {
         process(1);
         feedback("@1001 验证码已过期", 2);
         feedback("@1001 验证成功", 3);
-        assertEquals(1, manager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
         buttons.setImageUrl("https://example.com/next.jpg");
         process(4);
         Map<?, ?> attempts = (Map<?, ?>) ReflectionTestUtils.getField(service, "verificationAttempts");
         ReflectionTestUtils.setField(attempts.get(1001L), "submittedAt", System.currentTimeMillis() - 6 * 60 * 1000L);
         feedback("@1001 验证成功", 5);
-        assertEquals(2, manager.verifyCount.getPrimary().getUnconfirmed());
-        assertEquals(0, manager.verifyCount.getPrimary().getFailures());
+        assertEquals(2, statistics.counts.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getFailures());
     }
 
     @Test
@@ -247,9 +330,9 @@ class RemoteVerifyCodeStatisticsTest {
         doReturn(blocked).when(service).recognizeVerifyCode(anyString(), anyString(), eq(bot));
         buttons.setImageUrl("https://example.com/next.jpg");
         process(2);
-        assertEquals(2, manager.verifyCount.getPrimary().getUnconfirmed());
-        assertEquals(0, manager.verifyCount.getPrimary().getFailures());
-        assertEquals(0, manager.verifyCount.getKnn().getAttempts());
+        assertEquals(2, statistics.counts.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getFailures());
+        assertEquals(0, statistics.counts.getKnn().getAttempts());
     }
 
     @Test
@@ -258,20 +341,18 @@ class RemoteVerifyCodeStatisticsTest {
         doThrow(new IllegalStateException("click failed")).when(bot).clickKeyboardButton(anyLong(), any(), any(), any(), any());
         process(1);
         feedback("@1001 验证成功", 2);
-        assertEquals(1, manager.verifyCount.getPrimary().getUnconfirmed());
-        assertEquals(0, manager.verifyCount.getPrimary().getFailures());
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getFailures());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
     }
 
     @Test
-    void resettingStatisticsDoesNotBringBackOutstandingOldCounts() {
+    void localHistoryDoesNotCollectNewReceipts() {
         process(1);
-        VerifyCount old = manager.verifyCount;
-        manager.verifyCount = new VerifyCount();
         feedback("@1001 验证成功", 2);
-        assertEquals(1, old.getPrimary().getSuccesses());
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getSuccesses());
         assertEquals(0, manager.verifyCount.getPrimary().getAttempts());
+        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
     }
 
     @Test
@@ -279,8 +360,8 @@ class RemoteVerifyCodeStatisticsTest {
         process(1);
         config.setAutoVerifyModel(0);
         feedback("@1001 验证成功", 2);
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, manager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
     }
 
     @Test
@@ -294,8 +375,8 @@ class RemoteVerifyCodeStatisticsTest {
         ReflectionTestUtils.invokeMethod(manualService, "clickButton", bot, group, null, new MessageChain(), "点击序号3");
         verify(bot, timeout(3000).times(2)).clickKeyboardButton(anyLong(), any(), any(), any(), any());
         feedback("@1001 验证成功", 2);
-        assertEquals(0, manager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, manager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
     }
 
     @Test
@@ -304,8 +385,8 @@ class RemoteVerifyCodeStatisticsTest {
         Map<?, ?> attempts = (Map<?, ?>) ReflectionTestUtils.getField(service, "verificationAttempts");
         ReflectionTestUtils.setField(attempts.get(1001L), "submittedAt", System.currentTimeMillis() - 6 * 60 * 1000L);
         repeat(2);
-        assertEquals(0, manager.verifyCount.getPrimary().getFailures());
-        assertEquals(1, manager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getFailures());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
     }
 
     @Test
@@ -315,8 +396,8 @@ class RemoteVerifyCodeStatisticsTest {
         buttons.setImageUrl("https://example.com/next.jpg");
         process(3);
         feedback("@1001 验证成功", 2);
-        assertEquals(1, manager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, manager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(1, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
     }
 
     @Test
@@ -329,7 +410,7 @@ class RemoteVerifyCodeStatisticsTest {
         process(1);
         feedback("@1001 验证失败", 2);
         verify(service, never()).reportKnnFailure(anyString(), any(), any(), anyLong(), anyString());
-        repeat(3);
+        verify(bot, timeout(3000).times(2)).clickKeyboardButton(anyLong(), any(), any(), any(), any());
         feedback("@1001 验证失败", 4);
         feedback("@1001 验证失败", 4);
         verify(service, timeout(3000).times(1)).reportKnnFailure(eq(reviewId), any(), eq("📖"), eq(1001L), eq("game_rejected"));
@@ -346,7 +427,7 @@ class RemoteVerifyCodeStatisticsTest {
         feedback("@1001 验证成功", 3);
         verify(service, never()).reportKnnFailure(anyString(), any(), any(), anyLong(), anyString());
         buttons.setImageUrl("https://example.com/next.jpg");
-        doReturn(result("🐰")).when(service).recognizeVerifyCode(anyString(), anyString(), eq(bot));
+        doAnswer(call -> result("🐰")).when(service).recognizeVerifyCode(anyString(), anyString(), eq(bot));
         RecognitionResult nextKnn = result("📖");
         nextKnn.setKnnReviewId("d".repeat(64));
         doReturn(nextKnn).when(service).recognizeVerifyCodeWithKnn(anyString(), anyString(), eq(bot));
@@ -383,6 +464,8 @@ class RemoteVerifyCodeStatisticsTest {
 
     private RecognitionResult result(String answer) {
         RecognitionResult result = new RecognitionResult();
+        result.setRecognitionId(java.util.UUID.randomUUID().toString().replace("-", ""));
+        result.setFeedbackToken("t".repeat(43));
         result.setAnswer(answer);
         result.setResult("");
         result.setUrl(buttons.getImageUrl());

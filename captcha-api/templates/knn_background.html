@@ -1,0 +1,102 @@
+<style>
+  .kbg-layout{display:grid;grid-template-columns:300px minmax(0,1fr);gap:18px;margin-top:18px}
+  .kbg-muted{color:var(--text-secondary);font-size:13px;line-height:1.7}.kbg-controls label{display:block;margin:18px 0 7px}
+  .kbg-controls input[type=range]{width:100%}.kbg-controls input[type=checkbox]{margin-right:7px}.kbg-value{float:right}
+  .kbg-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.kbg-secondary{background:var(--bg-tertiary)!important;color:var(--text-primary)!important}
+  .kbg-message{white-space:pre-wrap;padding:12px 15px;border-radius:8px;background:var(--info-bg);margin-top:12px}.kbg-message.error{background:var(--danger-bg);color:#fca5a5}
+  .kbg-panel{min-width:0}.kbg-panel canvas{width:100%;height:auto;border-radius:8px;border:1px solid var(--border-default);background:#eee}
+  .kbg-panel ul{font-size:13px;line-height:1.8;padding-left:22px}.kbg-panel details img{max-width:100%;background:#eee}
+  @media(max-width:1000px){.kbg-layout{grid-template-columns:1fr}}
+</style>
+<div class="card">
+  <h2 style="margin-top:0">KNN 背景抑制</h2>
+  <p class="kbg-muted">KNN 重试时先淡化整图的浅色背景，再重新检测图标。首次主模型识别保持原样；分类与 KNN 从原图裁切取特征，继续使用已有样本索引。</p>
+  <p id="kbg-status" class="kbg-muted" role="status">正在读取在线参数…</p>
+  <div id="kbg-message" class="kbg-message" role="status" hidden></div>
+</div>
+<div class="kbg-layout">
+  <aside class="card kbg-controls">
+    <h3 style="margin-top:0">处理参数</h3>
+    <label><input type="checkbox" id="kbg-enabled">启用 KNN 背景抑制</label>
+    <p class="kbg-muted">保存后，所有接入本 API 的 KNN 请求从下一次开始使用新参数，无需重启。</p>
+    <div class="kbg-actions"><button class="btn kbg-secondary" data-preset="light">轻度</button><button class="btn kbg-secondary" data-preset="standard">标准</button><button class="btn kbg-secondary" data-preset="strong">较强</button></div>
+    <label for="kbg-strength">背景抑制强度 <output class="kbg-value" id="kbg-strength-value"></output></label>
+    <input id="kbg-strength" type="range" min="0" max="100" step="1" value="80"><p class="kbg-muted">越高，背景越接近浅灰；0% 保持原图。</p>
+    <label for="kbg-sensitivity">背景判定灵敏度 <output class="kbg-value" id="kbg-sensitivity-value"></output></label>
+    <input id="kbg-sensitivity" type="range" min="0" max="100" step="1" value="30"><p class="kbg-muted">越高，越多浅色区域被淡化。真实图标变淡时，请调低。</p>
+    <label for="kbg-padding">轮廓保护扩展 <output class="kbg-value" id="kbg-padding-value"></output></label>
+    <input id="kbg-padding" type="range" min="0" max="3" step="1" value="1"><p class="kbg-muted">保留轮廓周围像素；越高也可能保留更多背景。</p>
+    <label><input type="checkbox" id="kbg-interiors" checked>保留小范围封闭轮廓内的浅色</label>
+    <label><input type="checkbox" id="kbg-auto" checked>调参后自动刷新预览</label>
+    <div class="kbg-actions"><button id="kbg-save" class="btn" disabled>保存并生效</button><button id="kbg-reload" class="btn kbg-secondary">读取在线参数</button></div>
+    <p class="kbg-muted">调参和预览不会自动保存。关闭开关后保存，即恢复原图检测。</p>
+  </aside>
+  <main class="card kbg-panel">
+    <h3 style="margin-top:0">原图与处理效果</h3>
+    <label for="kbg-file">选择验证码图片（PNG / JPEG，不超过 5 MB、200 万像素）</label>
+    <input id="kbg-file" type="file" accept="image/png,image/jpeg,image/webp" style="display:block;margin:10px 0">
+    <p id="kbg-source" class="kbg-muted"></p>
+    <div class="kbg-actions"><button id="kbg-preview" class="btn kbg-secondary" disabled>预览当前参数</button><a class="btn kbg-secondary" href="/admin/knn-review">打开人工纠错</a></div>
+    <p id="kbg-preview-status" class="kbg-muted" aria-live="polite">选择图片可预览。预览不计识别用量，也不会加入错题或样本索引。</p>
+    <div id="kbg-results" hidden>
+      <h3>原图检测与 KNN</h3><canvas id="kbg-original" aria-label="原图检测结果"></canvas><ul id="kbg-original-items"></ul>
+      <h3>背景抑制后重新检测与 KNN</h3><canvas id="kbg-processed" aria-label="背景抑制后检测结果"></canvas><ul id="kbg-processed-items"></ul>
+      <details><summary>查看保留区域（白色保留，黑色淡化）</summary><img id="kbg-mask" alt="保留区域"></details>
+      <p class="kbg-muted">框来自各自分支的独立检测；KNN 相似度不是正确率。请先观察真实图标是否被保留、背景误检是否减少，再保存参数。</p>
+    </div>
+  </main>
+</div>
+<script>
+(() => {
+  const $ = id => document.getElementById('kbg-' + id);
+  const controls = ['enabled','strength','sensitivity','padding','interiors'];
+  let revision=null,dirty=false,sampleId=new URLSearchParams(location.search).get('sample_id');
+  let timer=null,sequence=0,controller=null,saving=false,ready=false;
+  function message(text,error=false){$('message').hidden=false;$('message').textContent=text;$('message').classList.toggle('error',error);}
+  function options(){return {enabled:$('enabled').checked,strength:Number($('strength').value)/100,sensitivity:Number($('sensitivity').value),edge_padding:Number($('padding').value),preserve_interiors:$('interiors').checked};}
+  function values(){$('strength-value').textContent=$('strength').value+'%';$('sensitivity-value').textContent=$('sensitivity').value;$('padding-value').textContent=$('padding').value+' 像素';}
+  function hasImage(){return $('file').files.length>0||!!sampleId;}
+  function invalidate(){sequence++;if(controller)controller.abort();clearTimeout(timer);}
+  function changed(){dirty=true;values();invalidate();$('preview-status').textContent=hasImage()?'参数已改变，等待重新预览。':'选择图片可预览当前参数。';if($('auto').checked&&hasImage()&&ready)timer=setTimeout(preview,450);}
+  async function json(response){let data;try{data=await response.json();}catch{throw new Error('服务响应无效，请重新登录后重试');}if(!response.ok)throw new Error(data.error||'请求失败，请重新登录后重试');return data;}
+  async function load(){
+    if(dirty&&!window.confirm('读取在线参数会覆盖尚未保存的修改，是否继续？'))return;
+    try{const data=await json(await fetch('/admin/knn-background/settings',{cache:'no-store'}));const o=data.options;
+      $('enabled').checked=o.enabled;$('strength').value=Math.round(o.strength*100);$('sensitivity').value=o.sensitivity;$('padding').value=o.edge_padding;$('interiors').checked=o.preserve_interiors;
+      revision=data.revision;dirty=false;ready=true;values();$('status').textContent='在线状态：'+(o.enabled&&o.strength>0?'已启用':'保持原图检测')+' · 参数版本 '+revision.slice(0,8);$('save').disabled=false;$('preview').disabled=false;
+      invalidate();if(hasImage()&&$('auto').checked)preview();
+    }catch(error){message(error.message,true);}
+  }
+  async function draw(branch,data,token){
+    const image=new Image();image.src=data.image;await image.decode();if(token!==sequence)return;
+    const canvas=$(branch),ctx=canvas.getContext('2d');canvas.width=image.width;canvas.height=image.height;ctx.drawImage(image,0,0);
+    const list=$(branch+'-items');list.replaceChildren();data.items.forEach((item,i)=>{
+      const [x,y,w,h]=item.box;ctx.strokeStyle='#087f8c';ctx.lineWidth=2;ctx.strokeRect(x,y,w,h);ctx.fillStyle='#087f8c';ctx.fillRect(x,Math.max(0,y-19),25,19);ctx.fillStyle='white';ctx.font='bold 14px sans-serif';ctx.fillText(String(i+1),x+5,Math.max(0,y-19)+15);
+      const row=document.createElement('li');let text='框 '+(i+1)+'：'+item.label+' · 检测得分 '+(item.confidence*100).toFixed(1)+'%';
+      if(item.knn)text+=item.knn.accepted?' · KNN 相似度 '+(item.knn.confidence*100).toFixed(1)+'%':' · KNN 未采用（'+(item.knn.reason==='class_not_covered'?'样本未覆盖':'相似度不足')+'）';
+      row.textContent=text;list.append(row);
+    });
+  }
+  async function preview(){
+    clearTimeout(timer);if(!ready||!hasImage()){message('请先选择图片',true);return;}
+    const token=++sequence;if(controller)controller.abort();controller=new AbortController();const form=new FormData();form.append('options_json',JSON.stringify(options()));
+    if($('file').files[0])form.append('image',$('file').files[0]);else form.append('sample_id',sampleId);$('preview-status').textContent='正在重新检测并计算 KNN…';
+    try{const data=await json(await fetch('/admin/knn-background/preview',{method:'POST',body:form,signal:controller.signal}));if(token!==sequence)return;
+      await Promise.all([draw('original',data.original,token),draw('processed',data.processed,token)]);if(token!==sequence)return;
+      $('results').hidden=false;$('mask').src=data.mask_image;
+      const unavailable=data.processed.knnStatus==='unavailable'?' · KNN 索引不可用，请检查服务日志':'';
+      $('preview-status').textContent='预览完成：原图 '+data.original.items.length+' 框 → 处理后 '+data.processed.items.length+' 框；变化像素 '+(data.changed_fraction*100).toFixed(1)+'%。当前参数'+(dirty?'尚未保存。':'已与在线配置同步。')+unavailable;
+    }catch(error){if(error.name!=='AbortError'&&token===sequence){message(error.message,true);$('preview-status').textContent='预览失败，在线配置未改变。';}}
+  }
+  controls.forEach(id=>$(id).addEventListener('input',changed));$('auto').onchange=()=>{if($('auto').checked&&hasImage()&&ready)preview();};
+  document.querySelectorAll('[data-preset]').forEach(button=>button.onclick=()=>{const presets={light:[40,15,1],standard:[65,30,1],strong:[90,50,1]},p=presets[button.dataset.preset];$('enabled').checked=true;$('strength').value=p[0];$('sensitivity').value=p[1];$('padding').value=p[2];$('interiors').checked=true;changed();});
+  $('file').onchange=()=>{sampleId=null;$('source').textContent='';invalidate();if(hasImage()&&ready)preview();};$('preview').onclick=preview;$('reload').onclick=load;
+  $('save').onclick=async()=>{
+    if(saving||!revision)return;const snapshot=options();saving=true;$('save').disabled=true;
+    try{const data=await json(await fetch('/admin/knn-background/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({options:snapshot,revision})}));revision=data.revision;dirty=JSON.stringify(snapshot)!==JSON.stringify(options());
+      $('status').textContent='在线状态：'+(snapshot.enabled&&snapshot.strength>0?'已启用':'保持原图检测')+' · 参数版本 '+revision.slice(0,8);message('保存成功，从下一次 KNN 请求开始生效。'+(dirty?'表单还有新修改尚未保存。':''));
+    }catch(error){message(error.message,true);}finally{saving=false;$('save').disabled=false;}
+  };
+  if(sampleId)$('source').textContent='正在使用人工纠错图片：'+sampleId.slice(0,12);values();load();
+})();
+</script>

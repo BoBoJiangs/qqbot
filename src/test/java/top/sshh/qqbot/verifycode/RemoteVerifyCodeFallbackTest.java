@@ -27,6 +27,7 @@ import static org.mockito.Mockito.*;
 class RemoteVerifyCodeFallbackTest {
     private static final long BOT_ID = 1001L;
     private static final long GROUP_ID = 2001L;
+    private final RecordingStatisticsClient statistics = new RecordingStatisticsClient();
     private final RemoteVerifyCode service = spy(new RemoteVerifyCode());
     private final Bot bot = mock(Bot.class);
     private final Group group = mock(Group.class);
@@ -53,8 +54,25 @@ class RemoteVerifyCodeFallbackTest {
         ReflectionTestUtils.setField(service, "testService", reminders);
         groupManager.verifyCount = new VerifyCount();
         ReflectionTestUtils.setField(service, "groupManager", groupManager);
+        ReflectionTestUtils.setField(service, "statisticsClient", statistics);
         ReflectionTestUtils.setField(service, "xxGroupId", 0L);
         doNothing().when(service).saveErrorImage(any(), any(), any(), eq(BOT_ID));
+    }
+
+    @Test
+    void serviceFailureNeverClicksRandomlyOrReportsAModelError() {
+        RecognitionResult result = new RecognitionResult();
+        result.setServiceError(true);
+        result.setResult("识别失败：图片下载失败");
+        result.setEmojiList(Collections.emptyList());
+
+        process(result);
+        ReflectionTestUtils.invokeMethod(service, "retryRepeatedCaptcha", bot, group, new MessageChain(),
+                "captcha", 2, buttons, result);
+
+        verify(bot, never()).clickKeyboardButton(anyLong(), any(), any(), any(), any());
+        verify(service, never()).saveErrorImage(any(), any(), any(), anyLong());
+        assertEquals(0, random.calls);
     }
 
     @Test
@@ -135,8 +153,8 @@ class RemoteVerifyCodeFallbackTest {
         process(result);
 
         verify(bot, times(1)).clickKeyboardButton(anyLong(), any(), any(), any(), any());
-        assertEquals(0, groupManager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, groupManager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
         verifyNoInteractions(reminders);
     }
 
@@ -152,8 +170,8 @@ class RemoteVerifyCodeFallbackTest {
         verify(bot, times(2)).clickKeyboardButton(
                 GROUP_ID, buttons.getBotAppid(), "2", "data-2", buttons.getMsgSeq());
         verify(service, times(1)).recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText(), bot);
-        assertEquals(0, groupManager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, groupManager.verifyCount.getPrimary().getAttempts());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getAttempts());
         assertEquals(0, random.calls);
         verifyNoInteractions(reminders);
     }
@@ -184,8 +202,8 @@ class RemoteVerifyCodeFallbackTest {
 
         verify(bot, times(2)).clickKeyboardButton(
                 GROUP_ID, buttons.getBotAppid(), "2", "data-2", buttons.getMsgSeq());
-        assertEquals(0, groupManager.verifyCount.getPrimary().getSuccesses());
-        assertEquals(1, groupManager.verifyCount.getPrimary().getUnconfirmed());
+        assertEquals(0, statistics.counts.getPrimary().getSuccesses());
+        assertEquals(1, statistics.counts.getPrimary().getUnconfirmed());
         verifyNoInteractions(reminders);
     }
 
@@ -223,6 +241,8 @@ class RemoteVerifyCodeFallbackTest {
     }
 
     private void process(RecognitionResult result) {
+        result.setRecognitionId(java.util.UUID.randomUUID().toString().replace("-", ""));
+        result.setFeedbackToken("t".repeat(43));
         doReturn(result).when(service).recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText(), bot);
         assertDoesNotThrow(() -> ReflectionTestUtils.invokeMethod(service, "autoVerifyCode", bot, group,
                 new MessageChain().text(buttons.getImageText()), buttons.getImageText(), 1, buttons));

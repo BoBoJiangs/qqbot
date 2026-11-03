@@ -1,0 +1,82 @@
+<style>
+  .rst-tools{display:flex;gap:12px;align-items:end;flex-wrap:wrap}.rst-tools label{display:block;margin-bottom:6px}
+  .rst-tools select,.rst-tools input{min-width:180px}.rst-secondary{background:var(--bg-tertiary)!important;color:var(--text-primary)!important}
+  .rst-models{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,540px),1fr));gap:18px;margin-top:18px}
+  .rst-models>.card{min-width:0}.rst-models table{width:100%;min-width:480px;font-variant-numeric:tabular-nums}
+  .rst-models th,.rst-models td{text-align:right;white-space:nowrap}.rst-models th:first-child,.rst-models td:first-child{text-align:left}
+  .rst-muted{color:var(--text-secondary);font-size:13px;line-height:1.8}
+  .rst-message{padding:12px;background:var(--info-bg);border-radius:8px;white-space:pre-wrap;margin-top:12px}
+  .rst-message.error{background:var(--danger-bg);color:#fca5a5}#rst-text{white-space:pre-wrap;line-height:1.9;overflow-wrap:anywhere}
+</style>
+<div class="card">
+  <h2 style="margin-top:0">全局验证统计</h2>
+  <p class="rst-muted">汇总各 Java 服务上报的主模型与 KNN 结果。成功率 = 成功 ÷（成功 + 失败）；未确认不进入分母。今日按北京时间、识别请求的发起日期统计。</p>
+  <div class="rst-tools">
+    <div><label for="rst-server">服务器</label><select id="rst-server"><option value="">全部服务器</option></select></div>
+    <div><label for="rst-qq">机器人 QQ</label><input id="rst-qq" inputmode="numeric" placeholder="留空查询全部 QQ" maxlength="20"></div>
+    <button id="rst-refresh" class="btn">查询统计</button><button id="rst-clear-filter" class="btn rst-secondary">查看全局</button>
+  </div>
+  <p id="rst-scope" class="rst-muted">正在加载…</p><div id="rst-message" class="rst-message" role="status" hidden></div>
+</div>
+<div class="rst-models" id="rst-models"></div>
+<div class="card" style="margin-top:18px"><h3>QQ 命令展示</h3><div id="rst-text"></div></div>
+<div class="card" style="margin-top:18px">
+  <details><summary>接入说明与查询密钥</summary>
+    <p class="rst-muted">每台 Java 服务会持久保存独立服务器编号，首次调用验证码 API 后自动出现在列表中。新版本才会上报验证结果；旧版调用不混入全局统计。</p>
+    <p class="rst-muted">要从 QQ 查询全局数据，请把查询密钥写入各 Java 服务的 <code>config/captcha-statistics.key</code>，或配置 <code>captcha.statistics.read-key</code>。密钥仅供你信任的服务器使用；结果上报使用每次识别单独的凭据。</p>
+    <button id="rst-copy-key" class="btn rst-secondary">查看 / 复制查询密钥</button>
+    <textarea id="rst-key" readonly hidden aria-label="统一统计查询密钥" style="width:100%;margin-top:10px"></textarea>
+    <pre style="white-space:pre-wrap">验证统计
+验证统计 服务器列表
+验证统计 服务器 server-a
+验证统计 QQ 123456789
+验证统计 服务器 server-a QQ 123456789</pre>
+  </details>
+</div>
+<div class="card" style="margin-top:18px">
+  <h3>重新计数</h3><p class="rst-muted">清空主模型与 KNN 的全局验证统计，从现在重新计数。服务器编号保留；会员用量、KNN 错题和索引不受影响。旧识别结果的延迟上报不会重新加入已清空的数据。</p>
+  <button id="rst-reset" class="btn rst-secondary">清空全局验证统计</button>
+</div>
+<script>
+(() => {
+  const $=id=>document.getElementById('rst-'+id);let epoch=null,sequence=0;
+  function message(text,error=false){$('message').hidden=false;$('message').textContent=text;$('message').classList.toggle('error',error);}
+  async function api(path,body){
+    const response=await fetch('/admin/recognition-statistics/'+path,body===undefined?{cache:'no-store'}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const data=await response.json();if(!response.ok)throw new Error(data.error||'请求失败，请重新登录后重试');return data;
+  }
+  function render(data){
+    epoch=data.epoch;$('text').textContent=data.text;
+    const time=new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',dateStyle:'medium',timeStyle:'short'}).format(new Date(data.started_at*1000));
+    $('scope').textContent='来源 '+data.source_servers+' 台 Java 服务 · '+data.source_qq+' 个 QQ · 今日 '+data.date+'（北京时间）· 计数起点 '+time;
+    $('models').replaceChildren();
+    [['primary','主模型'],['knn','KNN 重试']].forEach(([key,label])=>{
+      const card=document.createElement('div');card.className='card';const title=document.createElement('h3');title.textContent=label;card.append(title);
+      const wrapper=document.createElement('div');wrapper.className='table-wrapper';
+      const table=document.createElement('table'),thead=document.createElement('thead'),tbody=document.createElement('tbody'),head=document.createElement('tr');
+      ['范围','调用','成功','失败','未确认','成功率'].forEach(name=>{const th=document.createElement('th');th.scope='col';th.textContent=name;head.append(th);});thead.append(head);table.append(thead,tbody);
+      [['total','累计'],['today','今日']].forEach(([period,name])=>{const s=data.models[key][period],row=document.createElement('tr');
+        [name,s.attempts,s.successes,s.failures,s.unconfirmed,s.success_rate.toFixed(2)+'%'].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.append(cell);});tbody.append(row);
+      });wrapper.append(table);card.append(wrapper);$('models').append(card);
+    });
+  }
+  async function load(){
+    const qq=$('qq').value.trim();if(qq&&!/^\d{1,20}$/.test(qq)){message('请输入正确的 QQ 号码',true);return;}
+    const token=++sequence,params=new URLSearchParams();if($('server').value)params.set('server_id',$('server').value);if(qq)params.set('qq',qq);
+    try{const [data,servers]=await Promise.all([api('data?'+params),api('servers')]);if(token!==sequence)return;
+      const selected=$('server').value;$('server').replaceChildren();const all=document.createElement('option');all.value='';all.textContent='全部服务器';$('server').append(all);
+      servers.items.forEach(server=>{const option=document.createElement('option');option.value=server.id;option.textContent=server.name+' · '+server.id;$('server').append(option);});$('server').value=selected;
+      render(data);$('message').hidden=true;
+    }catch(error){if(token===sequence)message(error.message,true);}
+  }
+  $('refresh').onclick=load;$('server').onchange=load;$('qq').onkeydown=event=>{if(event.key==='Enter')load();};
+  $('clear-filter').onclick=()=>{$('server').value='';$('qq').value='';load();};
+  $('copy-key').onclick=async()=>{try{const data=await api('access-key',{});
+    if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(data.key);message('查询密钥已复制，请仅配置到你信任的 Java 服务。');}
+    else{$('key').hidden=false;$('key').value=data.key;$('key').focus();$('key').select();message('已选中查询密钥，按 Ctrl+C 复制；请仅配置到你信任的 Java 服务。');}
+  }catch(error){message('查询密钥读取或复制失败，请重新登录后重试。',true);}};
+  $('reset').onclick=async()=>{if(!epoch||!window.confirm('确定清空所有服务器、全部 QQ 的验证统计并重新计数？'))return;
+    try{sequence++;const data=await api('reset',{epoch});$('server').value='';$('qq').value='';render(data);message('全局统计已清空，后续识别开始重新计数。');}catch(error){message(error.message,true);}
+  };load();
+})();
+</script>

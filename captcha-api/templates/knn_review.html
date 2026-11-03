@@ -27,7 +27,7 @@
   <main class="card" style="min-width:0">
     <div id="knn-empty"><h3>没有待复核的 KNN 错题</h3><p class="knn-muted">新发生的 KNN 失败会自动进入此处。未确认结果、接口异常和点击异常不会作为识别错题收集。</p></div>
     <div id="knn-workspace" hidden>
-      <div class="knn-toolbar"><h3 style="margin:0" id="knn-name"></h3><div><button id="knn-select" class="btn knn-secondary">选择 / 移动框</button> <button id="knn-add" class="btn knn-secondary">拖动新增框</button></div></div>
+      <div class="knn-toolbar"><h3 style="margin:0" id="knn-name"></h3><div><a id="knn-background" class="btn knn-secondary" href="/admin/knn-background">背景抑制预览</a> <button id="knn-select" class="btn knn-secondary">选择 / 移动框</button> <button id="knn-add" class="btn knn-secondary">拖动新增框</button></div></div>
       <p id="knn-title"></p><p id="knn-reason" class="knn-muted"></p>
       <canvas id="knn-canvas" class="knn-canvas" aria-label="验证码原图和候选框"></canvas>
       <p class="knn-muted">标签当前为预测预填值，尚未确认。点击框可选择，拖动可移动；可修改下方坐标，或删除背景误检框。发布仅改善分类，不能替代检测模型修复漏框和误检。</p>
@@ -74,6 +74,7 @@
     const token=++sequence; const data=await api('sample/'+id); if(token!==sequence)return;
     const nextImage=new Image();nextImage.onload=()=>{
       if(token!==sequence)return; record=data;image=nextImage;dirty=false;mode='select';selected=0;
+      $('background').href='/admin/knn-background?sample_id='+encodeURIComponent(id);
       items=(data.review_items||data.prediction_items.map(item=>({box:item.box,label:item.knn.accepted?item.knn.label:item.primary_label}))).map((item,i)=>{
         const prediction=data.prediction_items[i];let text='人工调整后的框';
         if(prediction){const knn=prediction.knn;text='主模型：'+prediction.primary_label+'；KNN：'+(knn.label||'未给出建议')+(knn.confidence!==undefined?'，相似度 '+(knn.confidence*100).toFixed(1)+'%':'');}

@@ -11,6 +11,7 @@ import com.zhuangxv.bot.core.*;
 import com.zhuangxv.bot.message.Message;
 import com.zhuangxv.bot.message.MessageChain;
 import com.zhuangxv.bot.message.support.AtMessage;
+import com.zhuangxv.bot.message.support.TextMessage;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -28,7 +29,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import top.sshh.qqbot.data.GuessIdiom;
 import top.sshh.qqbot.data.RecognitionResult;
-import top.sshh.qqbot.data.VerifyCount;
 import top.sshh.qqbot.service.GroupManager;
 import top.sshh.qqbot.service.TestService;
 import top.sshh.qqbot.service.utils.CaptchaReminderSender;
@@ -44,7 +44,6 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -65,6 +64,8 @@ public class RemoteVerifyCode {
     public Map<Long, RecognitionResult> codeUrlMap = new ConcurrentHashMap();
     @Autowired
     private GroupManager groupManager;
+    @Autowired
+    private CaptchaStatisticsClient statisticsClient;
     @Autowired
     private TestService testService;
     @Value("${captcha.shitu-api-url:#{null}}")
@@ -231,7 +232,7 @@ public class RemoteVerifyCode {
                     : currentVerificationAttempt(bot, buttons, "knn");
             RecognitionResult recognitionResult = suppliedResult != null ? suppliedResult
                     : recognizeVerifyCode(buttons.getImageUrl(), buttons.getImageText(), bot);
-            if (attempt != null) { attempt.result = recognitionResult; }
+            if (attempt != null) { attachRecognitionResult(attempt, recognitionResult); }
             if (!isCurrentCaptcha(bot, buttons)) { abandonVerificationAttempt(attempt); return; }
             if (isCaptchaServiceBlocked(recognitionResult)) {
                 abandonVerificationAttempt(attempt);
@@ -246,7 +247,7 @@ public class RemoteVerifyCode {
                 if (retried != null) {
                     attempt = currentVerificationAttempt(bot, buttons, "knn");
                     recognitionResult = retried;
-                    if (attempt != null) { attempt.result = recognitionResult; }
+                    if (attempt != null) { attachRecognitionResult(attempt, recognitionResult); }
                     if (isCaptchaServiceBlocked(recognitionResult)) {
                         abandonVerificationAttempt(attempt);
                         sendCaptchaServiceBlockedMessage(bot, group, recognitionResult);
@@ -275,7 +276,7 @@ public class RemoteVerifyCode {
                 verifyFailSendMessage(bot, group, messageChain, message, messageId, buttons, recognitionResult);
             }
         } catch (Exception e) {
-            abandonVerificationAttempt(attempt);
+            abandonVerificationAttempt(attempt, "click_error");
             if (Thread.currentThread().isInterrupted()) {
                 logger.warn("验证码点击已中断，停止本次验证 botId={} groupId={}", bot.getBotId(), group.getGroupId());
                 return;
@@ -322,10 +323,8 @@ public class RemoteVerifyCode {
 
     private RecognitionResult tryKnnRetry(Bot bot, Group group, Buttons buttons, Integer messageId, RecognitionResult first) {
         if (!knnRetryEnabled || bot.getBotConfig().getAutoVerifyModel() == 0 || first == null
-                || first.isKnnAttempted() || first.isClickFailed() || isCaptchaServiceBlocked(first)
+                || first.isKnnAttempted() || first.isClickFailed() || isRecognitionServiceFailure(first)
                 || requestedEmojiIndex(buttons.getImageText()) < 0) { return null; }
-        String status = StringUtils.defaultString(first.getResult());
-        if (status.contains("请求超时") || status.contains("请求异常") || status.contains("服务返回异常")) { return null; }
         long botId = bot.getBotId();
         if (!knnRetryInProgress.add(botId)) { return null; }
         try {
@@ -334,7 +333,7 @@ public class RemoteVerifyCode {
             logger.info("首次验证码识别失败，使用KNN重试一次 botId={}", botId);
             VerificationAttempt attempt = startVerificationAttempt(bot, group, buttons, messageId, "knn");
             RecognitionResult retried = recognizeVerifyCodeWithKnn(buttons.getImageUrl(), buttons.getImageText(), bot);
-            attempt.result = retried;
+            attachRecognitionResult(attempt, retried);
             retried.setKnnAttempted(true);
             if (!isCurrentCaptcha(bot, buttons)) { abandonVerificationAttempt(attempt); return null; }
             // Publish before releasing the in-progress flag, so a duplicate
@@ -359,7 +358,7 @@ public class RemoteVerifyCode {
                             || Boolean.TRUE.equals(previous.outcome)) { return; }
                     if (previous.submitted) {
                         if (System.currentTimeMillis() - previous.submittedAt > VERIFICATION_FEEDBACK_TIMEOUT_MS) {
-                            abandonVerificationAttempt(previous);
+                            abandonVerificationAttempt(previous, "feedback_timeout");
                         } else { finishVerificationAttempt(previous, false, "same_image_again"); }
                     }
                 }
@@ -422,11 +421,23 @@ public class RemoteVerifyCode {
 
     private VerificationAttempt startVerificationAttempt(Bot bot, Group group, Buttons buttons,
             Integer messageId, String recognizer) {
-        VerifyCount counter = groupManager.verifyCount;
-        VerificationAttempt attempt = new VerificationAttempt(bot.getBotId(), counter, recognizer, buttons.getImageUrl(),
-                group.getGroupId(), messageId, counter.recordAttempt(recognizer));
-        verificationAttempts.put(bot.getBotId(), attempt);
+        VerificationAttempt attempt = new VerificationAttempt(bot.getBotId(), recognizer, buttons,
+                group.getGroupId(), messageId);
+        VerificationAttempt previous = verificationAttempts.put(bot.getBotId(), attempt);
+        if (previous != null) { abandonVerificationAttempt(previous, "superseded"); }
         return attempt;
+    }
+
+    private void attachRecognitionResult(VerificationAttempt attempt, RecognitionResult result) {
+        synchronized (attempt) {
+            attempt.result = result;
+            if (statisticsClient != null) {
+                statisticsClient.trackRecognition(result, attempt.recognizer, attempt.botId);
+                if (attempt.settled && attempt.outcome == null) {
+                    statisticsClient.reportOutcome(result, "unconfirmed", attempt.abandonReason);
+                }
+            }
+        }
     }
 
     private VerificationAttempt currentVerificationAttempt(Bot bot, Buttons buttons, String recognizer) {
@@ -437,12 +448,12 @@ public class RemoteVerifyCode {
 
     private boolean isRecognitionServiceFailure(RecognitionResult result) {
         String status = result == null ? "" : StringUtils.defaultString(result.getResult());
-        return result == null || isCaptchaServiceBlocked(result) || status.contains("请求超时")
+        return result == null || result.isServiceError() || isCaptchaServiceBlocked(result) || status.contains("请求超时")
                 || status.contains("请求异常") || status.contains("服务返回异常");
     }
 
     private void recordUnusableRecognition(VerificationAttempt attempt, RecognitionResult result) {
-        if (isRecognitionServiceFailure(result)) { abandonVerificationAttempt(attempt); }
+        if (isRecognitionServiceFailure(result)) { abandonVerificationAttempt(attempt, "service_error"); }
         else { finishVerificationAttempt(attempt, false, StringUtils.defaultString(result.getResult()).contains("KNN与已失败答案相同")
                 ? "same_failed_answer" : "no_usable_answer"); }
     }
@@ -463,7 +474,9 @@ public class RemoteVerifyCode {
             if (attempt.settled) { return; }
             attempt.settled = true;
             attempt.outcome = success;
-            attempt.counter.recordOutcome(attempt.recognizer, success, attempt.attemptedOn);
+            if (statisticsClient != null) {
+                statisticsClient.reportOutcome(attempt.result, success ? "success" : "failure", reason);
+            }
             logger.info("验证码识别结果已确认 botId={} groupId={} recognizer={} success={} reason={}",
                     attempt.botId, attempt.groupId, attempt.recognizer, success, reason);
             RecognitionResult result = attempt.result;
@@ -476,28 +489,37 @@ public class RemoteVerifyCode {
     }
 
     private void abandonVerificationAttempt(VerificationAttempt attempt) {
+        abandonVerificationAttempt(attempt, "client_abandoned");
+    }
+
+    private void abandonVerificationAttempt(VerificationAttempt attempt, String reason) {
         if (attempt == null) { return; }
-        synchronized (attempt) { attempt.settled = true; }
+        synchronized (attempt) {
+            if (attempt.settled) { return; }
+            attempt.settled = true;
+            attempt.abandonReason = reason;
+            if (statisticsClient != null) { statisticsClient.reportOutcome(attempt.result, "unconfirmed", reason); }
+        }
     }
 
     /** 人工控制命令或旧识别流程接管后，不再把后续成功归因给本次模型。 */
     public void excludeExternalVerification(long botId, String imageUrl) {
         VerificationAttempt attempt = verificationAttempts.get(botId);
-        if (attempt != null && Objects.equals(attempt.imageUrl, imageUrl)) { abandonVerificationAttempt(attempt); }
+        if (attempt != null && Objects.equals(attempt.imageUrl, imageUrl)) { abandonVerificationAttempt(attempt, "manual_takeover"); }
     }
 
     /** 只接受游戏机器人发给当前账号、当前群的验证回执；点击接口成功不代表答对。 */
     private void recordVerificationFeedback(Bot bot, Group group, MessageChain messageChain,
             String message, Integer messageId) {
-        String chainText = Utils.getMessageText(messageChain);
+        String chainText = getVerificationFeedbackText(messageChain);
         String text = StringUtils.defaultString(message) + "\n" + chainText;
-        boolean mentioned = messageChain != null && messageChain.getMessageByType(AtMessage.class).stream()
-                .anyMatch(at -> String.valueOf(bot.getBotId()).equals(at.getQq()));
-        if (group == null || text.contains("请点击")
-                || !mentioned && !Pattern.compile("(?:@|at_tinyid=|\\[CQ:at,qq=)" + bot.getBotId() + "(?!\\d)")
-                        .matcher(text).find()) { return; }
         boolean failed = text.contains("验证码不正确") || text.contains("验证失败")
                 || text.contains("验证未通过") || text.contains("未验证通过");
+        boolean mentioned = messageChain != null && messageChain.getMessageByType(AtMessage.class).stream()
+                .anyMatch(at -> String.valueOf(bot.getBotId()).equals(at.getQq()));
+        if (group == null || text.contains("请点击") && !failed
+                || !mentioned && !Pattern.compile("(?:@|at_tinyid=|\\[CQ:at,qq=)" + bot.getBotId() + "(?!\\d)")
+                        .matcher(text).find()) { return; }
         boolean expired = text.contains("验证码已过期");
         boolean success = !failed && !expired && (text.contains("验证成功") || text.contains("验证通过")
                 || text.contains("验证奖励") && text.contains("灵石")
@@ -505,12 +527,12 @@ public class RemoteVerifyCode {
         if (!failed && !success && !expired) { return; }
         VerificationAttempt attempt = verificationAttempts.get(bot.getBotId());
         if (attempt == null || attempt.groupId != group.getGroupId()) { return; }
-        if (bot.getBotConfig().getAutoVerifyModel() == 0) { abandonVerificationAttempt(attempt); return; }
+        if (bot.getBotConfig().getAutoVerifyModel() == 0) { abandonVerificationAttempt(attempt, "manual_takeover"); return; }
         synchronized (attempt) {
             if (attempt.settled || !attempt.submitted) { return; }
             long now = System.currentTimeMillis();
             if (now - attempt.submittedAt > VERIFICATION_FEEDBACK_TIMEOUT_MS) {
-                abandonVerificationAttempt(attempt);
+                abandonVerificationAttempt(attempt, "feedback_timeout");
                 return;
             }
             if (messageId != null) {
@@ -518,9 +540,46 @@ public class RemoteVerifyCode {
                 String key = bot.getBotId() + ":" + group.getGroupId() + ":" + messageId;
                 if (verificationFeedbackMessages.putIfAbsent(key, now) != null) { return; }
             }
-            if (expired) { abandonVerificationAttempt(attempt); }
+            if (expired) { abandonVerificationAttempt(attempt, "captcha_expired"); }
             else { finishVerificationAttempt(attempt, success, success ? "game_accepted" : "game_rejected"); }
         }
+        if (failed && "primary".equals(attempt.recognizer) && !text.contains("请点击")) {
+            customPool.submit(() -> retryRejectedPrimary(bot, group, messageChain, message, messageId, attempt));
+        }
+    }
+
+    /** 单独的失败回执也要触发 KNN，不依赖游戏再次发送相同验证码卡片。 */
+    private void retryRejectedPrimary(Bot bot, Group group, MessageChain chain, String message,
+            Integer messageId, VerificationAttempt failedAttempt) {
+        if (verificationAttempts.get(bot.getBotId()) != failedAttempt || !Boolean.FALSE.equals(failedAttempt.outcome)
+                || !isCurrentCaptcha(bot, failedAttempt.buttons)) { return; }
+        try {
+            RecognitionResult first = failedAttempt.result;
+            RecognitionResult retried = tryKnnRetry(bot, group, failedAttempt.buttons, messageId, first);
+            if (retried == null || !isCurrentCaptcha(bot, failedAttempt.buttons)) { return; }
+            if (StringUtils.isNotBlank(first.getAnswer()) && first.getAnswer().equals(retried.getAnswer())) {
+                retried.setAnswer("");
+                retried.setResult("识别失败：KNN与已失败答案相同");
+            }
+            autoVerifyCode(bot, group, chain, message, messageId, failedAttempt.buttons, retried);
+        } catch (Exception error) {
+            logger.warn("收到主模型失败回执后 KNN 重试未完成 botId={} groupId={}",
+                    bot.getBotId(), group.getGroupId(), error);
+        }
+    }
+
+    /** SnowLuma 会同时投递相同的 Markdown 和纯文本；去重后仍保留不同正文，避免误认普通奖励。 */
+    private String getVerificationFeedbackText(MessageChain messageChain) {
+        Set<String> parts = new LinkedHashSet<>();
+        if (messageChain != null) {
+            for (Message part : messageChain) {
+                if (part instanceof TextMessage) {
+                    String content = StringUtils.trim(((TextMessage) part).getText());
+                    if (StringUtils.isNotBlank(content)) { parts.add(content); }
+                }
+            }
+        }
+        return String.join("\n", parts);
     }
 
     /** 游戏的验证码成功回执只有“奖励5574灵石”；限制整段内容，排除悬赏等普通奖励。 */
@@ -535,27 +594,32 @@ public class RemoteVerifyCode {
 
     private static final class VerificationAttempt {
         private final long botId;
-        private final VerifyCount counter;
         private final String recognizer;
         private final String imageUrl;
+        private final Buttons buttons;
         private final long groupId;
         private final Integer messageId;
-        private final LocalDate attemptedOn;
         private boolean submitted;
         private long submittedAt;
         private boolean settled;
         private Boolean outcome;
+        private String abandonReason;
         private volatile RecognitionResult result;
 
-        private VerificationAttempt(long botId, VerifyCount counter, String recognizer, String imageUrl, long groupId,
-                Integer messageId, LocalDate attemptedOn) {
+        private VerificationAttempt(long botId, String recognizer, Buttons source, long groupId,
+                Integer messageId) {
             this.botId = botId;
-            this.counter = counter;
             this.recognizer = recognizer;
-            this.imageUrl = imageUrl;
+            this.imageUrl = source.getImageUrl();
+            this.buttons = new Buttons();
+            this.buttons.setImageUrl(source.getImageUrl());
+            this.buttons.setImageText(source.getImageText());
+            this.buttons.setBotAppid(source.getBotAppid());
+            this.buttons.setMsgSeq(source.getMsgSeq());
+            this.buttons.setGroupId(groupId);
+            this.buttons.setButtonList(new ArrayList<>(source.getButtonList()));
             this.groupId = groupId;
             this.messageId = messageId;
-            this.attemptedOn = attemptedOn;
         }
     }
 
@@ -798,7 +862,9 @@ public class RemoteVerifyCode {
         if (recognitionResult == null) {
             return false;
         }
-        return recognitionResult.getCode() != 0;
+        // code=1 is a normal recognition miss; membership and transport errors
+        // must not be counted as a wrong model answer.
+        return recognitionResult.getCode() != 0 && recognitionResult.getCode() != 1;
     }
 
     private void sendCaptchaServiceBlockedMessage(Bot bot, Group group, RecognitionResult recognitionResult) {
@@ -876,6 +942,14 @@ public class RemoteVerifyCode {
         // saveErrorImage(buttons.getImageUrl());
         if (isCaptchaServiceBlocked(recognitionResult)) {
             sendCaptchaServiceBlockedMessage(bot, group, recognitionResult);
+            return;
+        }
+        if (isRecognitionServiceFailure(recognitionResult)) {
+            logger.warn("验证码取图或服务异常，保留暂停并等待恢复，不点击、不上报错题 botId={} reason={}",
+                    bot.getBotId(), recognitionResult == null ? "empty" : recognitionResult.getResult());
+            if (bot.getBotConfig().getAutoVerifyModel() != 2) {
+                testService.showButtonMsg(bot, group, messageId, message, buttons, messageChain);
+            }
             return;
         }
         if (bot.getBotConfig().getAutoVerifyModel() != 2) {
@@ -1163,6 +1237,10 @@ public class RemoteVerifyCode {
 
             JSONObject requestBody = new JSONObject();
             requestBody.put("url", imageUrl);
+            if (statisticsClient != null) {
+                JSONObject context = statisticsClient.requestContext();
+                if (context != null) { requestBody.put("statistics", context); }
+            }
             if ("knn".equals(recognizer)) { requestBody.put("recognizer", "knn"); }
             String jsonInputString = requestBody.toJSONString();
 
@@ -1184,8 +1262,14 @@ public class RemoteVerifyCode {
             try {
                 RecognitionResult result = JSON.parseObject(response.toString(), RecognitionResult.class);
                 if (result == null) { throw new IllegalArgumentException("空识别结果"); }
+                if (code < 200 || code >= 300) { result.setServiceError(true); }
                 if (result.getEmojiList() == null) {
                     result.setEmojiList(new ArrayList<>());
+                }
+                if (code == 200 && result.isServiceError() && result.isUploadFallback()
+                        && StringUtils.isNotBlank(result.getRecognitionId())
+                        && StringUtils.isNotBlank(result.getFeedbackToken())) {
+                    return uploadImageFallback(shituApiUrl, imageUrl, qqNumber, result);
                 }
                 return result;
             } catch (Exception parseEx) {
@@ -1207,6 +1291,77 @@ public class RemoteVerifyCode {
                 conn.disconnect();
             }
         }
+    }
+
+    private RecognitionResult uploadImageFallback(String apiBase, String imageUrl, Long botId, RecognitionResult original) {
+        HttpURLConnection connection = null;
+        try {
+            logger.info("API取图失败，改由Java上传原图 botId={} recognitionId={}", botId, original.getRecognitionId());
+            byte[] image = downloadCaptchaImage(imageUrl);
+            JSONObject body = new JSONObject();
+            body.put("recognitionId", original.getRecognitionId());
+            body.put("feedbackToken", original.getFeedbackToken());
+            body.put("url", imageUrl);
+            body.put("imageBase64", Base64.getEncoder().encodeToString(image));
+            URL url = new URL(apiBase + "recognize/fallback?qq=" + URLEncoder.encode(String.valueOf(botId), "UTF-8"));
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("POST");
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8");
+            connection.setConnectTimeout(5000);
+            connection.setReadTimeout(15000);
+            connection.setDoOutput(true);
+            byte[] payload = body.toJSONString().getBytes(StandardCharsets.UTF_8);
+            connection.setFixedLengthStreamingMode(payload.length);
+            try (OutputStream output = connection.getOutputStream()) { output.write(payload); }
+            int status = connection.getResponseCode();
+            if (status != 200) { throw new IOException("upload HTTP " + status); }
+            RecognitionResult result;
+            try (InputStream input = connection.getInputStream()) {
+                result = JSON.parseObject(readStream(input), RecognitionResult.class);
+            }
+            if (result == null || !Objects.equals(original.getRecognitionId(), result.getRecognitionId())) {
+                throw new IOException("upload recognitionId mismatch");
+            }
+            result.setFeedbackToken(original.getFeedbackToken());
+            if (result.getEmojiList() == null) { result.setEmojiList(new ArrayList<>()); }
+            logger.info("原图上传兜底已返回 botId={} recognitionId={} serviceError={}",
+                    botId, original.getRecognitionId(), result.isServiceError());
+            return result;
+        } catch (Exception error) {
+            logger.warn("原图上传兜底未完成，按原编号记未确认 botId={} recognitionId={} errorType={}",
+                    botId, original.getRecognitionId(), error.getClass().getSimpleName());
+            return original;
+        } finally {
+            if (connection != null) { connection.disconnect(); }
+        }
+    }
+
+    /** 下载未经重编码的原始字节；限制等待时间和大小，避免兜底阻塞验证码处理线程。 */
+    protected byte[] downloadCaptchaImage(String imageUrl) throws IOException {
+        URL url = new URL(imageUrl);
+        if (!"http".equalsIgnoreCase(url.getProtocol()) && !"https".equalsIgnoreCase(url.getProtocol())) {
+            throw new IOException("unsupported image protocol");
+        }
+        HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+        connection.setConnectTimeout(3000);
+        connection.setReadTimeout(5000);
+        connection.setRequestProperty("User-Agent", "qqbot-captcha/1.0");
+        final int maxBytes = 5000000;
+        try {
+            if (connection.getResponseCode() != 200 || connection.getContentLengthLong() > maxBytes) {
+                throw new IOException("image status or size invalid");
+            }
+            try (InputStream input = connection.getInputStream(); ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+                byte[] buffer = new byte[8192];
+                int count;
+                while ((count = input.read(buffer)) != -1) {
+                    if (output.size() + count > maxBytes) { throw new IOException("image too large"); }
+                    output.write(buffer, 0, count);
+                }
+                if (output.size() == 0) { throw new IOException("image empty"); }
+                return output.toByteArray();
+            }
+        } finally { connection.disconnect(); }
     }
 
     // 从网络下载图片字节

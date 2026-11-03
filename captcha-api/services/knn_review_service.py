@@ -57,7 +57,7 @@ class KnnReviewStore:
             raise ValueError('样本编号无效')
         return self.root / folder / (sample_id + suffix)
 
-    def capture(self, image, boxes, primary_labels, predictions, owner, source_url):
+    def capture(self, image, boxes, primary_labels, predictions, owner, source_url, preprocessing=None):
         """Keep a short-lived snapshot; it enters errors/ only after a failure report."""
         if image.size > 6_000_000:
             raise ValueError('复核图片过大')
@@ -65,6 +65,7 @@ class KnnReviewStore:
         review_id = uuid.uuid4().hex + uuid.uuid4().hex
         image_id = hashlib.sha256(encoded).hexdigest()
         pending = {'review_id': review_id, 'image_id': image_id, 'owner': owner,
+                   'preprocessing': preprocessing,
                    'created_at': utc_now(), 'source_url': source_url,
                    'width': int(image.shape[1]), 'height': int(image.shape[0]),
                    'items': [{'box': list(map(int, box)), 'primary_label': label,
@@ -116,8 +117,10 @@ class KnnReviewStore:
                           'source': 'knn', 'attempts': [], 'review_revision': 0}
             atomic_write(self.image_path(sample_id), self._path('pending', review_id, '.png').read_bytes())
             record['prediction_items'] = pending['items']
+            record['preprocessing'] = pending.get('preprocessing')
             record['attempts'] = (record['attempts'] + [{'review_id': review_id, 'owner': owner,
-                'reason': reason, 'title': title[:2000], 'answer': answer[:1000], 'time': utc_now()}])[-30:]
+                'reason': reason, 'title': title[:2000], 'answer': answer[:1000], 'time': utc_now(),
+                'preprocessing': pending.get('preprocessing')}])[-30:]
             record.update(status='pending', updated_at=utc_now())
             write_json(record_path, record)
             pending_path.unlink(missing_ok=True)

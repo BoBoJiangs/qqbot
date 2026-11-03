@@ -1778,6 +1778,9 @@ public class TestService {
                 sb.append("采购药材×× ××(万价)\n");
                 sb.append("取消采购药材×× / 批量取消采购药材\n");
                 sb.append("查询采购药材\n");
+                sb.append("设置采购休眠 <每页平均成功数> <分钟>\n");
+                sb.append("查询采购休眠\n");
+                sb.append("关闭采购休眠\n");
                 sb.append("重复采购药材×× ×× [背包数量上限]\n");
                 sb.append("取消重复采购药材×× / 批量取消重复采购药材\n");
                 sb.append("查询重复采购药材\n");

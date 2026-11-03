@@ -17,6 +17,21 @@ public class RecognitionResult implements Serializable {
     private boolean knnAttempted;
     private boolean clickFailed;
     private String knnReviewId;
+    private String recognitionId;
+    private String feedbackToken;
+    private boolean serviceError;
+    private boolean uploadFallback;
+
+    public boolean isUploadFallback() { return uploadFallback; }
+    public void setUploadFallback(boolean value) { uploadFallback = value; }
+
+    public boolean isServiceError() { return serviceError; }
+    public void setServiceError(boolean value) { serviceError = value; }
+
+    public String getRecognitionId() { return recognitionId; }
+    public void setRecognitionId(String value) { recognitionId = value; }
+    public String getFeedbackToken() { return feedbackToken; }
+    public void setFeedbackToken(String value) { feedbackToken = value; }
 
     public String getRecognizer() { return recognizer; }
     public void setRecognizer(String recognizer) { this.recognizer = recognizer; }

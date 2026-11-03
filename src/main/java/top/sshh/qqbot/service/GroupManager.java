@@ -31,6 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
+import top.sshh.qqbot.verifycode.CaptchaStatisticsClient;
 import top.sshh.qqbot.data.*;
 
 import javax.annotation.PostConstruct;
@@ -113,7 +115,9 @@ public class GroupManager {
     public Map<String, TaskStatus> taskStateMap = new ConcurrentHashMap();
     public Map<String, Boolean> groupXslPriceQueryMap = new ConcurrentHashMap();
     public Map<String, Boolean> groupSettlementReminderMap = new ConcurrentHashMap();
-    public volatile VerifyCount verifyCount = new VerifyCount();
+    /** 仅保留旧扩展的字段兼容；不再采集、加载或保存本地验证统计。 */
+    @Deprecated public volatile VerifyCount verifyCount = new VerifyCount();
+    @Autowired private CaptchaStatisticsClient captchaStatisticsClient;
     public volatile boolean taskReminder = true;
     private final Map<String, Map<String, Long>> taskRecords = new ConcurrentHashMap();
     public  Map<String, String> autoVerifyQQ= new ConcurrentHashMap();
@@ -158,13 +162,11 @@ public class GroupManager {
             addRemoveVerifyQQ(bot, group, message, messageId);
             saveTasksToFile();
         }else if (message.startsWith("重置验证统计")) {
-            verifyCount = new VerifyCount();
-            saveTasksToFile();
-            group.sendMessage((new MessageChain()).reply(messageId).text("重置成功"));
-        }else if (message.equals("验证统计")) {
-            if(verifyCount!=null){
-                group.sendMessage((new MessageChain()).reply(messageId).text(verifyCount.getVerifyCountString()));
-            }
+            group.sendMessage((new MessageChain()).reply(messageId).text("全局统计请在验证码 API 后台重置"));
+        }else if (message.startsWith("验证统计")) {
+            final String statisticsCommand = message;
+            customPool.submit(() -> group.sendMessage((new MessageChain()).reply(messageId)
+                    .text(captchaStatisticsClient.queryCommand(statisticsCommand))));
 
         }
 
@@ -389,7 +391,6 @@ public class GroupManager {
             data.put("群悬赏价格查询", this.groupXslPriceQueryMap);
             data.put("群结算提醒", this.groupSettlementReminderMap);
             data.put("自动验证", this.autoVerifyQQ);
-            data.put("验证统计", this.verifyCount);
             data.put("打怪记录", this.monsterKillingRecords);
             data.put("令牌奖励时间", this.tokenRewardTimeMap);
             // 直接写入JSON字节（UTF-8编码）
@@ -442,12 +443,7 @@ public class GroupManager {
                 this.autoVerifyQQ = new ConcurrentHashMap<>();
             }
 
-            this.verifyCount = data.getObject("验证统计",
-                    new TypeReference<VerifyCount>() {
-                    });
-            if(this.verifyCount == null){
-                this.verifyCount = new VerifyCount();
-            }
+            this.verifyCount = new VerifyCount();
 
             // 3. 处理自动购买（嵌套Map）
             this.autoBuyProductMap = data.getObject("自动购买",

@@ -31,6 +31,9 @@ class Settings(BaseSettings):
     knn_report_path: str = 'knn/reference_meta.json'
     knn_review_dir: str = 'knn_review'
     knn_review_pending_ttl_seconds: int = 3600
+    knn_background_file: str = 'knn_background.json'
+    recognition_statistics_file: str = 'recognition_statistics.db'
+    recognition_statistics_key_file: str = 'recognition_statistics.key'
 
     # Error image directory
     error_dir: str = "errorPic"
