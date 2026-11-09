@@ -3,6 +3,7 @@
 Handles admin login, logout, password management, and dashboard.
 """
 import urllib.parse
+from pathlib import Path
 from fastapi import APIRouter, Request, Form, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from services.auth_service import get_auth_service
@@ -115,8 +116,10 @@ async def admin_index(request: Request):
     member_count = len(members)
     renewals = renewal_service.get_all_requests()
     renewal_count = len(renewals)
+    today_statistics = (Path(__file__).resolve().parents[1] / 'templates/recognition_today.html').read_text(encoding='utf-8')
 
     body = f"""
+    {today_statistics}
     <div class="row">
       <div class="card">
         <h2>白名单</h2>

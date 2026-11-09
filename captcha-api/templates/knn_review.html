@@ -10,7 +10,11 @@
   .knn-item{padding:12px;border:1px solid var(--border-default);border-radius:8px;background:var(--bg-primary)}
   .knn-item.active{border-color:var(--info)}.knn-item-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
   .knn-coords{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:8px}.knn-coords label{font-size:11px;color:var(--text-secondary)}
-  .knn-coords input{width:100%;padding:6px}.knn-item select{width:100%;margin-top:6px}
+  .knn-coords input{width:100%;padding:6px}.knn-item:focus-within{position:relative;z-index:1}
+  .knn-label-picker{position:relative;margin-top:6px}.knn-label-input{width:100%}.knn-label-input[aria-invalid=true]{border-color:var(--danger)}
+  .knn-label-options{position:absolute;top:calc(100% + 4px);left:0;right:0;z-index:2;max-height:220px;overflow-y:auto;padding:4px;border:1px solid var(--border-default);border-radius:8px;background:var(--bg-secondary);box-shadow:0 8px 24px rgba(0,0,0,.3)}
+  .knn-label-option{padding:9px 10px;border-radius:5px;color:var(--text-primary);cursor:pointer}.knn-label-option:hover,.knn-label-option[aria-selected=true]{background:var(--info-bg);color:var(--info)}
+  .knn-label-empty{padding:10px;color:var(--text-secondary);font-size:13px}
   .knn-message{padding:12px 15px;border-radius:8px;background:var(--info-bg);margin-top:14px;white-space:pre-wrap}
   .knn-message.error{background:var(--danger-bg);color:#fca5a5}.knn-remove{background:transparent;border:0;color:#fca5a5;cursor:pointer}
   #knn-empty{padding:45px 15px;text-align:center}#knn-title{white-space:pre-wrap;overflow-wrap:anywhere}.knn-queue-empty{padding:18px 0}
@@ -30,7 +34,7 @@
       <div class="knn-toolbar"><h3 style="margin:0" id="knn-name"></h3><div><a id="knn-background" class="btn knn-secondary" href="/admin/knn-background">背景抑制预览</a> <button id="knn-select" class="btn knn-secondary">选择 / 移动框</button> <button id="knn-add" class="btn knn-secondary">拖动新增框</button></div></div>
       <p id="knn-title"></p><p id="knn-reason" class="knn-muted"></p>
       <canvas id="knn-canvas" class="knn-canvas" aria-label="验证码原图和候选框"></canvas>
-      <p class="knn-muted">标签当前为预测预填值，尚未确认。点击框可选择，拖动可移动；可修改下方坐标，或删除背景误检框。发布仅改善分类，不能替代检测模型修复漏框和误检。</p>
+      <p class="knn-muted">标签当前为预测预填值，尚未确认。标签框支持输入关键词筛选，点击候选项或用 ↑↓ 和回车选择。点击图中框可选择，拖动可移动；可修改下方坐标，或删除背景误检框。发布仅改善分类，不能替代检测模型修复漏框和误检。</p>
       <div id="knn-editor" class="knn-editor"></div>
       <label for="knn-category">问题类型</label><select id="knn-category" style="width:100%;margin:6px 0 12px"><option value="classification">分类错误：人工确认后可加入 KNN</option><option value="detection">背景误检 / 漏框 / 顺序问题：仅归档，不加入 KNN</option><option value="unclear">无法确定：仅归档，不加入 KNN</option></select>
       <label for="knn-note">备注（可选）</label><textarea id="knn-note" rows="2" maxlength="2000" style="width:100%;margin:6px 0 14px" placeholder="例如：第2个是书本；浅色背景被误检"></textarea>
@@ -54,6 +58,47 @@
     items.forEach((item,i)=>{const [x,y,w,h]=item.box;ctx.strokeStyle=i===selected?'#f59e0b':'#087f8c';ctx.lineWidth=i===selected?3:2;ctx.strokeRect(x,y,w,h);ctx.fillStyle=ctx.strokeStyle;ctx.fillRect(x,Math.max(0,y-18),23,18);ctx.fillStyle='white';ctx.font='bold 13px sans-serif';ctx.fillText(String(i+1),x+6,Math.max(0,y-18)+14);});
     if(drag&&mode==='add'){ctx.strokeStyle='#f59e0b';ctx.strokeRect(drag.x,drag.y,drag.lastX-drag.x,drag.lastY-drag.y);}
   }
+  function labelPicker(item, index) {
+    const picker=document.createElement('div');picker.className='knn-label-picker';
+    const input=document.createElement('input');input.type='text';input.className='knn-label-input';input.value=item.label||'';
+    input.placeholder='输入关键词搜索标签';input.autocomplete='off';input.spellcheck=false;
+    input.setAttribute('aria-label','图标'+(index+1)+'真值标签');input.setAttribute('role','combobox');
+    input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-expanded','false');input.setAttribute('aria-haspopup','listbox');
+    const list=document.createElement('div');list.className='knn-label-options';list.id='knn-label-options-'+index;list.hidden=true;
+    list.setAttribute('role','listbox');list.setAttribute('aria-label','图标'+(index+1)+'候选标签');input.setAttribute('aria-controls',list.id);
+    let matches=[], active=-1;
+    function close() { list.hidden=true;input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant'); }
+    function highlight() {
+      Array.from(list.querySelectorAll('[role=option]')).forEach((option,i)=>option.setAttribute('aria-selected',String(i===active)));
+      if(active>=0){input.setAttribute('aria-activedescendant',list.id+'-'+active);list.children[active].scrollIntoView({block:'nearest'});}
+      else input.removeAttribute('aria-activedescendant');
+    }
+    function choose(label) {
+      input.value=label;item.label=label;dirty=true;input.setCustomValidity('');input.removeAttribute('aria-invalid');close();
+    }
+    function filter(query) {
+      const keyword=query.trim().toLocaleLowerCase();matches=labels.filter(label=>label.toLocaleLowerCase().includes(keyword));active=matches.length===1?0:-1;
+      list.replaceChildren();
+      matches.forEach((label,i)=>{
+        const option=document.createElement('div');option.className='knn-label-option';option.id=list.id+'-'+i;option.textContent=label;option.setAttribute('role','option');
+        option.onpointerdown=event=>event.preventDefault();option.onclick=()=>choose(label);list.append(option);
+      });
+      if(!matches.length){const empty=document.createElement('div');empty.className='knn-label-empty';empty.textContent='没有匹配的标签，请换个关键词';empty.setAttribute('role','status');list.append(empty);}
+      list.hidden=false;input.setAttribute('aria-expanded','true');highlight();
+    }
+    input.onfocus=()=>{input.select();filter('');};input.onblur=()=>{input.value=item.label||'';close();};
+    input.oninput=()=>{item.label=input.value.trim();dirty=true;input.setCustomValidity('');input.removeAttribute('aria-invalid');filter(input.value);};
+    input.onkeydown=event=>{
+      if(event.isComposing||event.keyCode===229||event.ctrlKey||event.metaKey)return;
+      if(event.key==='ArrowDown'||event.key==='ArrowUp'){
+        event.preventDefault();if(list.hidden)filter(input.value);
+        if(matches.length){active=event.key==='ArrowDown'?(active+1)%matches.length:(active<=0?matches.length-1:active-1);highlight();}
+      }else if(event.key==='Enter'&&!list.hidden){
+        event.preventDefault();event.stopPropagation();if(active>=0)choose(matches[active]);else if(labels.includes(input.value.trim()))choose(input.value.trim());
+      }else if(event.key==='Escape'){event.preventDefault();close();}
+    };
+    picker.append(input,list);return picker;
+  }
   function renderItems() {
     $('editor').replaceChildren();
     items.forEach((item,i)=>{
@@ -62,10 +107,7 @@
       const title=document.createElement('strong');title.textContent='图标 '+(i+1);title.style.cursor='pointer';title.onclick=()=>{selected=i;renderItems();draw();};
       const remove=document.createElement('button');remove.type='button';remove.className='knn-remove';remove.textContent='删除框';remove.onclick=()=>{items.splice(i,1);selected=Math.min(selected,items.length-1);dirty=true;renderItems();draw();};head.append(title,remove);card.append(head);
       if(item.prediction){const note=document.createElement('div');note.className='knn-muted';note.textContent=item.prediction;card.append(note);}
-      const select=document.createElement('select');select.setAttribute('aria-label','图标'+(i+1)+'真值标签');
-      const empty=document.createElement('option');empty.value='';empty.textContent='请选择正确标签';select.append(empty);
-      labels.forEach(label=>{const option=document.createElement('option');option.value=label;option.textContent=label;select.append(option);});select.value=item.label||'';
-      select.onchange=()=>{item.label=select.value;dirty=true;};card.append(select);
+      card.append(labelPicker(item,i));
       const coords=document.createElement('div');coords.className='knn-coords';['X','Y','宽','高'].forEach((name,j)=>{const label=document.createElement('label');label.textContent=name;const input=document.createElement('input');input.type='number';input.step='1';input.value=item.box[j];input.setAttribute('aria-label','图标'+(i+1)+name);input.onchange=()=>{item.box[j]=Number(input.value);dirty=true;draw();};label.append(input);coords.append(label);});card.append(coords);$('editor').append(card);
     });
   }
@@ -97,7 +139,13 @@
     if(selectFirst){if(rows.length)await loadSample(rows[0].id,true);else{++sequence;record=null;image=null;$('workspace').hidden=true;$('empty').hidden=false;dirty=false;}}
   }
   async function save() {
-    if(!record||busy)return;if(!items.length||items.some(item=>!item.label)){message('请为每个真实图标选择正确标签；无法确认的图片可忽略',true);return;}
+    if(!record||busy)return;
+    const invalid=items.findIndex(item=>!labels.includes(item.label));
+    if(!items.length||invalid>=0){
+      message('请为每个真实图标选择正确标签；输入关键词后需选择完整标签，无法确认的图片可忽略',true);
+      if(invalid>=0){const input=$('editor').querySelectorAll('.knn-label-input')[invalid];input.focus();input.setAttribute('aria-invalid','true');input.setCustomValidity('请输入完整的有效标签，或从候选列表选择');input.reportValidity();}
+      return;
+    }
     busy=true;$('save').disabled=true;
     try{await api('sample/'+record.id+'/confirm',{items:items.map(item=>({box:item.box,label:item.label})),category:$('category').value,note:$('note').value});dirty=false;message('已人工确认保存。分类纠错样本需点击“发布已确认样本到索引”才会用于识别。');await refresh(true);}catch(error){message(error.message,true);}finally{busy=false;$('save').disabled=false;}
   }
@@ -112,7 +160,7 @@
   $('refresh').onclick=()=>refresh(false).catch(error=>message(error.message,true));$('filter').onchange=()=>{if(dirty&&!window.confirm('放弃尚未保存的修改并切换筛选？'))return;offset=0;refresh(true).catch(error=>message(error.message,true));};
   $('prev').onclick=()=>{offset=Math.max(0,offset-100);refresh(true).catch(error=>message(error.message,true));};$('next').onclick=()=>{offset+=100;refresh(true).catch(error=>message(error.message,true));};
   $('publish').onclick=async()=>{if(busy)return;if(dirty){message('请先保存当前图片的修改，再发布索引。',true);return;}if(!window.confirm('发布将保留原始基准样本，并加入当前已确认的分类纠错样本。检测问题和未确认样本不会加入。是否发布？'))return;busy=true;$('publish').disabled=true;message('正在提取已确认样本特征并发布索引，请稍候…');try{const result=await api('publish',{});message('发布成功：当前 '+result.candidates+' 个图标样本，其中包含 '+result.review_documents+' 张纠错图。原索引已备份，无需重启服务。');await refresh(false);}catch(error){message('发布失败，原索引保留：'+error.message,true);}finally{busy=false;$('publish').disabled=false;}};
-  document.addEventListener('keydown',event=>{if(event.ctrlKey&&event.key==='Enter'){event.preventDefault();save();}});window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
+  document.addEventListener('keydown',event=>{if(event.ctrlKey&&event.key==='Enter'&&!event.isComposing&&event.keyCode!==229){event.preventDefault();save();}});window.addEventListener('beforeunload',event=>{if(dirty){event.preventDefault();event.returnValue='';}});
   refresh(true).catch(error=>message(error.message,true));
 })();
 </script>

@@ -209,7 +209,7 @@ class AutoSellGoodsConcurrencyTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"上架价格过高", "上架价格过低", "物品数量不足"})
+    @ValueSource(strings = {"物品数量不足"})
     void definitiveFailureOnlySkipsTheCurrentItem(String failure) throws Exception {
         begin(item("地龙干"), item("龙须藤"));
         reply(failure, 1);

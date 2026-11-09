@@ -189,5 +189,37 @@ class StatisticsRouteTests(StatisticsFixture):
                 body['feedbackToken'] = 'x' * 43
                 self.assertEqual(self.client.post('/statistics/feedback', json=body).status_code, 403)
 
+    def test_dashboard_statistics_do_not_infer_outcomes_from_member_usage(self):
+        self.settle(self.start())
+        self.settle(self.start(), 'failure', 'game_rejected')
+        self.start()
+        self.settle(self.start('knn', server='server-b', qq='2002'), 'failure', 'game_rejected')
+        admin = importlib.import_module('routes.admin_routes')
+        members = importlib.import_module('routes.member_routes')
+        usage = {'total_count': 230, 'error_count': 0, 'daily_count': 230}
+        configured = {'qq:1001': {'name': '测试用户', 'tier': 'permanent', 'enabled': True}}
+        with patch.object(admin, '_admin_guard', return_value=('admin', None)), \
+                patch.object(members, '_admin_guard', return_value=('admin', None)), \
+                patch.object(members.member_service, 'get_all_members', return_value=configured), \
+                patch.object(members.member_service._usage_repo, 'get_counter', return_value=usage), \
+                patch.object(admin.renewal_service, 'get_all_requests', return_value={}), \
+                patch.object(self.routes, '_admin_guard', return_value=('admin', None)):
+            for path in ['/admin', '/admin/members', '/admin/members?q=no-such-member']:
+                page = self.client.get(path)
+                self.assertEqual(page.status_code, 200)
+                self.assertIn('今日验证统计（全局）', page.text)
+                self.assertIn("fetch('/admin/recognition-statistics/data'", page.text)
+                self.assertNotIn('今日总统计', page.text)
+                self.assertNotIn('100.0%', page.text)
+            summary = self.client.get('/admin/recognition-statistics/data').json()
+            self.assertEqual(summary['models']['primary']['today'],
+                             dict(attempts=3, successes=1, failures=1, unconfirmed=1, success_rate=50.))
+            self.assertEqual(summary['models']['knn']['today']['failures'], 1)
+            member_page = self.client.get('/admin/members').text
+            self.assertIn('今日用量（UTC）', member_page)
+            self.assertIn('<strong>230</strong>', member_page)
+            self.assertNotIn('准确率', member_page)
+        self.assertEqual(usage, {'total_count': 230, 'error_count': 0, 'daily_count': 230})
+
 
 if __name__ == '__main__': unittest.main()

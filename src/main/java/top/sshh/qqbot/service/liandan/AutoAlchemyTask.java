@@ -178,29 +178,11 @@ public class AutoAlchemyTask {
         }
 
         if (message.equals("查询炼丹配方")) {
-            customPool.submit(() -> {
-                try {
-                    File dataFile = LocalDataFiles.export(java.nio.file.Paths.get(botId + "/炼丹配方.txt")).toFile();
-                    if (dataFile.exists()) {
-                        bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "炼丹配方.txt", "");
-                    } else {
-                        System.err.println("文件不存在！");
-                    }
-                } catch (Exception e) {
-                    System.err.println("上传文件异常");
-                }
-            });
+            customPool.submit(() -> exportAndUploadGroupFile(bot, group, "炼丹配方.txt"));
         }
 
         if (message.equals("查询药材价格")) {
-            customPool.submit(() -> {
-                try {
-                    File dataFile = LocalDataFiles.export(java.nio.file.Paths.get(botId + "/药材价格.txt")).toFile();
-                    bot.uploadGroupFile(group.getGroupId(), dataFile.getAbsolutePath(), "药材价格.txt", "");
-                } catch (Exception e) {
-                    System.err.println("上传文件异常");
-                }
-            });
+            customPool.submit(() -> exportAndUploadGroupFile(bot, group, "药材价格.txt"));
         }
 
         if (message.equals("添加成功,开始同步炼丹配方")) {
@@ -216,6 +198,7 @@ public class AutoAlchemyTask {
                     danCalculator.calculateAllDans(botId);
                     group.sendMessage((new MessageChain()).text("已同步炼丹配方！"));
                 } catch (Exception e) {
+                    log.error("同步炼丹配方失败, botId={}, groupId={}", botId, group.getGroupId(), e);
                     group.sendMessage((new MessageChain()).text("同步失败：" + e.getMessage()));
                 } finally {
                     matchingLock.unlock();
@@ -266,6 +249,7 @@ public class AutoAlchemyTask {
                             group.sendMessage((new MessageChain()).text("丹方匹配成功！"));
                             danCalculator.addAutoBuyHerbs(botId);
                         } catch (Exception e) {
+                            log.error("更新炼丹配置后同步配方失败, botId={}, groupId={}", botId, group.getGroupId(), e);
                             group.sendMessage((new MessageChain()).text("同步失败：" + e.getMessage()));
                         } finally {
                             matchingLock.unlock();
@@ -293,6 +277,22 @@ public class AutoAlchemyTask {
             }
         } catch (Exception e) {
             e.printStackTrace();
+        }
+    }
+
+    private void exportAndUploadGroupFile(Bot bot, Group group, String fileName) {
+        long botId = bot.getBotId();
+        try {
+            java.nio.file.Path path = java.nio.file.Paths.get(String.valueOf(botId), fileName);
+            byte[] content = LocalDataFiles.readAllBytes(path);
+            LocalDataFiles.export(path, content);
+            // 协议端可能运行在另一个容器中，传递内容，避免要求双方共享本地路径。
+            String source = "base64://" + Base64.getEncoder().encodeToString(content);
+            bot.uploadGroupFile(group.getGroupId(), source, fileName, "");
+        } catch (Exception e) {
+            log.error("导出或上传群文件失败, botId={}, groupId={}, fileName={}",
+                    botId, group.getGroupId(), fileName, e);
+            group.sendMessage(new MessageChain().text("上传" + fileName + "失败：" + e.getMessage()));
         }
     }
 

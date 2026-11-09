@@ -1,0 +1,36 @@
+<style>
+  .rtd-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}.rtd-header h2{margin:0}
+  .rtd-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.rtd-table{width:100%;min-width:550px;font-variant-numeric:tabular-nums}
+  .rtd-table th,.rtd-table td{text-align:right;white-space:nowrap}.rtd-table th:first-child,.rtd-table td:first-child{text-align:left}
+  .rtd-muted{color:var(--text-secondary);font-size:13px;line-height:1.8}.rtd-error{color:#fca5a5}
+</style>
+<section class="card" id="rtd-card" style="margin-bottom:16px" aria-label="今日全局验证统计">
+  <div class="rtd-header"><h2>今日验证统计（全局）</h2><div class="rtd-actions"><a href="/admin/recognition-statistics">查看完整统计</a><button type="button" class="btn btn-sm" id="rtd-refresh">刷新统计</button></div></div>
+  <p class="rtd-muted">与“全局验证统计”使用同一份游戏回执数据，包含全部服务器、全部 QQ，不受会员列表筛选影响。成功率 = 成功 ÷（成功 + 失败），未确认不计入分母。</p>
+  <p class="rtd-muted" id="rtd-status" role="status">正在加载…</p>
+  <div class="table-wrapper"><table class="rtd-table">
+    <thead><tr><th scope="col">模型</th><th scope="col">调用</th><th scope="col">成功</th><th scope="col">失败</th><th scope="col">未确认</th><th scope="col">成功率</th></tr></thead>
+    <tbody id="rtd-models"></tbody>
+  </table></div>
+</section>
+<script>
+(() => {
+  const card=document.getElementById('rtd-card'),status=document.getElementById('rtd-status'),body=document.getElementById('rtd-models'),refresh=document.getElementById('rtd-refresh');
+  async function load() {
+    refresh.disabled=true;card.setAttribute('aria-busy','true');status.classList.remove('rtd-error');status.textContent='正在加载…';
+    try {
+      const response=await fetch('/admin/recognition-statistics/data',{cache:'no-store'}),data=await response.json();
+      if(!response.ok)throw new Error(data.error||'统计加载失败，请刷新重试');
+      const rows=[['primary','主模型'],['knn','KNN 重试']].map(([key,name])=>{
+        const stats=data.models[key].today,row=document.createElement('tr');row.dataset.model=key;
+        [name,stats.attempts,stats.successes,stats.failures,stats.unconfirmed,stats.success_rate.toFixed(2)+'%'].forEach(value=>{const cell=document.createElement('td');cell.textContent=value;row.append(cell);});
+        return row;
+      });
+      body.replaceChildren(...rows);status.textContent='今日 '+data.date+'（北京时间）· 全部服务器 · 全部 QQ';
+    } catch(error) {
+      body.replaceChildren();status.classList.add('rtd-error');status.textContent=error.message;
+    } finally {refresh.disabled=false;card.removeAttribute('aria-busy');}
+  }
+  refresh.onclick=load;load();
+})();
+</script>

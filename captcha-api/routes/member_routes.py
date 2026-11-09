@@ -4,6 +4,7 @@ Handles member CRUD operations, filtering, and batch operations.
 """
 import urllib.parse
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from fastapi import APIRouter, Request, Form, Query
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 import config
@@ -162,8 +163,6 @@ async def admin_members_get(
         today_total_count += group_total_count
         today_total_error += group_error_count
 
-        accuracy = round((1 - group_error_count / group_total_count) * 100, 1) if group_total_count > 0 else 100.0
-
         # Group all keys by type
         ip_keys = [k[3:] for k, m in member_list if k.startswith("ip:")]
         qq_keys = [k[3:] for k, m in member_list if k.startswith("qq:")]
@@ -220,9 +219,6 @@ async def admin_members_get(
         if not edit_buttons:
             edit_buttons = f"<a class='btn btn-sm' href='/admin/members/form?key={urllib.parse.quote(first_key)}'>编辑</a>"
 
-        # Accuracy color
-        accuracy_class = "expiry-ok" if accuracy >= 90 else "expiry-warning" if accuracy >= 70 else "expiry-expired"
-
         # Collect all keys for batch operations
         all_keys = [k for k, m in member_list]
         all_keys_json = str(all_keys).replace("'", "\"")
@@ -238,7 +234,6 @@ async def admin_members_get(
             f"<td style='white-space:nowrap;font-size:0.8125rem;'>{expiry_html}</td>"
             f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>今日</span> <strong>{group_total_count}</strong></td>"
             f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>今日错</span> <strong>{group_error_count}</strong></td>"
-            f"<td style='text-align:center;white-space:nowrap;'><span class='{accuracy_class}'><strong>{accuracy:.1f}%</strong></span></td>"
             f"<td style='white-space:nowrap;'><div class='actions' style='gap:6px;'>"
             f"{edit_buttons}"
             f"<form class='inline' method='post' action='/admin/members/delete'>"
@@ -257,8 +252,6 @@ async def admin_members_get(
         usage_counter = member_service._usage_repo.get_counter(key)
         total_count = usage_counter.get("total_count", 0)
         error_count = usage_counter.get("error_count", 0)
-        accuracy = round((1 - error_count / total_count) * 100, 1) if total_count > 0 else 100.0
-
         # Accumulate today's total statistics
         today_total_count += total_count
         today_total_error += error_count
@@ -296,9 +289,6 @@ async def admin_members_get(
         # Edit URL
         edit_url = f"/admin/members/form?key={urllib.parse.quote(key)}"
 
-        # Accuracy color
-        accuracy_class = "expiry-ok" if accuracy >= 90 else "expiry-warning" if accuracy >= 70 else "expiry-expired"
-
         # Single key for batch operations
         single_keys_json = str([key]).replace("'", "\"")
 
@@ -313,7 +303,6 @@ async def admin_members_get(
             f"<td style='white-space:nowrap;font-size:0.8125rem;'>{expiry_html}</td>"
             f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>今日</span> <strong>{total_count}</strong></td>"
             f"<td style='text-align:right;white-space:nowrap;'><span class='muted'>今日错</span> <strong>{error_count}</strong></td>"
-            f"<td style='text-align:center;white-space:nowrap;'><span class='{accuracy_class}'><strong>{accuracy:.1f}%</strong></span></td>"
             f"<td style='white-space:nowrap;'><div class='actions' style='gap:6px;'>"
             f"<a class='btn btn-sm' href='{_h(edit_url)}'>编辑</a>"
             f"<form class='inline' method='post' action='/admin/members/delete'>"
@@ -339,29 +328,26 @@ async def admin_members_get(
     elif expired_filter == "no":
         current_filter.append("未到期")
 
-    # Calculate today's accuracy
-    today_accuracy = round((1 - today_total_error / today_total_count) * 100, 1) if today_total_count > 0 else 100.0
+    today_statistics = (Path(__file__).resolve().parents[1] / 'templates/recognition_today.html').read_text(encoding='utf-8')
 
     body = f"""
+    {today_statistics}
     <div class="row" style="margin-bottom:16px;">
       <div class="card" style="flex:1;">
-        <h2>今日总统计</h2>
-        <div style="display:flex;gap:24px;margin-top:10px;">
+        <h2>会员用量（当前筛选）</h2>
+        <p class="muted">用量用于会员额度管理，按 UTC 日期重置；旧版报错来自旧上报接口。实际验证结果以上方全局统计为准。</p>
+        <div style="display:flex;gap:24px;margin-top:10px;flex-wrap:wrap;">
           <div>
             <div class="muted">用户数</div>
-            <div style="font-size:1.5rem;font-weight:bold;color:#22D3EE;">{len(grouped_members)}</div>
+            <div style="font-size:1.5rem;font-weight:bold;color:#22D3EE;">{len(grouped_members) + len(unnammed_members)}</div>
           </div>
           <div>
-            <div class="muted">今日次数</div>
+            <div class="muted">今日用量（UTC）</div>
             <div style="font-size:1.5rem;font-weight:bold;color:#4CAF50;">{today_total_count}</div>
           </div>
           <div>
-            <div class="muted">今日错误</div>
+            <div class="muted">旧版报错（UTC）</div>
             <div style="font-size:1.5rem;font-weight:bold;color:#f44336;">{today_total_error}</div>
-          </div>
-          <div>
-            <div class="muted">准确率</div>
-            <div style="font-size:1.5rem;font-weight:bold;color:{'#4CAF50' if today_accuracy >= 90 else '#ff9800' if today_accuracy >= 70 else '#f44336'};">{today_accuracy:.1f}%</div>
           </div>
         </div>
       </div>
@@ -431,14 +417,13 @@ async def admin_members_get(
               <th style="width:90px;">等级</th>
               <th style="width:60px;">状态</th>
               <th style="width:130px;">到期时间</th>
-              <th style="width:90px;text-align:right;">今日次数</th>
-              <th style="width:90px;text-align:right;">今日错误</th>
-              <th style="width:80px;text-align:center;">准确率</th>
+              <th style="width:90px;text-align:right;">今日用量（UTC）</th>
+              <th style="width:90px;text-align:right;">旧版报错（UTC）</th>
               <th style="width:110px;">操作</th>
             </tr>
           </thead>
           <tbody>
-            {"".join(rows) or '<tr><td colspan="11" class="muted">暂无用户</td></tr>'}
+            {"".join(rows) or '<tr><td colspan="10" class="muted">暂无用户</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -470,14 +455,6 @@ async def admin_members_get(
       }});
       return keys;
     }}
-      document.getElementById('selected-count').textContent = checked.length;
-    }}
-
-    function getCheckedKeys() {{
-      const checked = document.querySelectorAll('.row-checkbox:checked');
-      return Array.from(checked).map(box => box.dataset.key);
-    }}
-
     function batchOperation(action) {{
       const keys = getCheckedKeys();
       if (keys.length === 0) {{

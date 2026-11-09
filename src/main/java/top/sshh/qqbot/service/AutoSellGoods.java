@@ -36,6 +36,7 @@ import java.util.regex.Pattern;
 public class AutoSellGoods {
     private static final Logger logger = LoggerFactory.getLogger(AutoSellGoods.class);
     private static final String BATCH_HERBS = "批量上架药材";
+    private static final long HERB_QUOTE_TIMEOUT_SECONDS = 30L;
     private final ScheduledExecutorService herbScheduler;
     private final Map<Long, Object> herbSaleLocks = new ConcurrentHashMap<>();
     private final Map<Long, HerbSaleSession> herbSales = new ConcurrentHashMap<>();
@@ -144,52 +145,92 @@ public class AutoSellGoods {
                 session.waitingForCaptcha = true;
                 bot.getBotConfig().setStop(true);
                 cancelHerbDelay(session);
+                cancelHerbQuoteTimeout(session);
                 return;
             }
             HerbOperation current = session.current;
-            boolean matchesOperation = current != null && matchesHerbOperationReply(current, messageChain);
+            boolean matchesOperation = current != null && current.attempts > 0
+                    && matchesHerbOperationReply(current, messageChain);
             boolean success = matchesOperation && (current.kind == HerbOperationKind.LIST
                     && text.contains("物品成功上架坊市")
                     || current.kind == HerbOperationKind.ALCHEMY && text.contains("炼金成功"));
-            boolean skip = matchesOperation && (current.kind == HerbOperationKind.LIST
-                    && (text.contains("上架价格过高") || text.contains("上架价格过低"))
-                    || current.product != null && text.contains("物品数量不足"));
+            boolean priceRejected = matchesOperation && current.kind == HerbOperationKind.LIST
+                    && (text.contains("上架价格过高") || text.contains("上架价格过低"));
+            boolean skip = matchesOperation && current.product != null && text.contains("物品数量不足");
             if (session.waitingForCaptcha) {
                 if (verified) {
                     session.waitingForCaptcha = false;
                     bot.getBotConfig().setStop(false);
-                    if (!success && !skip) {
+                    if (!success && !skip && !priceRejected) {
                         scheduleHerbOperation(session);
                         return;
                     }
-                } else if (!success && !skip) {
+                } else if (!success && !skip && !priceRejected) {
                     return;
                 }
                 // 成功回执可能先于验证奖励到达：先确认当前项，仍等验证后才发送下一项。
             }
             if (!matchesOperation) return;
-            if (success || skip) {
+            if (priceRejected) {
                 cancelHerbDelay(session);
-                session.current = null;
-                session.queue.remove(current.product);
-                if (skip) {
-                    group.sendMessage(new MessageChain().text("药材：" + current.product.getName()
-                            + "上架价格或数量不符合要求，已跳过。"));
-                }
-                if (session.queue.isEmpty()) {
-                    finishHerbSelling(group, bot.getBotConfig());
+                if (current.priceRefreshed) {
+                    completeHerbOperation(session, current, "刷新限价后上架价格仍被拒绝，已跳过。");
                 } else {
-                    scheduleHerbOperation(session);
+                    session.current = new HerbOperation(HerbOperationKind.QUOTE, current.product,
+                            "坊市数据" + current.product.getName(), true);
+                    // 当前项继续留在队首；查询和重试也沿用验证码暂停与串行发送规则。
+                    sendHerbOperation(session);
                 }
+            } else if (success || skip) {
+                completeHerbOperation(session, current, skip ? "物品数量不足，已跳过。" : null);
             } else if (text.contains("道友的上一条指令还没执行完") || text.contains("操作失败")
                     || text.contains("坊市现在太繁忙了")) {
+                cancelHerbQuoteTimeout(session);
                 if (current.attempts >= 3) {
-                    stopHerbSaleWithError(session, "当前指令连续失败，已停止批量上架药材；未处理项目仍保留。");
+                    if (current.kind == HerbOperationKind.QUOTE) {
+                        completeHerbOperation(session, current, "限价查询连续失败，已跳过。");
+                    } else {
+                        stopHerbSaleWithError(session, "当前指令连续失败，已停止批量上架药材；未处理项目仍保留。");
+                    }
                 } else {
                     // 临时失败只重试当前项，不能移除队首、触发下一项。
                     scheduleHerbOperation(session);
                 }
             }
+        }
+    }
+
+    /** PriceTask 在限价成功提交后通知；消息处理器顺序不会导致用旧限价重试。 */
+    public void onMarketQuoteSaved(Bot bot, Group group, MessageChain chain, String message, ProductPrice price) {
+        synchronized (herbSaleLock(bot.getBotId())) {
+            HerbSaleSession session = herbSales.get(bot.getBotId());
+            if (!matchesHerbReply(session, group, chain, gameText(message, chain))) return;
+            HerbOperation query = session.current;
+            if (query == null || query.kind != HerbOperationKind.QUOTE || query.attempts == 0
+                    || !query.product.getName().equals(price.getName())
+                    || !matchesHerbOperationReply(query, chain)) return;
+            cancelHerbDelay(session);
+            cancelHerbQuoteTimeout(session);
+            session.current = listingOperation(query.product, price, true);
+            logger.info("已刷新批量上架限价，botId={} 药材={} 最低价={} 最高价={}，准备重试当前项",
+                    bot.getBotId(), price.getName(), price.getMarketMinPrice(), price.getMarketMaxPrice());
+            scheduleHerbOperation(session);
+        }
+    }
+
+    private void completeHerbOperation(HerbSaleSession session, HerbOperation operation, String skipReason) {
+        if (!isCurrentHerbSale(session) || session.current != operation) return;
+        cancelHerbDelay(session);
+        cancelHerbQuoteTimeout(session);
+        session.current = null;
+        session.queue.remove(operation.product);
+        if (skipReason != null) {
+            session.group.sendMessage(new MessageChain().text("药材：" + operation.product.getName() + skipReason));
+        }
+        if (session.queue.isEmpty()) {
+            finishHerbSelling(session.group, session.bot.getBotConfig());
+        } else {
+            scheduleHerbOperation(session);
         }
     }
 
@@ -539,10 +580,10 @@ public class AutoSellGoods {
                 continue;
             }
             boolean alchemy = price.getPrice() < ProductLowPrice.getLowPrice(product.getName()) * 1.1;
-            long listingPrice = MarketPriceUtils.limitListingPrice(price, ((long) price.getPrice() - 10L) * 10000L);
-            session.current = new HerbOperation(alchemy ? HerbOperationKind.ALCHEMY : HerbOperationKind.LIST, product,
-                    alchemy ? "炼金 " + product.getName() + " " + product.getHerbCount()
-                            : "确认坊市上架 " + product.getName() + " " + listingPrice + " " + product.getHerbCount());
+            session.current = alchemy
+                    ? new HerbOperation(HerbOperationKind.ALCHEMY, product,
+                            "炼金 " + product.getName() + " " + product.getHerbCount())
+                    : listingOperation(product, price, false);
             sendHerbOperation(session);
             if (alchemy && isCurrentHerbSale(session)) {
                 session.group.sendMessage(new MessageChain().text("物品：" + price.getName() + "市场价：" + price.getPrice()
@@ -553,6 +594,13 @@ public class AutoSellGoods {
         finishHerbSelling(session.group, session.bot.getBotConfig());
     }
 
+    private HerbOperation listingOperation(ProductPrice product, ProductPrice price, boolean priceRefreshed) {
+        long listingPrice = MarketPriceUtils.limitListingPrice(price, ((long) price.getPrice() - 10L) * 10000L);
+        return new HerbOperation(HerbOperationKind.LIST, product,
+                "确认坊市上架 " + product.getName() + " " + listingPrice + " " + product.getHerbCount(),
+                priceRefreshed);
+    }
+
     private void sendHerbOperation(HerbSaleSession session) {
         HerbOperation operation = session.current;
         if (operation == null || !isCurrentHerbSale(session) || session.waitingForCaptcha) return;
@@ -560,10 +608,30 @@ public class AutoSellGoods {
         try {
             int messageId = session.group.sendMessage(new MessageChain().at("3889001741").text(operation.command));
             if (messageId != 0) operation.sentMessageIds.add(String.valueOf(messageId));
+            if (operation.kind == HerbOperationKind.QUOTE && session.current == operation) {
+                scheduleHerbQuoteTimeout(session, operation);
+            }
         } catch (Exception e) {
             logger.warn("批量上架药材发送失败 botId={} command={}", session.bot.getBotId(), operation.command, e);
-            stopHerbSaleWithError(session, "指令发送失败，已停止批量上架药材，请检查后重新开始。");
+            if (operation.kind == HerbOperationKind.QUOTE) {
+                completeHerbOperation(session, operation, "限价查询发送失败，已跳过。");
+            } else {
+                stopHerbSaleWithError(session, "指令发送失败，已停止批量上架药材，请检查后重新开始。");
+            }
         }
+    }
+
+    private void scheduleHerbQuoteTimeout(HerbSaleSession session, HerbOperation query) {
+        cancelHerbQuoteTimeout(session);
+        Object token = new Object();
+        session.quoteTimeoutToken = token;
+        session.quoteTimeout = herbScheduler.schedule(() -> {
+            synchronized (herbSaleLock(session.bot.getBotId())) {
+                if (!isCurrentHerbSale(session) || session.current != query
+                        || session.quoteTimeoutToken != token || session.waitingForCaptcha) return;
+                completeHerbOperation(session, query, "限价查询超时，已跳过。");
+            }
+        }, HERB_QUOTE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     private void scheduleHerbOperation(HerbSaleSession session) {
@@ -642,7 +710,16 @@ public class AutoSellGoods {
 
     private void cancelHerbSale(long botId) {
         HerbSaleSession session = herbSales.remove(botId);
-        if (session != null) cancelHerbDelay(session);
+        if (session != null) {
+            cancelHerbDelay(session);
+            cancelHerbQuoteTimeout(session);
+        }
+    }
+
+    private void cancelHerbQuoteTimeout(HerbSaleSession session) {
+        session.quoteTimeoutToken = null;
+        if (session.quoteTimeout != null) session.quoteTimeout.cancel(false);
+        session.quoteTimeout = null;
     }
 
     private void stopHerbSaleWithError(HerbSaleSession session, String message) {
@@ -668,19 +745,25 @@ public class AutoSellGoods {
         herbScheduler.shutdownNow();
     }
 
-    private enum HerbOperationKind { BACKPACK, LIST, ALCHEMY }
+    private enum HerbOperationKind { BACKPACK, LIST, ALCHEMY, QUOTE }
 
     private static class HerbOperation {
         final HerbOperationKind kind;
         final ProductPrice product;
         final String command;
+        final boolean priceRefreshed;
         int attempts;
         final Set<String> sentMessageIds = new HashSet<>();
 
         HerbOperation(HerbOperationKind kind, ProductPrice product, String command) {
+            this(kind, product, command, false);
+        }
+
+        HerbOperation(HerbOperationKind kind, ProductPrice product, String command, boolean priceRefreshed) {
             this.kind = kind;
             this.product = product;
             this.command = command;
+            this.priceRefreshed = priceRefreshed;
         }
     }
 
@@ -694,6 +777,8 @@ public class AutoSellGoods {
         HerbOperation current;
         Object delayToken;
         ScheduledFuture<?> nextTask;
+        Object quoteTimeoutToken;
+        ScheduledFuture<?> quoteTimeout;
 
         HerbSaleSession(Bot bot, Group group, List<ProductPrice> queue) {
             this.bot = bot;

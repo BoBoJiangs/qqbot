@@ -133,9 +133,13 @@ public final class LocalDataFiles {
         return Holder.STORE.delete(path);
     }
 
-    /** QQ 群文件上传仍需要物理文件，只在导出时生成最新内容。 */
+    /** 显式导出时刷新物理文件，数据库仍为数据源。 */
     public static Path export(Path path) throws IOException {
-        byte[] content = readAllBytes(path);
+        return export(path, readAllBytes(path));
+    }
+
+    /** 同一份内容快照用于本地导出和跨容器传输。 */
+    public static Path export(Path path, byte[] content) throws IOException {
         Files.createDirectories(path.toAbsolutePath().getParent());
         Files.write(path, content);
         return path;

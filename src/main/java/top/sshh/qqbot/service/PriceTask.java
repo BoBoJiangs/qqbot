@@ -64,6 +64,8 @@ public class PriceTask {
     private final Object productPriceUpdateLock = new Object();
     @Autowired
     private MarketLimitRefreshService marketLimitRefreshService;
+    @Autowired
+    private AutoSellGoods autoSellGoods;
 
     public PriceTask() {
 
@@ -969,6 +971,7 @@ public class PriceTask {
         if (quote == null) {
             return;
         }
+        ProductPrice savedQuote;
         synchronized (productPriceUpdateLock) {
             ProductPrice latest = productPriceResponse.getFirstByNameOrderByTimeDesc(quote.getName());
             if (latest == null) {
@@ -986,8 +989,12 @@ public class PriceTask {
                 }
             }
             productPriceResponse.save(latest);
+            savedQuote = latest;
         }
         // 仅在数据库提交成功后推进批量查询，避免查询先前进而限价未保存。
+        if (autoSellGoods != null) {
+            autoSellGoods.onMarketQuoteSaved(bot, group, messageChain, message, savedQuote);
+        }
         if (marketLimitRefreshService != null) {
             marketLimitRefreshService.onQuoteSaved(bot, group, messageChain, quote);
         }

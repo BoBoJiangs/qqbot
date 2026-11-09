@@ -164,7 +164,7 @@ public class DanCalculator {
             loadHerbPricesData(botId);
             bindAdditionalData();
         } catch (Exception e) {
-            logger.error("加载数据失败", e);
+            throw new IllegalStateException("加载炼丹数据失败：" + e.getMessage(), e);
         }
     }
 
@@ -512,49 +512,56 @@ public class DanCalculator {
 
     // ======================= 配方计算 =======================
     public void calculateAllDans(Long botId) {
-        Map<Dan, Set<String>> danRecipes = new LinkedHashMap<>();
+        Map<Dan, Set<String>> danRecipes = new ConcurrentHashMap<>();
         String targetFilePath = botId + "/炼丹配方.txt";
         Config config = getConfig(botId);
-        try (BufferedWriter writer = LocalDataFiles.newBufferedWriter(Paths.get(targetFilePath), StandardCharsets.UTF_8)) {
-            // 三重循环遍历组合（可以考虑 parallelStream 提升性能）
-            herbs.parallelStream()
-                    .filter(main -> main.price > 0)
-                    .forEach(main -> {
-                        herbs.stream()
-                                .filter(lead -> lead.price > 0 && checkBalance(main, lead) && isPingLeadAllowed(lead.leadAttrType, lead.name))
-                                .forEach(lead -> {
-                                    herbs.stream()
-                                            .filter(assist -> assist.price > 0)
-                                            .forEach(assist -> {
-                                                List<RecipeResult> resultList = findHighestDan(main, lead, assist,botId);
-                                                for (RecipeResult result : resultList) {
-                                                    if(!main.name.equals(lead.name) && !main.name.equals(assist.name) &&!lead.name.equals(assist.name)){
-                                                        String recipe = formatRecipe(main, lead, assist,
-                                                                result.mainCount, result.leadCount, result.assistCount,
-                                                                result.spend, (result.alchemyValue - result.spend), (result.marketValue - result.spend), result.dan.name,botId);
-                                                        danRecipes.computeIfAbsent(result.dan, k -> new HashSet<>()).add(recipe);
-                                                    }
-
+        if (config == null) {
+            throw new IllegalStateException("未找到机器人炼丹配置");
+        }
+        // 并行任务同时写入同一丹药的配方，Map 和内部 Set 都必须支持并发。
+        herbs.parallelStream()
+                .filter(main -> main.price > 0)
+                .forEach(main -> {
+                    herbs.stream()
+                            .filter(lead -> lead.price > 0 && checkBalance(main, lead) && isPingLeadAllowed(lead.leadAttrType, lead.name))
+                            .forEach(lead -> {
+                                herbs.stream()
+                                        .filter(assist -> assist.price > 0)
+                                        .forEach(assist -> {
+                                            List<RecipeResult> resultList = findHighestDan(main, lead, assist,botId);
+                                            for (RecipeResult result : resultList) {
+                                                if(!main.name.equals(lead.name) && !main.name.equals(assist.name) &&!lead.name.equals(assist.name)){
+                                                    String recipe = formatRecipe(main, lead, assist,
+                                                            result.mainCount, result.leadCount, result.assistCount,
+                                                            result.spend, (result.alchemyValue - result.spend), (result.marketValue - result.spend), result.dan.name,botId);
+                                                    danRecipes.computeIfAbsent(result.dan, k -> ConcurrentHashMap.newKeySet()).add(recipe);
                                                 }
-                                            });
-                                });
-                    });
+                                            }
+                                        });
+                            });
+                });
 
-            List<String> sortedRecipes = new ArrayList<>();
-            writer.write(System.lineSeparator() +  (config.isAlchemy()?"炼金丹配方":"坊市丹配方") + System.lineSeparator());
-            sortedDans.forEach(dan -> {
-                Set<String> recipes = danRecipes.getOrDefault(dan, Collections.emptySet());
-                sortedRecipes.addAll(recipes);
-            });
+        List<String> sortedRecipes = new ArrayList<>();
+        sortedDans.forEach(dan -> {
+            Set<String> recipes = danRecipes.getOrDefault(dan, Collections.emptySet());
+            sortedRecipes.addAll(recipes);
+        });
 
-            sortedRecipes.sort((r1, r2) -> Integer.compare(extractValue(r2), extractValue(r1)));
-            for (String recipe : sortedRecipes) {
-                if (!StringUtils.isBlank(recipe)) writer.write(recipe + System.lineSeparator());
-            }
+        sortedRecipes.sort((r1, r2) -> Integer.compare(extractValue(r2), extractValue(r1)));
+        StringBuilder content = new StringBuilder()
+                .append(System.lineSeparator())
+                .append(config.isAlchemy() ? "炼金丹配方" : "坊市丹配方")
+                .append(System.lineSeparator());
+        for (String recipe : sortedRecipes) {
+            if (!StringUtils.isBlank(recipe)) content.append(recipe).append(System.lineSeparator());
+        }
 
+        // 全部计算和排序成功后一次性提交，异常时保留上一版配方。
+        try {
+            LocalDataFiles.writeString(Paths.get(targetFilePath), content, StandardCharsets.UTF_8);
             logger.info("配方已生成至：{}", new File(targetFilePath).getAbsolutePath());
         } catch (IOException e) {
-            logger.error("文件写入失败", e);
+            throw new UncheckedIOException("保存炼丹配方失败：" + e.getMessage(), e);
         }
     }
 
