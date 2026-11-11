@@ -10,6 +10,7 @@ import com.zhuangxv.bot.message.support.TextMessage;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
@@ -34,6 +35,7 @@ class PriceTaskCommandConflictTest {
     @Test
     void originalRefiningPriceCommand_stillWorks() {
         PriceTask task = new PriceTask();
+        ReflectionTestUtils.setField(task, "groupManager", Mockito.mock(GroupManager.class));
         Bot bot = Mockito.mock(Bot.class);
         BotConfig config = Mockito.mock(BotConfig.class);
         Group group = Mockito.mock(Group.class);
@@ -53,6 +55,7 @@ class PriceTaskCommandConflictTest {
     @Test
     void quotedInlineHerbRows_areUsedByRefiningPriceQuery() {
         PriceTask task = new PriceTask();
+        ReflectionTestUtils.setField(task, "groupManager", Mockito.mock(GroupManager.class));
         Bot bot = Mockito.mock(Bot.class);
         BotConfig config = Mockito.mock(BotConfig.class);
         Group group = Mockito.mock(Group.class);

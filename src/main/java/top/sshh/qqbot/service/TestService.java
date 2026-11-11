@@ -1537,9 +1537,8 @@ public class TestService {
 
                                 name = name.replaceAll("\\s", "");
                                 if (StringUtils.isNotBlank(name)) {
-                                    boolean b = !Constant.ALCHEMY_PROTECTED_ITEMS.contains(name);
-                                    boolean isMakeDan = !Constant.MAKE_DAN_SET.contains(name);
-                                    if (message.endsWith("一键炼金") && b && isMakeDan
+                                    if (message.endsWith("一键炼金")
+                                            && !Constant.ALCHEMY_PROTECTED_ITEMS.contains(name)
                                             && !this.groupManager.isAlchemyExcluded(bot.getBotId(), name)) {
                                         if (botConfig.isStop()) {
                                             botConfig.setStop(false);

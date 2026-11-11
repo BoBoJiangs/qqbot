@@ -505,9 +505,7 @@ public class AutoSellGoods {
     }
 
     private void pillsCountLimit(Bot bot, int quantity, String currentPill) {
-        boolean b = !Constant.ALCHEMY_PROTECTED_ITEMS.contains(currentPill);
-        boolean isMakeDan = !Constant.MAKE_DAN_SET.contains(currentPill);
-        if (b && isMakeDan
+        if (!Constant.ALCHEMY_PROTECTED_ITEMS.contains(currentPill)
                 && !this.groupManager.isAlchemyExcluded(bot.getBotId(), currentPill)) {
             List<ProductPrice> productPrices = this.pillPackMap.get(bot.getBotId());
             if (productPrices == null) {

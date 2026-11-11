@@ -2,6 +2,8 @@ package top.sshh.qqbot.service;
 
 import com.zhuangxv.bot.core.Bot;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.util.ReflectionTestUtils;
 import top.sshh.qqbot.data.ProductPrice;
 
@@ -10,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -18,7 +21,7 @@ class AutoSellGoodsPillInventoryTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    void parsePillListSupportsInlineRowsAndSkipsAlchemyFurnace() throws Exception {
+    void parsePillListSupportsBothFormatsAndSkipsProtectedItems() throws Exception {
         AutoSellGoods service = new AutoSellGoods();
         GroupManager groupManager = mock(GroupManager.class);
         ReflectionTestUtils.setField(service, "groupManager", groupManager);
@@ -53,5 +56,34 @@ class AutoSellGoodsPillInventoryTest {
         assertEquals(1260, pills.get(1).getHerbCount());
         assertEquals("旧格式丹药", pills.get(2).getName());
         assertEquals(3, pills.get(2).getHerbCount());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"天尘丹", "易筋丹", "素心真丸"})
+    @SuppressWarnings("unchecked")
+    void customExclusionAloneControlsWhetherOtherPillsAreQueued(String name) throws Exception {
+        AutoSellGoods service = new AutoSellGoods();
+        try {
+            GroupManager groupManager = mock(GroupManager.class);
+            ReflectionTestUtils.setField(service, "groupManager", groupManager);
+            Bot bot = mock(Bot.class);
+            when(bot.getBotId()).thenReturn(BOT_ID);
+            List<String> rows = List.of("名字：" + name, "物品功效 拥有数量:390---炼金 |坊市数据");
+            Map<Long, List<ProductPrice>> packs =
+                    (Map<Long, List<ProductPrice>>) ReflectionTestUtils.getField(service, "pillPackMap");
+
+            when(groupManager.isAlchemyExcluded(BOT_ID, name)).thenReturn(true);
+            service.parsePillList(rows, bot);
+            assertNull(packs.get(BOT_ID));
+
+            when(groupManager.isAlchemyExcluded(BOT_ID, name)).thenReturn(false);
+            service.parsePillList(rows, bot);
+            List<ProductPrice> pills = packs.get(BOT_ID);
+            assertEquals(1, pills.size());
+            assertEquals(name, pills.get(0).getName());
+            assertEquals(390, pills.get(0).getHerbCount());
+        } finally {
+            service.shutdown();
+        }
     }
 }

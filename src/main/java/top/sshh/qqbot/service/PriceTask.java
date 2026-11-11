@@ -505,7 +505,7 @@ public class PriceTask {
 
             // 处理消息的情况
             if (hasReplyMessage(messageChain)) {
-                processReplyMessage(messageChain, message, result);
+                processReplyMessage(messageChain, message, result, bot.getBotId());
             } else {
                 // 处理直接查询的情况
                 processDirectQuery(message, result, bot);
@@ -514,9 +514,9 @@ public class PriceTask {
             // 如果计算结果有效，发送消息
             if (result.count > 0L) {
                 sendResultMessage(group, messageId, message, result);
-            } else if (result.protectedItemSkipped) {
+            } else if (result.excludedItemSkipped) {
                 group.sendMessage(new MessageChain().reply(messageId)
-                        .text("已过滤炼丹炉和渡厄丹，本次没有可生成的炼金命令。"));
+                        .text("已过滤炼金排除物品，本次没有可生成的炼金命令。"));
             }
         } catch (Exception e) {
             logger.error("处理上架价格查询时出错", e);
@@ -528,7 +528,7 @@ public class PriceTask {
         // 金额统一使用灵石，避免小数万的限价在生成命令或汇总时被截断。
         long count = 0L;
         long totalFee = 0L;
-        boolean protectedItemSkipped;
+        boolean excludedItemSkipped;
         StringBuilder stringBuilder = new StringBuilder();
     }
 
@@ -550,11 +550,11 @@ public class PriceTask {
     }
 
     // 处理回复消息
-    private void processReplyMessage(MessageChain messageChain, String message, PriceCalculationResult result) {
+    private void processReplyMessage(MessageChain messageChain, String message, PriceCalculationResult result, long botId) {
         ReplyMessage replyMessage = messageChain.getMessageByType(ReplyMessage.class).get(0);
         String replyText = extractReplyText(replyMessage);
         if (StringUtils.isNotBlank(replyText)) {
-            processTextMessage(replyText, message, result);
+            processTextMessage(replyText, message, result, botId);
         }
     }
 
@@ -585,14 +585,14 @@ public class PriceTask {
     }
 
     // 处理文本消息内容
-    private void processTextMessage(String text, String originalMessage, PriceCalculationResult result) {
+    private void processTextMessage(String text, String originalMessage, PriceCalculationResult result, long botId) {
         String[] lines = text.split("\n");
 
         for (int i = 0; i < lines.length; i++) {
             String line = Utils.stripMarkdownLink(lines[i].trim());
             HerbBackpackParser.Entry inlineEntry = HerbBackpackParser.parseInlineEntry(line);
             if (inlineEntry != null) {
-                processItem(inlineEntry.getName(), inlineEntry.getCount(), originalMessage, result);
+                processItem(inlineEntry.getName(), inlineEntry.getCount(), originalMessage, result, botId);
                 continue;
             }
 
@@ -600,7 +600,7 @@ public class PriceTask {
                 String name = extractItemName(line);
                 if (StringUtils.isNotBlank(name) && i + 1 < lines.length) {
                     int quantity = extractQuantity(Utils.stripMarkdownLink(lines[i + 1].trim()));
-                    processItem(name, quantity, originalMessage, result);
+                    processItem(name, quantity, originalMessage, result, botId);
                 }
             }
         }
@@ -649,18 +649,18 @@ public class PriceTask {
     }
 
     // 处理单个物品
-    private void processItem(String name, int quantity, String originalMessage, PriceCalculationResult result) {
+    private void processItem(String name, int quantity, String originalMessage, PriceCalculationResult result, long botId) {
         if (originalMessage.contains("炼金")) {
-            processRefiningItem(name, quantity, result);
+            processRefiningItem(name, quantity, result, botId);
         } else {
             processMarketItem(name, quantity, result);
         }
     }
 
     // 处理炼金物品
-    private void processRefiningItem(String name, int quantity, PriceCalculationResult result) {
-        if (Constant.ALCHEMY_PROTECTED_ITEMS.contains(name)) {
-            result.protectedItemSkipped = true;
+    private void processRefiningItem(String name, int quantity, PriceCalculationResult result, long botId) {
+        if (Constant.ALCHEMY_PROTECTED_ITEMS.contains(name) || groupManager.isAlchemyExcluded(botId, name)) {
+            result.excludedItemSkipped = true;
             return;
         }
         int price = ProductLowPrice.getLowPrice(name);
@@ -798,8 +798,8 @@ public class PriceTask {
         String totalValueStr = formatAmount(result.count, "总价值");
 
         if (originalMessage.contains("炼金")) {
-            if (result.protectedItemSkipped) {
-                result.stringBuilder.append("已过滤炼丹炉和渡厄丹（不计入总价值）\n");
+            if (result.excludedItemSkipped) {
+                result.stringBuilder.append("已过滤炼金排除物品（不计入总价值）\n");
             }
             result.stringBuilder.append("\n").append(totalValueStr);
         } else {
