@@ -22,7 +22,9 @@ public class MiYuExploreContext {
         /** 正在点击丹药按钮或发送出发命令 */
         CLICKING_PILLS,
         /** 确认出发指令已提交，等待游戏返回进入秘域的计时。 */
-        WAIT_DEPARTURE
+        WAIT_DEPARTURE,
+        /** 连续模式已入境，保留探索设置并等待本轮结算。 */
+        EXPLORING
     }
 
     /** 候选路线；每条路线由3个地区名组成，可为空表示未设置固定路线 */
@@ -35,6 +37,10 @@ public class MiYuExploreContext {
     private boolean randomPills = false;
     /** 单行开始指令走游戏快捷流程，同样保存等待出关和入境的阶段。 */
     private boolean quickStart = false;
+    /** 结算后继续下一轮，直到游戏提示当日次数耗尽。 */
+    private boolean continuous = false;
+    /** 同一结算消息会经过多个处理器，只允许续探一次。 */
+    private Integer lastSettlementMessageId;
 
     private State state = State.WAIT_START;
     /** 已点击刷新路线的次数（游戏上限6次/日） */
@@ -92,6 +98,24 @@ public class MiYuExploreContext {
 
     public void setQuickStart(boolean quickStart) {
         this.quickStart = quickStart;
+    }
+
+    public boolean isContinuous() {
+        return continuous;
+    }
+
+    public void setContinuous(boolean continuous) {
+        this.continuous = continuous;
+        changed();
+    }
+
+    public Integer getLastSettlementMessageId() {
+        return lastSettlementMessageId;
+    }
+
+    public void setLastSettlementMessageId(Integer lastSettlementMessageId) {
+        this.lastSettlementMessageId = lastSettlementMessageId;
+        changed();
     }
 
     public State getState() {

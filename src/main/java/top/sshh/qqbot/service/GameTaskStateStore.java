@@ -48,7 +48,13 @@ public class GameTaskStateStore {
     public synchronized void setMyTime(long botId, Long time) {
         update(botId, state -> {
             state.myTime = time;
-            if (time != null && time > 0L) state.exploration = null;
+            if (time != null && time > 0L && state.exploration != null) {
+                if (state.exploration.isContinuous()) {
+                    state.exploration.setState(MiYuExploreContext.State.EXPLORING);
+                } else {
+                    state.exploration = null;
+                }
+            }
         });
     }
 
